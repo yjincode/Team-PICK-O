@@ -10,6 +10,14 @@ terraform {
       source  = "hashicorp/random"
       version = "~> 3.1"
     }
+    tls = {
+      source  = "hashicorp/tls"
+      version = "~> 4.0"
+    }
+    local = {
+      source  = "hashicorp/local"
+      version = "~> 2.1"
+    }
   }
 }
 
@@ -165,11 +173,35 @@ resource "aws_security_group" "web_server" {
   }
 }
 
+# TLS 개인키 생성
+resource "tls_private_key" "ec2_key" {
+  algorithm = "RSA"
+  rsa_bits  = 4096
+}
+
+# AWS 키 페어 생성
+resource "aws_key_pair" "ec2_key_pair" {
+  key_name   = var.key_pair_name
+  public_key = tls_private_key.ec2_key.public_key_openssh
+
+  tags = {
+    Name        = "${var.project_name}-key"
+    Environment = var.environment
+  }
+}
+
+# 로컬 파일로 개인키 저장
+resource "local_file" "private_key" {
+  content  = tls_private_key.ec2_key.private_key_pem
+  filename = "${path.module}/${var.key_pair_name}.pem"
+  file_permission = "0600"
+}
+
 # EC2 인스턴스 생성
 resource "aws_instance" "web_server" {
   ami                         = data.aws_ami.amazon_linux.id
   instance_type               = var.instance_type
-  key_name                    = var.key_pair_name
+  key_name                    = aws_key_pair.ec2_key_pair.key_name
   vpc_security_group_ids      = [aws_security_group.web_server.id]
   subnet_id                   = aws_subnet.public.id
   associate_public_ip_address = true
@@ -187,6 +219,8 @@ resource "aws_instance" "web_server" {
     Environment = var.environment
     Project     = var.project_name
   }
+
+  depends_on = [aws_key_pair.ec2_key_pair]
 }
 
 # S3 버킷 생성

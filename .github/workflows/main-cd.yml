@@ -169,36 +169,79 @@ jobs:
           deployment/auto-shutdown.sh \
           $EC2_USER@$EC2_HOST:~/
         
+        # Create .env file for docker-compose
+        cat > deployment.env << EOL
+        # Docker Images
+        BACKEND_IMAGE=$ECR_REGISTRY/${{ secrets.ECR_REPOSITORY_BACKEND }}:$IMAGE_TAG
+        FRONTEND_IMAGE=$ECR_REGISTRY/${{ secrets.ECR_REPOSITORY_FRONTEND }}:$IMAGE_TAG
+        
+        # Database Configuration
+        DATABASE_URL="${{ secrets.DATABASE_URL }}"
+        POSTGRES_DB="${{ secrets.POSTGRES_DB }}"
+        POSTGRES_USER="${{ secrets.POSTGRES_USER }}"
+        POSTGRES_PASSWORD="${{ secrets.POSTGRES_PASSWORD }}"
+        
+        # Application Configuration
+        SECRET_KEY="${{ secrets.SECRET_KEY }}"
+        DEBUG=False
+        ALLOWED_HOSTS="${{ secrets.ALLOWED_HOSTS }}"
+        PROJECT_NAME="Team-PICK-O Backend (Demo)"
+        
+        # Network Configuration
+        REACT_APP_API_URL="http://${{ secrets.EC2_HOST }}:8000"
+        BACKEND_CORS_ORIGINS=["http://${{ secrets.EC2_HOST }}:3000","http://localhost:3000"]
+        
+        # Ports (데모용)
+        FRONTEND_PORT=3000
+        BACKEND_PORT=8000
+        DB_PORT=5432
+        REDIS_PORT=6379
+        HTTP_PORT=80
+        
+        # Redis Configuration
+        REDIS_URL="redis://redis:6379"
+        REDIS_PASSWORD="${{ secrets.REDIS_PASSWORD }}"
+        
+        # AWS Configuration
+        AWS_ACCESS_KEY_ID="${{ secrets.AWS_ACCESS_KEY_ID }}"
+        AWS_SECRET_ACCESS_KEY="${{ secrets.AWS_SECRET_ACCESS_KEY }}"
+        AWS_S3_BUCKET_NAME="${{ secrets.AWS_S3_BUCKET_NAME }}"
+        AWS_REGION="${{ secrets.AWS_REGION }}"
+        EOL
+        
+        # Copy env file to EC2
+        scp -i ec2_key.pem -o StrictHostKeyChecking=no deployment.env $EC2_USER@$EC2_HOST:~/.env
+        
         # Deploy on EC2
-        ssh -i ec2_key.pem -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST << EOF
+        ssh -i ec2_key.pem -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST << 'EOF'
           # Login to ECR
           aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin $ECR_REGISTRY
           
-          # Stop existing containers
-          docker-compose down || true
+          # Stop existing containers (using production compose)
+          docker-compose --env-file ~/.env down || true
           
-          # Set environment variables for demo
-          export BACKEND_IMAGE=$ECR_REGISTRY/${{ secrets.ECR_REPOSITORY_BACKEND }}:$IMAGE_TAG
-          export FRONTEND_IMAGE=$ECR_REGISTRY/${{ secrets.ECR_REPOSITORY_FRONTEND }}:$IMAGE_TAG
-          export DATABASE_URL="${{ secrets.DATABASE_URL }}"
-          export SECRET_KEY="${{ secrets.SECRET_KEY }}"
-          export POSTGRES_DB="${{ secrets.POSTGRES_DB }}"
-          export POSTGRES_USER="${{ secrets.POSTGRES_USER }}"
-          export POSTGRES_PASSWORD="${{ secrets.POSTGRES_PASSWORD }}"
+          # Pull latest images
+          docker-compose --env-file ~/.env pull
           
-          # Start new containers
-          docker-compose up -d
+          # Start new containers in production mode
+          docker-compose --env-file ~/.env up -d
           
           # Wait for services to be healthy
           sleep 60
           
           # Check if services are running
-          docker-compose ps
+          docker-compose --env-file ~/.env ps
+          
+          # Verify services are accessible
+          echo "🔍 서비스 상태 확인 중..."
+          curl -f http://localhost/health || echo "⚠️ Health check failed"
           
           # Setup auto-shutdown after 1 hour
           chmod +x auto-shutdown.sh
           ./auto-shutdown.sh 1
           echo "✅ 데모 배포 완료 - 1시간 후 자동 종료"
+          echo "🌐 Frontend: http://${{ secrets.EC2_HOST }}"
+          echo "🔧 Backend API: http://${{ secrets.EC2_HOST }}:8000"
         EOF
         
         rm ec2_key.pem
@@ -238,11 +281,14 @@ jobs:
         
         ssh -i ec2_key.pem -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST << EOF
           # Stop current deployment
-          docker-compose down
+          docker-compose --env-file ~/.env down
           
           # Pull and start last known good images
-          docker-compose pull
-          docker-compose up -d
+          docker-compose --env-file ~/.env pull
+          docker-compose --env-file ~/.env up -d
+          
+          echo "🔄 롤백된 서비스 상태:"
+          docker-compose --env-file ~/.env ps
         EOF
         
         rm ec2_key.pem

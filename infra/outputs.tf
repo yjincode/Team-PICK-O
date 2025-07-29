@@ -58,10 +58,16 @@ output "s3_bucket_arn" {
   value       = aws_s3_bucket.app_bucket.arn
 }
 
+# PEM 키 파일 경로
+output "private_key_path" {
+  description = "생성된 PEM 키 파일 경로"
+  value       = local_file.private_key.filename
+}
+
 # 접속 정보
 output "ssh_connection" {
   description = "SSH 접속 명령어"
-  value       = "ssh -i ~/.ssh/${var.key_pair_name}.pem ec2-user@${aws_instance.web_server.public_ip}"
+  value       = "ssh -i ${local_file.private_key.filename} ec2-user@${aws_instance.web_server.public_ip}"
 }
 
 output "web_urls" {
@@ -100,10 +106,11 @@ output "github_secrets" {
   value = {
     EC2_HOST                    = aws_instance.web_server.public_ip
     EC2_USER                    = "ec2-user"
+    EC2_PRIVATE_KEY            = tls_private_key.ec2_key.private_key_pem
     AWS_REGION                  = var.aws_region
-    S3_BUCKET_NAME              = aws_s3_bucket.app_bucket.id
+    AWS_S3_BUCKET_NAME         = aws_s3_bucket.app_bucket.id
     ECR_REPOSITORY_BACKEND      = aws_ecr_repository.backend.name
     ECR_REPOSITORY_FRONTEND     = aws_ecr_repository.frontend.name
   }
-  sensitive = false
+  sensitive = true
 }
