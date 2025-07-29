@@ -1,0 +1,58 @@
+version: '3.8'
+
+services:
+  frontend:
+    build: 
+      context: ../frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - REACT_APP_API_URL=http://localhost:8000
+    volumes:
+      - ../frontend/src:/app/src
+      - ../frontend/public:/app/public
+    depends_on:
+      - backend
+    networks:
+      - app-network
+
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=${DATABASE_URL:-postgresql://teamPicko:teamPicko123@database:5432/teamPicko_dev}
+      - SECRET_KEY=${SECRET_KEY:-dev-secret-key-change-in-production}
+      - DEBUG=True
+      - ALLOWED_HOSTS=localhost,127.0.0.1
+      - PROJECT_NAME=Team-PICK-O Backend (Dev)
+    volumes:
+      - ../backend:/app
+    depends_on:
+      - database
+    networks:
+      - app-network
+
+  database:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=teamPicko_dev
+      - POSTGRES_USER=${POSTGRES_USER:-teamPicko}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-teamPicko123}
+    volumes:
+      - postgres-dev-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - app-network
+
+volumes:
+  postgres-dev-data:
+
+networks:
+  app-network:
+    driver: bridge
