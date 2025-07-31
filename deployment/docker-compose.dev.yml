@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  # 개발용 데이터베이스만 제공
+  # Frontend/Backend는 로컬에서 직접 실행
+  database:
+    image: postgres:15-alpine
+    container_name: teamPicko-dev-db
+    environment:
+      - POSTGRES_DB=teamPicko_dev
+      - POSTGRES_USER=teamPicko
+      - POSTGRES_PASSWORD=12341234
+    volumes:
+      - postgres-dev-data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U teamPicko -d teamPicko_dev"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # 개발용 Redis (캐시, 세션 저장용 - 선택사항)
+  # redis:
+  #   image: redis:7-alpine
+  #   container_name: teamPicko-dev-redis
+  #   ports:
+  #     - "6379:6379"
+  #   volumes:
+  #     - redis-dev-data:/data
+  #   restart: unless-stopped
+  #   healthcheck:
+  #     test: ["CMD", "redis-cli", "ping"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+
+volumes:
+  postgres-dev-data:
+    name: teamPicko-dev-postgres
+  # redis-dev-data:
+  #   name: teamPicko-dev-redis
+

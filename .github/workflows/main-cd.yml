@@ -1,0 +1,295 @@
+name: Demo Deploy (임시 테스트 - 1시간 후 종료)
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  pre-deployment-check:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Validate deployment configuration
+      run: |
+        cd deployment
+        docker-compose config
+        echo "✅ Docker Compose configuration is valid"
+
+  deploy:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ secrets.AWS_REGION }}
+      continue-on-error: false
+    
+    - name: Verify AWS credentials
+      run: |
+        echo "🔍 AWS 자격증명 확인 중..."
+        aws sts get-caller-identity
+        echo "✅ AWS 자격증명 확인 완료"
+    
+    - name: Check ECR repositories exist
+      run: |
+        echo "🔍 ECR 저장소 존재 여부 확인 중..."
+        
+        # Backend ECR 저장소 확인/생성
+        if ! aws ecr describe-repositories --repository-names ${{ secrets.ECR_REPOSITORY_BACKEND }} > /dev/null 2>&1; then
+          echo "⚠️ Backend ECR 저장소가 없습니다. 생성 중..."
+          aws ecr create-repository \
+            --repository-name ${{ secrets.ECR_REPOSITORY_BACKEND }} \
+            --image-scanning-configuration scanOnPush=true \
+            --region ${{ secrets.AWS_REGION }}
+          echo "✅ Backend ECR 저장소 생성 완료"
+        else
+          echo "✅ Backend ECR 저장소 존재 확인"
+        fi
+        
+        # Frontend ECR 저장소 확인/생성
+        if ! aws ecr describe-repositories --repository-names ${{ secrets.ECR_REPOSITORY_FRONTEND }} > /dev/null 2>&1; then
+          echo "⚠️ Frontend ECR 저장소가 없습니다. 생성 중..."
+          aws ecr create-repository \
+            --repository-name ${{ secrets.ECR_REPOSITORY_FRONTEND }} \
+            --image-scanning-configuration scanOnPush=true \
+            --region ${{ secrets.AWS_REGION }}
+          echo "✅ Frontend ECR 저장소 생성 완료"
+        else
+          echo "✅ Frontend ECR 저장소 존재 확인"
+        fi
+    
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v2
+      with:
+        mask-password: 'true'
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+      with:
+        platforms: linux/amd64
+    
+    - name: Build and push backend image
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY_BACKEND }}
+        IMAGE_TAG: demo-${{ github.sha }}
+        DOCKER_BUILDKIT: 1
+      run: |
+        echo "🔨 Backend 이미지 빌드 중..."
+        echo "📍 ECR Registry: $ECR_REGISTRY"
+        echo "📍 Repository: $ECR_REPOSITORY"
+        echo "📍 Tag: $IMAGE_TAG"
+        
+        # Docker context 확인
+        cd backend
+        ls -la
+        
+        # Backend 이미지 빌드 및 푸시
+        docker buildx build \
+          --platform linux/amd64 \
+          --tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
+          --tag $ECR_REGISTRY/$ECR_REPOSITORY:latest \
+          --push \
+          --progress=plain \
+          .
+        
+        echo "✅ Backend 이미지 빌드 및 푸시 완료"
+        echo "📦 이미지: $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+        
+        # 푸시된 이미지 확인
+        aws ecr describe-images \
+          --repository-name $ECR_REPOSITORY \
+          --image-ids imageTag=$IMAGE_TAG \
+          --region ${{ secrets.AWS_REGION }}
+    
+    - name: Build and push frontend image
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY_FRONTEND }}
+        IMAGE_TAG: demo-${{ github.sha }}
+        DOCKER_BUILDKIT: 1
+      run: |
+        echo "🔨 Frontend 이미지 빌드 중..."
+        echo "📍 ECR Registry: $ECR_REGISTRY"
+        echo "📍 Repository: $ECR_REPOSITORY"  
+        echo "📍 Tag: $IMAGE_TAG"
+        
+        # Docker context 확인
+        cd frontend
+        ls -la
+        
+        # Frontend 이미지 빌드 및 푸시
+        docker buildx build \
+          --platform linux/amd64 \
+          --tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
+          --tag $ECR_REGISTRY/$ECR_REPOSITORY:latest \
+          --push \
+          --progress=plain \
+          .
+        
+        echo "✅ Frontend 이미지 빌드 및 푸시 완료"
+        echo "📦 이미지: $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+        
+        # 푸시된 이미지 확인
+        aws ecr describe-images \
+          --repository-name $ECR_REPOSITORY \
+          --image-ids imageTag=$IMAGE_TAG \
+          --region ${{ secrets.AWS_REGION }}
+    
+    - name: Deploy to Demo EC2
+      env:
+        EC2_HOST: ${{ secrets.EC2_HOST }}
+        EC2_USER: ${{ secrets.EC2_USER }}
+        EC2_KEY: ${{ secrets.EC2_PRIVATE_KEY }}
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        IMAGE_TAG: demo-${{ github.sha }}
+      run: |
+        echo "$EC2_KEY" > ec2_key.pem
+        chmod 600 ec2_key.pem
+        
+        # Copy deployment files to EC2
+        scp -i ec2_key.pem -o StrictHostKeyChecking=no \
+          deployment/docker-compose.yml \
+          deployment/nginx.conf \
+          deployment/auto-shutdown.sh \
+          $EC2_USER@$EC2_HOST:~/
+        
+        # Create .env file for docker-compose
+        cat > deployment.env << EOL
+        # Docker Images
+        BACKEND_IMAGE=$ECR_REGISTRY/${{ secrets.ECR_REPOSITORY_BACKEND }}:$IMAGE_TAG
+        FRONTEND_IMAGE=$ECR_REGISTRY/${{ secrets.ECR_REPOSITORY_FRONTEND }}:$IMAGE_TAG
+        
+        # Database Configuration
+        DATABASE_URL="${{ secrets.DATABASE_URL }}"
+        POSTGRES_DB="${{ secrets.POSTGRES_DB }}"
+        POSTGRES_USER="${{ secrets.POSTGRES_USER }}"
+        POSTGRES_PASSWORD="${{ secrets.POSTGRES_PASSWORD }}"
+        
+        # Application Configuration
+        SECRET_KEY="${{ secrets.SECRET_KEY }}"
+        DEBUG=False
+        ALLOWED_HOSTS="${{ secrets.ALLOWED_HOSTS }}"
+        PROJECT_NAME="Team-PICK-O Backend (Demo)"
+        
+        # Network Configuration
+        REACT_APP_API_URL="http://${{ secrets.EC2_HOST }}:8000"
+        BACKEND_CORS_ORIGINS=["http://${{ secrets.EC2_HOST }}:3000","http://localhost:3000"]
+        
+        # Ports (데모용)
+        FRONTEND_PORT=3000
+        BACKEND_PORT=8000
+        DB_PORT=5432
+        REDIS_PORT=6379
+        HTTP_PORT=80
+        
+        # Redis Configuration
+        REDIS_URL="redis://redis:6379"
+        REDIS_PASSWORD="${{ secrets.REDIS_PASSWORD }}"
+        
+        # AWS Configuration
+        AWS_ACCESS_KEY_ID="${{ secrets.AWS_ACCESS_KEY_ID }}"
+        AWS_SECRET_ACCESS_KEY="${{ secrets.AWS_SECRET_ACCESS_KEY }}"
+        AWS_S3_BUCKET_NAME="${{ secrets.AWS_S3_BUCKET_NAME }}"
+        AWS_REGION="${{ secrets.AWS_REGION }}"
+        EOL
+        
+        # Copy env file to EC2
+        scp -i ec2_key.pem -o StrictHostKeyChecking=no deployment.env $EC2_USER@$EC2_HOST:~/.env
+        
+        # Deploy on EC2
+        ssh -i ec2_key.pem -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST << 'EOF'
+          # Login to ECR
+          aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin $ECR_REGISTRY
+          
+          # Stop existing containers (using production compose)
+          docker-compose --env-file ~/.env down || true
+          
+          # Pull latest images
+          docker-compose --env-file ~/.env pull
+          
+          # Start new containers in production mode
+          docker-compose --env-file ~/.env up -d
+          
+          # Wait for services to be healthy
+          sleep 60
+          
+          # Check if services are running
+          docker-compose --env-file ~/.env ps
+          
+          # Verify services are accessible
+          echo "🔍 서비스 상태 확인 중..."
+          curl -f http://localhost/health || echo "⚠️ Health check failed"
+          
+          # Setup auto-shutdown after 1 hour
+          chmod +x auto-shutdown.sh
+          ./auto-shutdown.sh 1
+          echo "✅ 데모 배포 완료 - 1시간 후 자동 종료"
+          echo "🌐 Frontend: http://${{ secrets.EC2_HOST }}"
+          echo "🔧 Backend API: http://${{ secrets.EC2_HOST }}:8000"
+        EOF
+        
+        rm ec2_key.pem
+    
+    - name: Health Check
+      env:
+        EC2_HOST: ${{ secrets.EC2_HOST }}
+      run: |
+        sleep 30
+        curl -f http://$EC2_HOST/health || curl -f https://$EC2_HOST/health
+        echo "✅ 데모 배포 성공 및 서비스 정상"
+    
+    - name: Notify deployment status
+      if: always()
+      run: |
+        if [ "${{ job.status }}" == "success" ]; then
+          echo "🚀 데모 배포 성공! EC2 서버가 1시간 후 자동 종료됩니다."
+          echo "접속 URL: http://${{ secrets.EC2_HOST }}"
+        else
+          echo "❌ 데모 배포 실패! 로그를 확인해주세요."
+        fi
+
+  rollback:
+    runs-on: ubuntu-latest
+    if: failure()
+    needs: deploy
+    
+    steps:
+    - name: Rollback deployment
+      env:
+        EC2_HOST: ${{ secrets.EC2_HOST }}
+        EC2_USER: ${{ secrets.EC2_USER }}
+        EC2_KEY: ${{ secrets.EC2_PRIVATE_KEY }}
+      run: |
+        echo "$EC2_KEY" > ec2_key.pem
+        chmod 600 ec2_key.pem
+        
+        ssh -i ec2_key.pem -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST << EOF
+          # Stop current deployment
+          docker-compose --env-file ~/.env down
+          
+          # Pull and start last known good images
+          docker-compose --env-file ~/.env pull
+          docker-compose --env-file ~/.env up -d
+          
+          echo "🔄 롤백된 서비스 상태:"
+          docker-compose --env-file ~/.env ps
+        EOF
+        
+        rm ec2_key.pem
+        echo "🔄 롤백 완료"
