@@ -4,16 +4,15 @@ from fastapi.staticfiles import StaticFiles
 import os
 from dotenv import load_dotenv
 
+
 from routers import businesses, orders
 
 load_dotenv()
 
 app = FastAPI(
     title=os.getenv("PROJECT_NAME", "Team-PICK-O Backend"),
+
     description="Team-PICK-O 수산물 거래 관리 시스템",
-    version="1.0.0",
-    openapi_url="/api/v1/openapi.json"
-)
 
 # CORS 설정
 origins = [
@@ -36,12 +35,17 @@ if os.path.exists("static"):
     app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # 라우터 등록
+
 app.include_router(businesses.router, prefix="/api/v1/businesses", tags=["거래처 관리"])
 app.include_router(orders.router, prefix="/api/v1/orders", tags=["주문 관리"])
 
 @app.get("/")
 async def root():
     return {"message": "Team-PICK-O 수산물 거래 관리 시스템", "status": "running"}
+
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy"}
 
 if __name__ == "__main__":
     import uvicorn
