@@ -13,7 +13,8 @@ build/
 .env.local
 .env.development.local
 .env.test.local
-.env.production.local
+.env.production.local\.env
+*.env
 
 # ---------------------------
 # 🐍 Python (FastAPI or 기타 백엔드)
@@ -162,3 +163,4 @@ claude-session-*
 Thumbs.db
 *.swp
 *.swo
+ 
