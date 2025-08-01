@@ -7,7 +7,7 @@ services:
     image: postgres:15-alpine
     container_name: teamPicko-dev-db
     environment:
-      - POSTGRES_DB=teamPicko_dev
+      - POSTGRES_DB=teamPicko
       - POSTGRES_USER=teamPicko
       - POSTGRES_PASSWORD=12341234
     volumes:
@@ -17,7 +17,7 @@ services:
       - "5432:5432"
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U teamPicko -d teamPicko_dev"]
+      test: ["CMD-SHELL", "pg_isready -U teamPicko -d teamPicko"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -42,4 +42,3 @@ volumes:
     name: teamPicko-dev-postgres
   # redis-dev-data:
   #   name: teamPicko-dev-redis
-
