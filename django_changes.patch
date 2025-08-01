@@ -1,0 +1,549 @@
+diff --git a/backend/config/settings.py b/backend/config/settings.py
+index 9726499..15a1360 100644
+--- a/backend/config/settings.py
++++ b/backend/config/settings.py
+@@ -48,6 +48,7 @@ INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
+ 
+ MIDDLEWARE = [
+     'corsheaders.middleware.CorsMiddleware',
++    'core.middleware.FirebaseAuthMiddleware',
+     'django.middleware.security.SecurityMiddleware',
+     'django.contrib.sessions.middleware.SessionMiddleware',
+     'django.middleware.common.CommonMiddleware',
+@@ -232,6 +233,22 @@ AI_MODELS = {
+     'MODEL_CACHE_DIR': BASE_DIR / 'models',
+ }
+ 
++# Discord Integration
++DISCORD_WEBHOOK_URL = os.getenv('DISCORD_WEBHOOK_URL', '')
++
++# Firebase Configuration
++FIREBASE_KEY_PATH = os.getenv('FIREBASE_KEY_PATH', '')
++FIREBASE_CONFIG = None
++
++# 환경변수에서 Firebase 서비스 계정 정보 읽기 (JSON 형태)
++firebase_config_json = os.getenv('FIREBASE_CONFIG_JSON', '')
++if firebase_config_json:
++    try:
++        import json
++        FIREBASE_CONFIG = json.loads(firebase_config_json)
++    except json.JSONDecodeError:
++        FIREBASE_CONFIG = None
++
+ # Create necessary directories
+ os.makedirs(BASE_DIR / 'logs', exist_ok=True)
+ os.makedirs(AI_MODELS['MODEL_CACHE_DIR'], exist_ok=True)
+\ No newline at end of file
+diff --git a/backend/config/urls.py b/backend/config/urls.py
+index 02d175a..5c6e973 100644
+--- a/backend/config/urls.py
++++ b/backend/config/urls.py
+@@ -41,6 +41,7 @@ urlpatterns = [
+     path('admin/', admin.site.urls),
+     
+     # API endpoints
++    path('api/v1/core/', include('core.urls')),
+     path('api/v1/fish/', include('fish_analysis.urls')),
+     path('api/v1/accounts/', include('accounts.urls')),
+     path('api/v1/dashboard/', include('dashboard.urls')),
+diff --git a/backend/core/models.py b/backend/core/models.py
+index f990b96..891cf7c 100644
+--- a/backend/core/models.py
++++ b/backend/core/models.py
+@@ -32,7 +32,19 @@ class User(AbstractUser):
+         default='basic',
+         verbose_name="구독 플랜"
+     )
++    status = models.CharField(
++        max_length=20,
++        choices=[
++            ('pending', '승인 대기'),
++            ('approved', '승인됨'),
++            ('rejected', '거절됨'),
++            ('suspended', '일시정지')
++        ],
++        default='pending',
++        verbose_name="계정 상태"
++    )
+     created_at = models.DateTimeField(auto_now_add=True, verbose_name="생성일시")
++    approved_at = models.DateTimeField(null=True, blank=True, verbose_name="승인일시")
+ 
+     class Meta:
+         db_table = 'users'
+diff --git a/backend/requirements.txt b/backend/requirements.txt
+index 8946d18..efb0e51 100644
+--- a/backend/requirements.txt
++++ b/backend/requirements.txt
+@@ -10,6 +10,7 @@ drf-spectacular==0.26.5
+ 
+ # Authentication & Security
+ djangorestframework-simplejwt==5.3.0
++firebase-admin==6.4.0
+ 
+ # Computer Vision & AI (기존 유지)
+ opencv-python==4.8.1.78
+diff --git a/frontend/package.json b/frontend/package.json
+index c2f3e2c..f487794 100644
+--- a/frontend/package.json
++++ b/frontend/package.json
+@@ -16,6 +16,7 @@
+     "axios": "^1.3.4",
+     "class-variance-authority": "^0.7.0",
+     "clsx": "^2.0.0",
++    "firebase": "^10.8.0",
+     "lucide-react": "^0.263.1",
+     "react": "^18.2.0",
+     "react-dom": "^18.2.0",
+diff --git a/frontend/src/lib/api.js b/frontend/src/lib/api.js
+index 748a20e..b96c5ad 100644
+--- a/frontend/src/lib/api.js
++++ b/frontend/src/lib/api.js
+@@ -1,7 +1,7 @@
+ import axios from 'axios';
+ 
+ // API 기본 설정
+-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api';
++const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
+ 
+ // axios 인스턴스 생성
+ const api = axios.create({
+@@ -12,12 +12,12 @@ const api = axios.create({
+   },
+ });
+ 
+-// 요청 인터셉터 (토큰 추가)
++// 요청 인터셉터 (Firebase ID 토큰 추가)
+ api.interceptors.request.use(
+   (config) => {
+-    const token = localStorage.getItem('accessToken');
+-    if (token) {
+-      config.headers.Authorization = `Bearer ${token}`;
++    const firebaseToken = localStorage.getItem('firebaseIdToken');
++    if (firebaseToken) {
++      config.headers.Authorization = `Bearer ${firebaseToken}`;
+     }
+     return config;
+   },
+@@ -34,7 +34,8 @@ api.interceptors.response.use(
+   (error) => {
+     if (error.response?.status === 401) {
+       // 토큰 만료 시 로그인 페이지로 리다이렉트
+-      localStorage.removeItem('accessToken');
++      localStorage.removeItem('firebaseIdToken');
++      localStorage.removeItem('userInfo');
+       window.location.href = '/login';
+     }
+     return Promise.reject(error);
+@@ -43,10 +44,14 @@ api.interceptors.response.use(
+ 
+ // API 함수들
+ export const authAPI = {
+-  login: (credentials) =>
+-    api.post('/auth/login', credentials),
+-  logout: () => api.post('/auth/logout'),
+-  refresh: () => api.post('/auth/refresh'),
++  // 사용자 등록 (회원가입)
++  register: (userData) => api.post('/core/auth/register/', userData),
++  
++  // 사용자 상태 확인
++  checkUserStatus: (firebaseUid) => api.get(`/core/auth/status/?firebase_uid=${firebaseUid}`),
++  
++  // 승인 대기 사용자 목록 (개발/테스트용)
++  getPendingUsers: () => api.get('/core/auth/pending/'),
+ };
+ 
+ export const customerAPI = {
+diff --git a/frontend/src/pages/login/LoginPage.jsx b/frontend/src/pages/login/LoginPage.jsx
+index 2c59749..c8a04e1 100644
+--- a/frontend/src/pages/login/LoginPage.jsx
++++ b/frontend/src/pages/login/LoginPage.jsx
+@@ -1,22 +1,314 @@
+ "use client"
+ 
+ import React from "react"
+-import { useState } from "react"
++import { useState, useEffect } from "react"
+ import { Button } from "../../components/ui/button"
+ import { Input } from "../../components/ui/input"
+ import { Label } from "../../components/ui/label"
+ import { Card, CardContent } from "../../components/ui/card"
+ import { SharkMascot } from "../../components/common/SharkMascot"
++import { setupRecaptcha, sendPhoneVerification, verifyPhoneCode, onAuthStateChange } from "../../lib/firebase"
++import { authAPI } from "../../lib/api"
+ 
+ export default function LoginPage() {
+-  const [credentials, setCredentials] = useState({ username: "", password: "" })
++  const [step, setStep] = useState('phone') // 'phone', 'code', 'register', 'pending'
++  const [phoneNumber, setPhoneNumber] = useState('')
++  const [verificationCode, setVerificationCode] = useState('')
++  const [loading, setLoading] = useState(false)
++  const [error, setError] = useState('')
++  const [userInfo, setUserInfo] = useState({
++    business_name: '',
++    owner_name: '',
++    address: '',
++    business_registration_number: '',
++    subscription_plan: 'basic'
++  })
+ 
+-  const handleLogin = (e) => {
++  useEffect(() => {
++    // 페이지 로드 시 reCAPTCHA 설정
++    setupRecaptcha('recaptcha-container')
++    
++    // 이미 로그인된 사용자가 있는지 확인
++    const unsubscribe = onAuthStateChange(async (user) => {
++      if (user) {
++        await handleAuthenticatedUser(user)
++      }
++    })
++    
++    return () => unsubscribe()
++  }, [])
++
++  const handleAuthenticatedUser = async (user) => {
++    try {
++      const idToken = await user.getIdToken()
++      localStorage.setItem('firebaseIdToken', idToken)
++      
++      // 사용자 상태 확인
++      const response = await authAPI.checkUserStatus(user.uid)
++      
++      if (response.data.exists) {
++        const userData = response.data.user
++        localStorage.setItem('userInfo', JSON.stringify(userData))
++        
++        if (userData.status === 'approved') {
++          // 승인된 사용자 -> 대시보드로 이동
++          window.location.href = '/dashboard'
++        } else if (userData.status === 'pending') {
++          // 승인 대기 상태
++          setStep('pending')
++        } else {
++          // 거절 또는 정지 상태
++          setError('계정이 비활성화되었습니다. 관리자에게 문의하세요.')
++        }
++      } else {
++        // 미등록 사용자 -> 회원가입 단계로
++        setUserInfo(prev => ({ ...prev, firebase_uid: user.uid, phone_number: user.phoneNumber }))
++        setStep('register')
++      }
++    } catch (error) {
++      console.error('사용자 상태 확인 오류:', error)
++      setError('사용자 정보를 확인하는 중 오류가 발생했습니다.')
++    }
++  }
++
++  const handleSendCode = async (e) => {
++    e.preventDefault()
++    setLoading(true)
++    setError('')
++    
++    try {
++      const result = await sendPhoneVerification(phoneNumber)
++      
++      if (result.success) {
++        setStep('code')
++      } else {
++        setError(result.message)
++      }
++    } catch (error) {
++      setError('인증번호 전송 중 오류가 발생했습니다.')
++    } finally {
++      setLoading(false)
++    }
++  }
++
++  const handleVerifyCode = async (e) => {
+     e.preventDefault()
+-    // Simple demo login - in real app, validate credentials
+-    console.log("Login attempt:", credentials)
++    setLoading(true)
++    setError('')
++    
++    try {
++      const result = await verifyPhoneCode(verificationCode)
++      
++      if (result.success) {
++        // Firebase 인증 성공 -> onAuthStateChange에서 처리됨
++      } else {
++        setError(result.message)
++      }
++    } catch (error) {
++      setError('인증번호 확인 중 오류가 발생했습니다.')
++    } finally {
++      setLoading(false)
++    }
+   }
+ 
++  const handleRegister = async (e) => {
++    e.preventDefault()
++    setLoading(true)
++    setError('')
++    
++    try {
++      const response = await authAPI.register(userInfo)
++      
++      if (response.status === 201) {
++        setStep('pending')
++      } else {
++        setError('회원가입 중 오류가 발생했습니다.')
++      }
++    } catch (error) {
++      console.error('회원가입 오류:', error)
++      setError(error.response?.data?.message || '회원가입 중 오류가 발생했습니다.')
++    } finally {
++      setLoading(false)
++    }
++  }
++
++  const renderPhoneStep = () => (
++    <form onSubmit={handleSendCode} className="space-y-4">
++      <div className="space-y-2">
++        <Label htmlFor="phone" className="text-base font-medium text-gray-700">
++          전화번호
++        </Label>
++        <Input
++          id="phone"
++          type="tel"
++          placeholder="010-1234-5678"
++          value={phoneNumber}
++          onChange={(e) => setPhoneNumber(e.target.value)}
++          className="h-12 text-base border-gray-300 focus:border-accent-blue"
++          required
++        />
++        <p className="text-xs text-gray-500">인증번호가 SMS로 전송됩니다.</p>
++      </div>
++
++      <Button
++        type="submit"
++        disabled={loading}
++        className="w-full h-12 bg-navy hover:bg-navy/90 text-white text-base font-medium mt-6"
++      >
++        {loading ? '전송 중...' : '인증번호 전송'}
++      </Button>
++    </form>
++  )
++
++  const renderCodeStep = () => (
++    <form onSubmit={handleVerifyCode} className="space-y-4">
++      <div className="space-y-2">
++        <Label htmlFor="code" className="text-base font-medium text-gray-700">
++          인증번호
++        </Label>
++        <Input
++          id="code"
++          type="text"
++          placeholder="6자리 인증번호"
++          value={verificationCode}
++          onChange={(e) => setVerificationCode(e.target.value)}
++          className="h-12 text-base border-gray-300 focus:border-accent-blue text-center tracking-widest"
++          maxLength="6"
++          required
++        />
++        <p className="text-xs text-gray-500">{phoneNumber}로 전송된 인증번호를 입력하세요.</p>
++      </div>
++
++      <div className="flex gap-2">
++        <Button
++          type="button"
++          variant="outline"
++          onClick={() => setStep('phone')}
++          className="flex-1 h-12"
++        >
++          뒤로
++        </Button>
++        <Button
++          type="submit"
++          disabled={loading}
++          className="flex-1 h-12 bg-navy hover:bg-navy/90 text-white"
++        >
++          {loading ? '확인 중...' : '인증 확인'}
++        </Button>
++      </div>
++    </form>
++  )
++
++  const renderRegisterStep = () => (
++    <form onSubmit={handleRegister} className="space-y-4">
++      <div className="space-y-2">
++        <Label htmlFor="business_name" className="text-base font-medium text-gray-700">
++          사업장명 *
++        </Label>
++        <Input
++          id="business_name"
++          type="text"
++          placeholder="예: 바다수산"
++          value={userInfo.business_name}
++          onChange={(e) => setUserInfo(prev => ({ ...prev, business_name: e.target.value }))}
++          className="h-12 text-base border-gray-300 focus:border-accent-blue"
++          required
++        />
++      </div>
++
++      <div className="space-y-2">
++        <Label htmlFor="owner_name" className="text-base font-medium text-gray-700">
++          대표자명 *
++        </Label>
++        <Input
++          id="owner_name"
++          type="text"
++          placeholder="홍길동"
++          value={userInfo.owner_name}
++          onChange={(e) => setUserInfo(prev => ({ ...prev, owner_name: e.target.value }))}
++          className="h-12 text-base border-gray-300 focus:border-accent-blue"
++          required
++        />
++      </div>
++
++      <div className="space-y-2">
++        <Label htmlFor="address" className="text-base font-medium text-gray-700">
++          주소 *
++        </Label>
++        <Input
++          id="address"
++          type="text"
++          placeholder="부산광역시 기장군 일광면"
++          value={userInfo.address}
++          onChange={(e) => setUserInfo(prev => ({ ...prev, address: e.target.value }))}
++          className="h-12 text-base border-gray-300 focus:border-accent-blue"
++          required
++        />
++      </div>
++
++      <div className="space-y-2">
++        <Label htmlFor="business_number" className="text-base font-medium text-gray-700">
++          사업자등록번호 *
++        </Label>
++        <Input
++          id="business_number"
++          type="text"
++          placeholder="123-45-67890"
++          value={userInfo.business_registration_number}
++          onChange={(e) => setUserInfo(prev => ({ ...prev, business_registration_number: e.target.value }))}
++          className="h-12 text-base border-gray-300 focus:border-accent-blue"
++          required
++        />
++      </div>
++
++      <Button
++        type="submit"
++        disabled={loading}
++        className="w-full h-12 bg-navy hover:bg-navy/90 text-white text-base font-medium mt-6"
++      >
++        {loading ? '가입 신청 중...' : '가입 신청'}
++      </Button>
++    </form>
++  )
++
++  const renderPendingStep = () => (
++    <div className="text-center space-y-4">
++      <div className="w-16 h-16 mx-auto bg-yellow-100 rounded-full flex items-center justify-center">
++        <svg className="w-8 h-8 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
++          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
++        </svg>
++      </div>
++      <div>
++        <h3 className="text-xl font-bold text-gray-900 mb-2">승인 대기 중</h3>
++        <p className="text-gray-600">
++          회원가입 신청이 완료되었습니다.<br />
++          관리자 승인 후 서비스를 이용하실 수 있습니다.
++        </p>
++      </div>
++      <div className="text-sm text-gray-500">
++        <p>승인까지 1-2일 정도 소요될 수 있습니다.</p>
++        <p>승인 완료 시 SMS로 안내드립니다.</p>
++      </div>
++    </div>
++  )
++
++  const getStepInfo = () => {
++    switch (step) {
++      case 'phone':
++        return { title: '로그인', subtitle: '전화번호로 로그인하세요' }
++      case 'code':
++        return { title: '인증번호 확인', subtitle: '전송받은 인증번호를 입력하세요' }
++      case 'register':
++        return { title: '회원가입', subtitle: '사업장 정보를 입력해주세요' }
++      case 'pending':
++        return { title: '가입 완료', subtitle: '' }
++      default:
++        return { title: '로그인', subtitle: '전화번호로 로그인하세요' }
++    }
++  }
++
++  const stepInfo = getStepInfo()
++
+   return (
+     <div className="min-h-screen flex">
+       {/* Left Side - Dark Navy with Mascot */}
+@@ -44,57 +336,23 @@ export default function LoginPage() {
+           <CardContent className="p-8">
+             <div className="space-y-6">
+               <div className="text-center space-y-2">
+-                <h2 className="text-2xl font-bold text-gray-900">로그인</h2>
+-                <p className="text-gray-600">계정 정보를 입력해주세요</p>
++                <h2 className="text-2xl font-bold text-gray-900">{stepInfo.title}</h2>
++                {stepInfo.subtitle && <p className="text-gray-600">{stepInfo.subtitle}</p>}
+               </div>
+ 
+-              <form onSubmit={handleLogin} className="space-y-4">
+-                <div className="space-y-2">
+-                  <Label htmlFor="username" className="text-base font-medium text-gray-700">
+-                    아이디
+-                  </Label>
+-                  <Input
+-                    id="username"
+-                    type="text"
+-                    placeholder="아이디를 입력하세요"
+-                    value={credentials.username}
+-                    onChange={(e) => setCredentials((prev) => ({ ...prev, username: e.target.value }))}
+-                    className="h-12 text-base border-gray-300 focus:border-accent-blue"
+-                    required
+-                  />
++              {error && (
++                <div className="bg-red-50 border border-red-200 rounded-md p-3">
++                  <p className="text-red-600 text-sm">{error}</p>
+                 </div>
++              )}
+ 
+-                <div className="space-y-2">
+-                  <Label htmlFor="password" className="text-base font-medium text-gray-700">
+-                    비밀번호
+-                  </Label>
+-                  <Input
+-                    id="password"
+-                    type="password"
+-                    placeholder="비밀번호를 입력하세요"
+-                    value={credentials.password}
+-                    onChange={(e) => setCredentials((prev) => ({ ...prev, password: e.target.value }))}
+-                    className="h-12 text-base border-gray-300 focus:border-accent-blue"
+-                    required
+-                  />
+-                </div>
++              {step === 'phone' && renderPhoneStep()}
++              {step === 'code' && renderCodeStep()}
++              {step === 'register' && renderRegisterStep()}
++              {step === 'pending' && renderPendingStep()}
+ 
+-                <Button
+-                  type="submit"
+-                  className="w-full h-12 bg-navy hover:bg-navy/90 text-white text-base font-medium mt-6"
+-                >
+-                  로그인
+-                </Button>
+-              </form>
+-
+-              <div className="text-center space-y-2 text-sm text-gray-500">
+-                <p>
+-                  계정이 없으신가요? <span className="text-accent-blue cursor-pointer hover:underline">회원가입</span>
+-                </p>
+-                <p>
+-                  <span className="text-accent-blue cursor-pointer hover:underline">비밀번호 찾기</span>
+-                </p>
+-              </div>
++              {/* reCAPTCHA container */}
++              <div id="recaptcha-container"></div>
+             </div>
+           </CardContent>
+         </Card>

@@ -45,10 +45,9 @@ class UserSerializer(serializers.ModelSerializer):
             'firebase_uid',
             'subscription_plan',
             'status',
-            'created_at',
-            'approved_at'
+            'created_at'
         ]
-        read_only_fields = ['id', 'status', 'created_at', 'approved_at']
+        read_only_fields = ['id', 'status', 'created_at']
 
 
 class BusinessSerializer(serializers.ModelSerializer):

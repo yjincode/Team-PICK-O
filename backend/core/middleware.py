@@ -1,6 +1,7 @@
 """
 Firebase 인증 미들웨어
 """
+import os
 import logging
 from django.http import JsonResponse
 from django.contrib.auth import get_user_model
@@ -25,22 +26,25 @@ class FirebaseAuthMiddleware(MiddlewareMixin):
         
         # Firebase Admin SDK 초기화
         if not firebase_admin._apps:
-            # 서비스 계정 키 파일 경로 또는 환경변수에서 credential 설정
-            firebase_key_path = getattr(settings, 'FIREBASE_KEY_PATH', None)
-            
-            if firebase_key_path:
-                cred = credentials.Certificate(firebase_key_path)
-            else:
-                # 환경변수에서 서비스 계정 정보 읽기
-                firebase_config = getattr(settings, 'FIREBASE_CONFIG', None)
-                if firebase_config:
-                    cred = credentials.Certificate(firebase_config)
+            try:
+                # 서비스 계정 키 파일 경로 또는 환경변수에서 credential 설정
+                firebase_key_path = getattr(settings, 'FIREBASE_KEY_PATH', None)
+                firebase_config = getattr(settings, 'FIREBASE_CONFIG', {})
+                service_account_path = firebase_config.get('SERVICE_ACCOUNT_PATH')
+                
+                if firebase_key_path and os.path.exists(firebase_key_path):
+                    cred = credentials.Certificate(firebase_key_path)
+                    firebase_admin.initialize_app(cred)
+                    logger.info("Firebase Admin SDK 초기화 완료")
+                elif service_account_path and os.path.exists(service_account_path):
+                    cred = credentials.Certificate(service_account_path)
+                    firebase_admin.initialize_app(cred)
+                    logger.info("Firebase Admin SDK 초기화 완료")
                 else:
-                    # 기본 credential 사용 (Google Cloud 환경에서)
-                    cred = credentials.ApplicationDefault()
-            
-            firebase_admin.initialize_app(cred)
-            logger.info("Firebase Admin SDK 초기화 완료")
+                    logger.warning("Firebase 서비스 계정 키 파일을 찾을 수 없습니다. Firebase 인증이 비활성화됩니다.")
+            except Exception as e:
+                logger.error(f"Firebase 초기화 실패: {e}")
+                logger.warning("Firebase 인증이 비활성화됩니다.")
     
     def process_request(self, request):
         # 인증이 필요하지 않은 경로들
