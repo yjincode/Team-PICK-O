@@ -13,6 +13,7 @@ import SalesList from './pages/sales/SalesList';
 import SalesChart from './pages/sales/SalesChart';
 import AuctionPredictionChart from './pages/sales/AuctionPredictionChart';
 import LoginPage from './pages/login/LoginPage';
+import Call from './pages/call/Call'; // 경로는 실제 위치에 맞게 조정하세요
 
 function App() {
   return (
@@ -72,6 +73,11 @@ function App() {
             <SalesList />
           </MainLayout>
         } />
+        <Route path="/call" element={
+  <MainLayout>
+    <Call />
+  </MainLayout>
+} />
         <Route path="/sales/chart" element={
           <MainLayout>
             <SalesChart />
