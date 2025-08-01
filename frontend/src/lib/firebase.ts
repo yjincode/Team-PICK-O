@@ -50,7 +50,7 @@ declare global {
   }
 }
 
-// Firebase 설정
+// Firebase 설정 (직접 하드코딩)
 const firebaseConfig: FirebaseConfig = {
   apiKey: "AIzaSyChBnuJCAKe-TxcvGT0eCV5AUNA_4btZPo",
   authDomain: "pick-o-main.firebaseapp.com",
@@ -61,102 +61,207 @@ const firebaseConfig: FirebaseConfig = {
   measurementId: "G-0MZ40REVBH"
 };
 
+// Firebase 설정 디버깅
+console.log('🔥 Firebase 설정 전체:', firebaseConfig);
+
 // Firebase 초기화
 const app: FirebaseApp = initializeApp(firebaseConfig);
 const auth: Auth = getAuth(app);
-const analytics: Analytics = getAnalytics(app);
+
+// Analytics 초기화 (개발 환경에서는 선택적)
+let analytics: Analytics;
+try {
+  analytics = getAnalytics(app);
+} catch (error) {
+  console.warn('Analytics 초기화 실패 (개발 환경에서는 정상):', error);
+}
 
 // reCAPTCHA verifier 설정
-export const setupRecaptcha = (containerId: string): void => {
+export const setupRecaptcha = (containerId: string): RecaptchaVerifier => {
+  console.log('🔧 reCAPTCHA 설정 시작...', { containerId, authDomain: firebaseConfig.authDomain });
+  
+  // 기존 verifier가 있다면 정리
   if (window.recaptchaVerifier) {
-    window.recaptchaVerifier.clear();
+    try {
+      console.log('🧹 기존 reCAPTCHA verifier 정리 중...');
+      window.recaptchaVerifier.clear();
+    } catch (error) {
+      console.warn('기존 reCAPTCHA verifier 정리 중 오류:', error);
+    }
+    window.recaptchaVerifier = undefined;
   }
   
-  window.recaptchaVerifier = new RecaptchaVerifier(auth, containerId, {
-    'size': 'invisible',
+  // DOM 요소 확인
+  const container = document.getElementById(containerId);
+  if (!container) {
+    throw new Error(`reCAPTCHA 컨테이너를 찾을 수 없습니다: ${containerId}`);
+  }
+  
+  console.log('📍 reCAPTCHA 컨테이너 확인됨:', container);
+  
+  // 새로운 RecaptchaVerifier 생성
+  const recaptchaVerifier = new RecaptchaVerifier(auth, containerId, {
+    'size': 'normal',
     'callback': (response: string) => {
-      console.log('reCAPTCHA 검증 완료');
+      console.log('✅ reCAPTCHA 검증 완료:', response.substring(0, 20) + '...');
     },
     'expired-callback': () => {
-      console.log('reCAPTCHA 만료');
-      window.recaptchaVerifier?.clear();
+      console.log('❌ reCAPTCHA 만료');
+      // reCAPTCHA 만료 시 자동 재설정
+      if (window.recaptchaVerifier) {
+        window.recaptchaVerifier.clear();
+        window.recaptchaVerifier = undefined;
+      }
+    },
+    'error-callback': (error: any) => {
+      console.error('❌ reCAPTCHA 오류:', error);
     }
   });
+  
+  console.log('🔨 reCAPTCHA verifier 생성됨');
+  
+  // window 객체에 저장
+  window.recaptchaVerifier = recaptchaVerifier;
+  
+  return recaptchaVerifier;
 };
 
 // 전화번호 인증 코드 전송
 export const sendPhoneVerification = async (phoneNumber: string): Promise<AuthResult> => {
   try {
-    if (!window.recaptchaVerifier) {
-      throw new Error('reCAPTCHA verifier가 설정되지 않았습니다.');
+    console.log('📱 전화번호 인증 시작:', phoneNumber);
+    
+    // 전화번호 정규화
+    const normalizedPhone = normalizePhoneNumber(phoneNumber);
+    if (!normalizedPhone) {
+      return {
+        success: false,
+        error: '유효하지 않은 전화번호 형식입니다.'
+      };
     }
     
-    // 한국 전화번호 형식으로 변환 (+82)
-    const formattedNumber = phoneNumber.startsWith('+82') 
-      ? phoneNumber 
-      : phoneNumber.replace(/^0/, '+82');
+    console.log('📱 전화번호 인증 시작:', normalizedPhone);
     
-    const confirmationResult = await signInWithPhoneNumber(auth, formattedNumber, window.recaptchaVerifier);
+    // reCAPTCHA verifier 설정
+    const recaptchaVerifier = setupRecaptcha('recaptcha-container');
+    
+    // Auth 객체 상태 확인
+    console.log('🔐 Auth 객체 상태:', { 
+      currentUser: auth.currentUser,
+      app: auth.app.name,
+      apiKey: firebaseConfig.apiKey.substring(0, 20) + '...',
+      projectId: firebaseConfig.projectId 
+    });
+    
+    // 전화번호 인증 요청
+    console.log('🔐 Firebase Auth 시도:', { phoneNumber: normalizedPhone, projectId: firebaseConfig.projectId });
+    
+    const confirmationResult = await signInWithPhoneNumber(
+      auth,
+      normalizedPhone,
+      recaptchaVerifier
+    );
+    
+    // window 객체에 저장
     window.confirmationResult = confirmationResult;
     
+    console.log('✅ 인증 코드 전송 성공');
+    
     return {
       success: true,
-      message: '인증번호가 전송되었습니다.',
-      confirmationResult
+      message: '인증 코드가 전송되었습니다.',
+      confirmationResult: confirmationResult
     };
-  } catch (error: any) {
-    console.error('전화번호 인증 오류:', error);
     
-    // reCAPTCHA 초기화
-    if (window.recaptchaVerifier) {
-      window.recaptchaVerifier.clear();
-    }
+  } catch (error: any) {
+    console.error('❌ 전화번호 인증 오류:', error);
+    
+    const errorMessage = getErrorMessage(error.code);
     
     return {
       success: false,
-      message: getErrorMessage(error.code),
-      error: error.message
+      error: errorMessage || '인증 코드 전송에 실패했습니다.'
     };
   }
 };
 
-// 인증번호 확인
+// 전화번호 정규화 함수
+const normalizePhoneNumber = (phoneNumber: string): string | null => {
+  // 하이픈 제거
+  let cleaned = phoneNumber.replace(/[-]/g, '');
+  
+  // 한국 전화번호 형식 처리
+  if (cleaned.startsWith('0')) {
+    cleaned = '+82' + cleaned.substring(1);
+  } else if (cleaned.startsWith('82')) {
+    cleaned = '+' + cleaned;
+  } else if (!cleaned.startsWith('+')) {
+    cleaned = '+82' + cleaned;
+  }
+  
+  // 유효성 검사 (한국 전화번호: +82 10-1234-5678)
+  const phoneRegex = /^\+82[0-9]{9,10}$/;
+  if (!phoneRegex.test(cleaned)) {
+    return null;
+  }
+  
+  return cleaned;
+};
+
+// 인증 코드 확인
 export const verifyPhoneCode = async (code: string): Promise<AuthResult> => {
   try {
-    const confirmationResult = window.confirmationResult;
-    if (!confirmationResult) {
-      throw new Error('인증 세션을 찾을 수 없습니다. 다시 인증번호를 요청해주세요.');
+    console.log('🔐 인증 코드 확인 시작');
+    
+    if (!window.confirmationResult) {
+      return {
+        success: false,
+        error: '인증 세션이 만료되었습니다. 다시 시도해주세요.'
+      };
     }
     
-    const result: UserCredential = await confirmationResult.confirm(code);
-    const user: User = result.user;
+    // 인증 코드 확인
+    const result: UserCredential = await window.confirmationResult.confirm(code);
     
-    // Firebase ID 토큰 획득
-    const idToken: string = await user.getIdToken();
+    if (result.user) {
+      // ID 토큰 가져오기
+      const idToken = await result.user.getIdToken();
+      
+      console.log('✅ 인증 성공:', result.user.uid);
+      
+      return {
+        success: true,
+        message: '인증이 완료되었습니다.',
+        user: result.user,
+        idToken: idToken,
+        uid: result.user.uid,
+        phoneNumber: result.user.phoneNumber || ''
+      };
+    } else {
+      return {
+        success: false,
+        error: '인증에 실패했습니다.'
+      };
+    }
     
-    return {
-      success: true,
-      user: user,
-      idToken: idToken,
-      uid: user.uid,
-      phoneNumber: user.phoneNumber || undefined
-    };
   } catch (error: any) {
-    console.error('인증번호 확인 오류:', error);
+    console.error('❌ 인증 코드 확인 오류:', error);
+    
+    const errorMessage = getErrorMessage(error.code);
+    
     return {
       success: false,
-      message: getErrorMessage(error.code),
-      error: error.message
+      error: errorMessage || '인증 코드가 올바르지 않습니다.'
     };
   }
 };
 
-// 현재 사용자 정보 가져오기
+// 현재 사용자 가져오기
 export const getCurrentUser = (): User | null => {
   return auth.currentUser;
 };
 
-// 사용자 상태 변화 감지
+// 인증 상태 변경 감지
 export const onAuthStateChange = (callback: (user: User | null) => void): Unsubscribe => {
   return onAuthStateChanged(auth, callback);
 };
@@ -166,41 +271,54 @@ export const signOut = async (): Promise<SignOutResult> => {
   try {
     await auth.signOut();
     
-    // reCAPTCHA 정리
+    // window 객체 정리
     if (window.recaptchaVerifier) {
-      window.recaptchaVerifier.clear();
-    }
-    if (window.confirmationResult) {
-      window.confirmationResult = undefined;
+      try {
+        window.recaptchaVerifier.clear();
+      } catch (error) {
+        console.warn('reCAPTCHA verifier 정리 중 오류:', error);
+      }
+      window.recaptchaVerifier = undefined;
     }
     
-    return { success: true };
+    window.confirmationResult = undefined;
+    
+    console.log('✅ 로그아웃 성공');
+    
+    return {
+      success: true
+    };
+    
   } catch (error: any) {
-    console.error('로그아웃 오류:', error);
-    return { 
-      success: false, 
-      error: error.message 
+    console.error('❌ 로그아웃 오류:', error);
+    
+    return {
+      success: false,
+      error: '로그아웃에 실패했습니다.'
     };
   }
 };
 
-// 에러 메시지 한글화
+// Firebase 에러 메시지 변환
 const getErrorMessage = (errorCode: string): string => {
   switch (errorCode) {
     case 'auth/invalid-phone-number':
-      return '유효하지 않은 전화번호입니다.';
+      return '유효하지 않은 전화번호 형식입니다.';
+    case 'auth/invalid-verification-code':
+      return '인증 코드가 올바르지 않습니다.';
+    case 'auth/invalid-verification-id':
+      return '인증 세션이 만료되었습니다. 다시 시도해주세요.';
+    case 'auth/quota-exceeded':
+      return '인증 요청 한도를 초과했습니다. 잠시 후 다시 시도해주세요.';
     case 'auth/too-many-requests':
       return '너무 많은 요청이 발생했습니다. 잠시 후 다시 시도해주세요.';
-    case 'auth/invalid-verification-code':
-      return '인증번호가 올바르지 않습니다.';
-    case 'auth/code-expired':
-      return '인증번호가 만료되었습니다. 다시 요청해주세요.';
-    case 'auth/session-expired':
-      return '세션이 만료되었습니다. 다시 시도해주세요.';
+    case 'auth/invalid-app-credential':
+      return 'Firebase 앱 설정에 문제가 있습니다. 관리자에게 문의하거나 잠시 후 다시 시도해주세요.';
+    case 'auth/network-request-failed':
+      return '네트워크 연결을 확인해주세요.';
     default:
-      return '오류가 발생했습니다. 다시 시도해주세요.';
+      return '인증 중 오류가 발생했습니다. 다시 시도해주세요.';
   }
 };
 
 export { auth, app, analytics };
-export type { AuthResult, SignOutResult, FirebaseConfig };

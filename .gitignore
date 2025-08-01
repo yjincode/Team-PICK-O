@@ -8,12 +8,26 @@ yarn-error.log*
 dist/
 build/
 
-# dotenv
+# 환경변수 파일 (프로젝트 루트)
 .env
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
+
+# 프론트엔드 환경변수
+frontend/.env
+frontend/.env.local
+frontend/.env.development.local
+frontend/.env.test.local
+frontend/.env.production.local
+
+# 백엔드 환경변수
+backend/.env
+backend/.env.local
+backend/.env.development.local
+backend/.env.test.local
+backend/.env.production.local
 
 # ---------------------------
 # 🐍 Python (FastAPI or 기타 백엔드)
@@ -35,10 +49,13 @@ ENV/
 ENV.bak/
 venv.bak/
 
+# Firebase 서비스 계정 키
+firebase-service-account.json
+firebase-adminsdk-*.json
+**/firebase-service-account.json
+**/firebase-adminsdk-*.json
+
 # 민감한 정보 및 설정 파일
-.env
-.env.*
-!.env.example
 config/local_settings.py
 config/secret_settings.py
 

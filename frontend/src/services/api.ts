@@ -8,7 +8,10 @@ import {
 } from '../types/auth';
 
 // API 기본 설정
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api/v1';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
+
+// 디버깅용 로그
+console.log('🔗 API Base URL:', API_BASE_URL);
 
 // HTTP 클라이언트 클래스
 class ApiClient {
@@ -24,6 +27,7 @@ class ApiClient {
     options: RequestInit = {}
   ): Promise<T> {
     const url = `${this.baseURL}${endpoint}`;
+    console.log(`📡 API 요청: ${url}`);
     
     const defaultHeaders: HeadersInit = {
       'Content-Type': 'application/json',
@@ -33,6 +37,7 @@ class ApiClient {
     const idToken = localStorage.getItem('firebase_token');
     if (idToken) {
       defaultHeaders['Authorization'] = `Bearer ${idToken}`;
+      console.log('🔐 Firebase 토큰 포함됨');
     }
 
     const config: RequestInit = {
@@ -41,23 +46,37 @@ class ApiClient {
     };
 
     try {
+      console.log('📤 요청 설정:', { url, method: config.method || 'GET' });
       const response = await fetch(url, config);
+      console.log('📥 응답 상태:', response.status);
       
-      // 응답이 JSON이 아닌 경우 처리
+      // 응답이 JSON이 아닌 경우에도 일단 텍스트로 받아보기
+      let data;
       const contentType = response.headers.get('content-type');
-      if (!contentType || !contentType.includes('application/json')) {
-        throw new Error(`서버 응답 오류: ${response.status}`);
+      
+      if (contentType && contentType.includes('application/json')) {
+        data = await response.json();
+      } else {
+        const text = await response.text();
+        console.warn('⚠️ JSON이 아닌 응답:', text);
+        throw new Error(`서버 응답 오류: ${response.status} - ${text}`);
       }
 
-      const data = await response.json();
-
       if (!response.ok) {
+        console.error('❌ API 오류 응답:', data);
         throw new Error(data.error || data.message || `HTTP ${response.status}`);
       }
 
+      console.log('✅ API 응답 성공:', data);
       return data as T;
-    } catch (error) {
-      console.error(`API 요청 실패 [${endpoint}]:`, error);
+    } catch (error: any) {
+      console.error(`❌ API 요청 실패 [${endpoint}]:`, error);
+      
+      // 네트워크 오류인지 확인
+      if (error.name === 'TypeError' && error.message === 'Failed to fetch') {
+        throw new Error('서버에 연결할 수 없습니다. 백엔드 서버가 실행 중인지 확인해주세요.');
+      }
+      
       throw error;
     }
   }

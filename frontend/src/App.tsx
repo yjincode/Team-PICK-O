@@ -1,7 +1,8 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
-import { PrivateRoute, PublicRoute } from './components/auth/PrivateRoute';
+import PrivateRoute from './components/auth/PrivateRoute';
+import PublicRoute from './components/auth/PublicRoute';
 import MainLayout from './components/layout/MainLayout';
 import Dashboard from './pages/dashboard/Dashboard';
 import CustomerList from './pages/customers/CustomerList';
@@ -14,14 +15,14 @@ import FishItemForm from './pages/inventory/FishItemForm';
 import SalesList from './pages/sales/SalesList';
 import SalesChart from './pages/sales/SalesChart';
 import AuctionPredictionChart from './pages/sales/AuctionPredictionChart';
-import LoginPage from './pages/login/LoginPage.tsx';
+import LoginPage from './pages/login/LoginPage';
 
-function App(): JSX.Element {
+const App: React.FC = () => {
   return (
     <AuthProvider>
       <Router>
         <Routes>
-          {/* 공개 라우트 - 로그인 페이지 */}
+          {/* 로그인 페이지는 레이아웃 없이 */}
           <Route 
             path="/login" 
             element={
@@ -31,9 +32,8 @@ function App(): JSX.Element {
             } 
           />
           
-          {/* 보호된 라우트들 - 인증 및 승인 필요 */}
+          {/* 나머지 페이지들은 메인 레이아웃과 인증 보호 적용 */}
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
-          
           <Route 
             path="/dashboard" 
             element={
@@ -45,7 +45,6 @@ function App(): JSX.Element {
             } 
           />
           
-          {/* 고객 관리 */}
           <Route 
             path="/customers" 
             element={
@@ -77,7 +76,6 @@ function App(): JSX.Element {
             } 
           />
           
-          {/* 주문 관리 */}
           <Route 
             path="/orders" 
             element={
@@ -99,7 +97,6 @@ function App(): JSX.Element {
             } 
           />
           
-          {/* 재고 관리 */}
           <Route 
             path="/inventory" 
             element={
@@ -121,7 +118,6 @@ function App(): JSX.Element {
             } 
           />
           
-          {/* 매출 관리 */}
           <Route 
             path="/sales" 
             element={
@@ -153,7 +149,7 @@ function App(): JSX.Element {
             } 
           />
           
-          {/* 404 페이지 - 인증된 사용자는 대시보드로, 미인증 사용자는 로그인으로 */}
+          {/* 404 페이지 */}
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
       </Router>
@@ -161,4 +157,4 @@ function App(): JSX.Element {
   );
 }
 
-export default App;
+export default App; 

@@ -28,6 +28,7 @@ export default function LoginPage(): JSX.Element {
   const [phoneNumber, setPhoneNumber] = useState<string>('')
   const [verificationCode, setVerificationCode] = useState<string>('')
   const [loading, setLoading] = useState<boolean>(false)
+  const [cooldown, setCooldown] = useState<number>(0)
   const [error, setError] = useState<string>('')
   const [userInfo, setUserInfo] = useState<UserRegistrationData>({
     firebase_uid: '',
@@ -40,8 +41,15 @@ export default function LoginPage(): JSX.Element {
   })
 
   useEffect(() => {
-    // 페이지 로드 시 reCAPTCHA 설정
-    setupRecaptcha('recaptcha-container')
+    // 컴포넌트 마운트 시 reCAPTCHA 설정
+    try {
+      console.log('🔧 reCAPTCHA 초기화 중...');
+      setupRecaptcha('recaptcha-container');
+      console.log('✅ reCAPTCHA 초기화 완료');
+    } catch (error) {
+      console.error('❌ reCAPTCHA 초기화 실패:', error);
+      setError('reCAPTCHA 초기화에 실패했습니다. 페이지를 새로고침해주세요.');
+    }
     
     // 이미 로그인된 사용자가 있는지 확인
     const unsubscribe = onAuthStateChange(async (user: User | null) => {
@@ -50,7 +58,20 @@ export default function LoginPage(): JSX.Element {
       }
     })
     
-    return () => unsubscribe()
+    // 컴포넌트 언마운트 시 정리
+    return () => {
+      unsubscribe();
+      // reCAPTCHA 정리
+      try {
+        if (window.recaptchaVerifier) {
+          window.recaptchaVerifier.clear();
+          window.recaptchaVerifier = undefined;
+        }
+        window.confirmationResult = undefined;
+      } catch (error) {
+        console.warn('정리 중 오류:', error);
+      }
+    }
   }, [])
 
   const handleAuthenticatedUser = async (user: User): Promise<void> => {
@@ -96,15 +117,55 @@ export default function LoginPage(): JSX.Element {
     setError('')
     
     try {
+      console.log('📱 전화번호 인증 시작:', phoneNumber);
+      
       const result = await sendPhoneVerification(phoneNumber)
       
       if (result.success) {
+        console.log('✅ SMS 전송 요청 성공');
         setStep('code')
+        // 성공 시 60초 쿨다운
+        setCooldown(60)
+        const timer = setInterval(() => {
+          setCooldown(prev => {
+            if (prev <= 1) {
+              clearInterval(timer)
+              return 0
+            }
+            return prev - 1
+          })
+        }, 1000)
       } else {
+        console.error('❌ SMS 전송 실패:', result.error);
         setError(result.message || '인증번호 전송에 실패했습니다.')
+        
+        // too-many-requests 오류인 경우 긴 쿨다운
+        if (result.error?.includes('too-many-requests')) {
+          setCooldown(300) // 5분 쿨다운
+          const timer = setInterval(() => {
+            setCooldown(prev => {
+              if (prev <= 1) {
+                clearInterval(timer)
+                return 0
+              }
+              return prev - 1
+            })
+          }, 1000)
+        }
+        
+        // reCAPTCHA 관련 오류인 경우 재설정
+        if (result.error?.includes('captcha') || result.error?.includes('internal-error')) {
+          console.log('🔄 reCAPTCHA 재설정 시도...');
+          try {
+            setupRecaptcha('recaptcha-container');
+          } catch (recaptchaError) {
+            console.error('reCAPTCHA 재설정 실패:', recaptchaError);
+          }
+        }
       }
-    } catch (error) {
-      setError('인증번호 전송 중 오류가 발생했습니다.')
+    } catch (error: any) {
+      console.error('❌ 전화번호 인증 오류:', error);
+      setError('인증번호 전송 중 오류가 발생했습니다. 페이지를 새로고침하고 다시 시도해주세요.')
     } finally {
       setLoading(false)
     }
@@ -116,14 +177,19 @@ export default function LoginPage(): JSX.Element {
     setError('')
     
     try {
+      console.log('🔐 인증번호 확인 시작:', verificationCode);
+      
       const result = await verifyPhoneCode(verificationCode)
       
       if (result.success) {
-        // Firebase 인증 성공 -> onAuthStateChange에서 처리됨
+        console.log('✅ 인증번호 확인 성공');
+        // Firebase 인증 성공 -> onAuthStateChange에서 자동으로 처리됨
       } else {
+        console.error('❌ 인증번호 확인 실패:', result.error);
         setError(result.message || '인증번호 확인에 실패했습니다.')
       }
-    } catch (error) {
+    } catch (error: any) {
+      console.error('❌ 인증번호 확인 오류:', error);
       setError('인증번호 확인 중 오류가 발생했습니다.')
     } finally {
       setLoading(false)
@@ -171,10 +237,12 @@ export default function LoginPage(): JSX.Element {
 
       <Button
         type="submit"
-        disabled={loading}
-        className="w-full h-12 bg-navy hover:bg-navy/90 text-white text-base font-medium mt-6"
+        disabled={loading || cooldown > 0}
+        className="w-full h-12 bg-navy hover:bg-navy/90 text-white text-base font-medium mt-6 disabled:opacity-50"
       >
-        {loading ? '전송 중...' : '인증번호 전송'}
+        {loading ? '전송 중...' : 
+         cooldown > 0 ? `재전송 (${cooldown}초 후)` : 
+         '인증번호 전송'}
       </Button>
     </form>
   )
@@ -371,7 +439,13 @@ export default function LoginPage(): JSX.Element {
               {step === 'pending' && renderPendingStep()}
 
               {/* reCAPTCHA container */}
-              <div id="recaptcha-container"></div>
+              <div id="recaptcha-container" className="flex justify-center mt-4"></div>
+              
+              {step === 'phone' && (
+                <div className="text-xs text-center text-gray-500 mt-2">
+                  실제 전화번호 사용 시 reCAPTCHA 인증이 필요합니다.
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
