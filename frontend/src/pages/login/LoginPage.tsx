@@ -8,7 +8,7 @@ import { Input } from "../../components/ui/input"
 import { Label } from "../../components/ui/label"
 import { Card, CardContent } from "../../components/ui/card"
 import { SharkMascot } from "../../components/common/SharkMascot"
-import { setupRecaptcha, sendPhoneVerification, verifyPhoneCode, onAuthStateChange } from "../../lib/firebase"
+import { setupRecaptcha, sendPhoneVerification, verifyPhoneCode, onAuthStateChange } from "../../lib/firebase.ts"
 import { authApi, tokenManager } from "../../services/api"
 import {
   LoginStep,
