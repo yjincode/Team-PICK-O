@@ -1,11 +1,11 @@
 const config = {
   darkMode: ["class"],
   content: [
-    "./pages/**/*.{js,jsx}",
-    "./components/**/*.{js,jsx}",
-    "./app/**/*.{js,jsx}",
-    "./src/**/*.{js,jsx}",
-    "*.{js,jsx,mdx}",
+    "./pages/**/*.{js,jsx,ts,tsx}",
+    "./components/**/*.{js,jsx,ts,tsx}",
+    "./app/**/*.{js,jsx,ts,tsx}",
+    "./src/**/*.{js,jsx,ts,tsx}",
+    "*.{js,jsx,ts,tsx,mdx}",
   ],
   prefix: "",
   theme: {
@@ -82,8 +82,8 @@ const config = {
         "accordion-up": "accordion-up 0.2s ease-out",
       },
       fontFamily: {
-        korean: ["var(--font-noto-sans-kr)", "sans-serif"],
-        sans: ["var(--font-noto-sans-kr)", "system-ui", "sans-serif"],
+        korean: ["Noto Sans KR", "sans-serif"],
+        sans: ["Noto Sans KR", "system-ui", "sans-serif"],
       },
     },
   },

@@ -20,7 +20,7 @@ interface ChartTooltipProps {
   formatter?: (value: any) => any
 }
 
-const ChartTooltip = ({ children, content, formatter, ...props }: ChartTooltipProps) => {
+const ChartTooltip = ({ children }: ChartTooltipProps) => {
   return <>{children}</>
 }
 

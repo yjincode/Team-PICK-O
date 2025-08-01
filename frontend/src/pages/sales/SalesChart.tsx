@@ -1,6 +1,6 @@
 "use client"
 
-import React from "react"
+
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card"
 import { Button } from "../../components/ui/button"
 import { Badge } from "../../components/ui/badge"
@@ -46,20 +46,24 @@ export default function SalesChart() {
   return (
     <div className="flex-1 space-y-6 p-6 bg-light-blue-gray min-h-screen">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center space-x-3">
-          <BarChart3 className="h-8 w-8 text-accent-blue" />
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">매출 통계</h1>
-            <p className="text-gray-600 mt-1">월별 매출 현황 및 상세 분석</p>
+          <BarChart3 className="h-6 w-6 sm:h-8 sm:w-8 text-accent-blue flex-shrink-0" />
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 truncate">매출 통계</h1>
+            <p className="text-sm sm:text-base text-gray-600 mt-1 hidden sm:block">월별 매출 현황 및 상세 분석</p>
           </div>
         </div>
-        <div className="flex space-x-2">
-          <Button variant="outline">
+        <div className="flex flex-col sm:flex-row gap-2">
+          <Button variant="outline" size="sm" className="w-full sm:w-auto">
             <Calendar className="h-4 w-4 mr-2" />
-            기간 선택
+            <span className="hidden sm:inline">기간 선택</span>
+            <span className="sm:hidden">기간</span>
           </Button>
-          <Button className="bg-accent-blue hover:bg-accent-blue/90">리포트 생성</Button>
+          <Button className="bg-accent-blue hover:bg-accent-blue/90 w-full sm:w-auto">
+            <span className="hidden sm:inline">리포트 생성</span>
+            <span className="sm:hidden">리포트</span>
+          </Button>
         </div>
       </div>
 
