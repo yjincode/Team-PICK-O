@@ -2,89 +2,52 @@
 
 import React from "react"
 import { useState, useEffect } from "react"
-import { User } from "firebase/auth"
 import { Button } from "../../components/ui/button"
 import { Input } from "../../components/ui/input"
 import { Label } from "../../components/ui/label"
 import { Card, CardContent } from "../../components/ui/card"
 import { SharkMascot } from "../../components/common/SharkMascot"
-import { setupRecaptcha, sendPhoneVerification, verifyPhoneCode, onAuthStateChange } from "../../lib/firebase.ts"
-import { authApi } from "../../lib/api"
-import { tokenManager } from "../../lib/utils"
-import {
-  LoginStep,
-  UserRegistrationData,
-  ErrorState,
-  SubscriptionPlan,
-  UserData
-} from "../../types/auth"
+import { setupRecaptcha, sendPhoneVerification, verifyPhoneCode, onAuthStateChange } from "../../lib/firebase"
+import { authAPI } from "../../lib/api"
 
-interface StepInfo {
-  title: string;
-  subtitle: string;
-}
-
-export default function LoginPage(): JSX.Element {
-  const [step, setStep] = useState<LoginStep>('phone')
-  const [phoneNumber, setPhoneNumber] = useState<string>('')
-  const [verificationCode, setVerificationCode] = useState<string>('')
-  const [loading, setLoading] = useState<boolean>(false)
-  const [cooldown, setCooldown] = useState<number>(0)
-  const [error, setError] = useState<string>('')
-  const [userInfo, setUserInfo] = useState<UserRegistrationData>({
-    firebase_uid: '',
+export default function LoginPage() {
+  const [step, setStep] = useState('phone') // 'phone', 'code', 'register', 'pending'
+  const [phoneNumber, setPhoneNumber] = useState('')
+  const [verificationCode, setVerificationCode] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [userInfo, setUserInfo] = useState({
     business_name: '',
     owner_name: '',
-    phone_number: '',
     address: '',
     business_registration_number: '',
-    subscription_plan: 'basic' as SubscriptionPlan
+    subscription_plan: 'basic'
   })
 
   useEffect(() => {
-    // 컴포넌트 마운트 시 reCAPTCHA 설정
-    try {
-      console.log('🔧 reCAPTCHA 초기화 중...');
-      setupRecaptcha('recaptcha-container');
-      console.log('✅ reCAPTCHA 초기화 완료');
-    } catch (error) {
-      console.error('❌ reCAPTCHA 초기화 실패:', error);
-      setError('reCAPTCHA 초기화에 실패했습니다. 페이지를 새로고침해주세요.');
-    }
+    // 페이지 로드 시 reCAPTCHA 설정
+    setupRecaptcha('recaptcha-container')
     
     // 이미 로그인된 사용자가 있는지 확인
-    const unsubscribe = onAuthStateChange(async (user: User | null) => {
+    const unsubscribe = onAuthStateChange(async (user) => {
       if (user) {
         await handleAuthenticatedUser(user)
       }
     })
     
-    // 컴포넌트 언마운트 시 정리
-    return () => {
-      unsubscribe();
-      // reCAPTCHA 정리
-      try {
-        if (window.recaptchaVerifier) {
-          window.recaptchaVerifier.clear();
-          window.recaptchaVerifier = undefined;
-        }
-        window.confirmationResult = undefined;
-      } catch (error) {
-        console.warn('정리 중 오류:', error);
-      }
-    }
+    return () => unsubscribe()
   }, [])
 
-  const handleAuthenticatedUser = async (user: User): Promise<void> => {
+  const handleAuthenticatedUser = async (user) => {
     try {
       const idToken = await user.getIdToken()
-      tokenManager.setToken(idToken)
+      localStorage.setItem('firebaseIdToken', idToken)
       
       // 사용자 상태 확인
-      const response = await authApi.checkUserStatus(user.uid)
+      const response = await authAPI.checkUserStatus(user.uid)
       
-      if (response.exists && response.user) {
-        const userData: UserData = response.user
+      if (response.data.exists) {
+        const userData = response.data.user
         localStorage.setItem('userInfo', JSON.stringify(userData))
         
         if (userData.status === 'approved') {
@@ -99,11 +62,7 @@ export default function LoginPage(): JSX.Element {
         }
       } else {
         // 미등록 사용자 -> 회원가입 단계로
-        setUserInfo(prev => ({ 
-          ...prev, 
-          firebase_uid: user.uid, 
-          phone_number: user.phoneNumber || '' 
-        }))
+        setUserInfo(prev => ({ ...prev, firebase_uid: user.uid, phone_number: user.phoneNumber }))
         setStep('register')
       }
     } catch (error) {
@@ -112,113 +71,68 @@ export default function LoginPage(): JSX.Element {
     }
   }
 
-  const handleSendCode = async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {
+  const handleSendCode = async (e) => {
     e.preventDefault()
     setLoading(true)
     setError('')
     
     try {
-      console.log('📱 전화번호 인증 시작:', phoneNumber);
-      
       const result = await sendPhoneVerification(phoneNumber)
       
       if (result.success) {
-        console.log('✅ SMS 전송 요청 성공');
         setStep('code')
-        // 성공 시 60초 쿨다운
-        setCooldown(60)
-        const timer = setInterval(() => {
-          setCooldown(prev => {
-            if (prev <= 1) {
-              clearInterval(timer)
-              return 0
-            }
-            return prev - 1
-          })
-        }, 1000)
       } else {
-        console.error('❌ SMS 전송 실패:', result.error);
-        setError(result.message || '인증번호 전송에 실패했습니다.')
-        
-        // too-many-requests 오류인 경우 긴 쿨다운
-        if (result.error?.includes('too-many-requests')) {
-          setCooldown(300) // 5분 쿨다운
-          const timer = setInterval(() => {
-            setCooldown(prev => {
-              if (prev <= 1) {
-                clearInterval(timer)
-                return 0
-              }
-              return prev - 1
-            })
-          }, 1000)
-        }
-        
-        // reCAPTCHA 관련 오류인 경우 재설정
-        if (result.error?.includes('captcha') || result.error?.includes('internal-error')) {
-          console.log('🔄 reCAPTCHA 재설정 시도...');
-          try {
-            setupRecaptcha('recaptcha-container');
-          } catch (recaptchaError) {
-            console.error('reCAPTCHA 재설정 실패:', recaptchaError);
-          }
-        }
+        setError(result.message)
       }
-    } catch (error: any) {
-      console.error('❌ 전화번호 인증 오류:', error);
-      setError('인증번호 전송 중 오류가 발생했습니다. 페이지를 새로고침하고 다시 시도해주세요.')
+    } catch (error) {
+      setError('인증번호 전송 중 오류가 발생했습니다.')
     } finally {
       setLoading(false)
     }
   }
 
-  const handleVerifyCode = async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {
+  const handleVerifyCode = async (e) => {
     e.preventDefault()
     setLoading(true)
     setError('')
     
     try {
-      console.log('🔐 인증번호 확인 시작:', verificationCode);
-      
       const result = await verifyPhoneCode(verificationCode)
       
       if (result.success) {
-        console.log('✅ 인증번호 확인 성공');
-        // Firebase 인증 성공 -> onAuthStateChange에서 자동으로 처리됨
+        // Firebase 인증 성공 -> onAuthStateChange에서 처리됨
       } else {
-        console.error('❌ 인증번호 확인 실패:', result.error);
-        setError(result.message || '인증번호 확인에 실패했습니다.')
+        setError(result.message)
       }
-    } catch (error: any) {
-      console.error('❌ 인증번호 확인 오류:', error);
+    } catch (error) {
       setError('인증번호 확인 중 오류가 발생했습니다.')
     } finally {
       setLoading(false)
     }
   }
 
-  const handleRegister = async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {
+  const handleRegister = async (e) => {
     e.preventDefault()
     setLoading(true)
     setError('')
     
     try {
-      const response = await authApi.registerUser(userInfo)
+      const response = await authAPI.register(userInfo)
       
-      if (response.user) {
+      if (response.status === 201) {
         setStep('pending')
       } else {
         setError('회원가입 중 오류가 발생했습니다.')
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error('회원가입 오류:', error)
-      setError(error.message || '회원가입 중 오류가 발생했습니다.')
+      setError(error.response?.data?.message || '회원가입 중 오류가 발생했습니다.')
     } finally {
       setLoading(false)
     }
   }
 
-  const renderPhoneStep = (): JSX.Element => (
+  const renderPhoneStep = () => (
     <form onSubmit={handleSendCode} className="space-y-4">
       <div className="space-y-2">
         <Label htmlFor="phone" className="text-base font-medium text-gray-700">
@@ -238,17 +152,15 @@ export default function LoginPage(): JSX.Element {
 
       <Button
         type="submit"
-        disabled={loading || cooldown > 0}
-        className="w-full h-12 bg-navy hover:bg-navy/90 text-white text-base font-medium mt-6 disabled:opacity-50"
+        disabled={loading}
+        className="w-full h-12 bg-navy hover:bg-navy/90 text-white text-base font-medium mt-6"
       >
-        {loading ? '전송 중...' : 
-         cooldown > 0 ? `재전송 (${cooldown}초 후)` : 
-         '인증번호 전송'}
+        {loading ? '전송 중...' : '인증번호 전송'}
       </Button>
     </form>
   )
 
-  const renderCodeStep = (): JSX.Element => (
+  const renderCodeStep = () => (
     <form onSubmit={handleVerifyCode} className="space-y-4">
       <div className="space-y-2">
         <Label htmlFor="code" className="text-base font-medium text-gray-700">
@@ -261,7 +173,7 @@ export default function LoginPage(): JSX.Element {
           value={verificationCode}
           onChange={(e) => setVerificationCode(e.target.value)}
           className="h-12 text-base border-gray-300 focus:border-accent-blue text-center tracking-widest"
-          maxLength={6}
+          maxLength="6"
           required
         />
         <p className="text-xs text-gray-500">{phoneNumber}로 전송된 인증번호를 입력하세요.</p>
@@ -287,7 +199,7 @@ export default function LoginPage(): JSX.Element {
     </form>
   )
 
-  const renderRegisterStep = (): JSX.Element => (
+  const renderRegisterStep = () => (
     <form onSubmit={handleRegister} className="space-y-4">
       <div className="space-y-2">
         <Label htmlFor="business_name" className="text-base font-medium text-gray-700">
@@ -359,7 +271,7 @@ export default function LoginPage(): JSX.Element {
     </form>
   )
 
-  const renderPendingStep = (): JSX.Element => (
+  const renderPendingStep = () => (
     <div className="text-center space-y-4">
       <div className="w-16 h-16 mx-auto bg-yellow-100 rounded-full flex items-center justify-center">
         <svg className="w-8 h-8 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -380,7 +292,7 @@ export default function LoginPage(): JSX.Element {
     </div>
   )
 
-  const getStepInfo = (): StepInfo => {
+  const getStepInfo = () => {
     switch (step) {
       case 'phone':
         return { title: '로그인', subtitle: '전화번호로 로그인하세요' }
@@ -395,7 +307,7 @@ export default function LoginPage(): JSX.Element {
     }
   }
 
-  const stepInfo: StepInfo = getStepInfo()
+  const stepInfo = getStepInfo()
 
   return (
     <div className="min-h-screen flex">
@@ -440,17 +352,11 @@ export default function LoginPage(): JSX.Element {
               {step === 'pending' && renderPendingStep()}
 
               {/* reCAPTCHA container */}
-              <div id="recaptcha-container" className="flex justify-center mt-4"></div>
-              
-              {step === 'phone' && (
-                <div className="text-xs text-center text-gray-500 mt-2">
-                  실제 전화번호 사용 시 reCAPTCHA 인증이 필요합니다.
-                </div>
-              )}
+              <div id="recaptcha-container"></div>
             </div>
           </CardContent>
         </Card>
       </div>
     </div>
   )
-}
+} 
