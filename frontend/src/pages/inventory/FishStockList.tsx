@@ -1,9 +1,14 @@
+/**
+ * 어종 재고 목록 페이지
+ * 어류 재고 현황을 조회하고 관리하는 페이지입니다
+ */
 import React from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card"
 import { Button } from "../../components/ui/button"
 import { Badge } from "../../components/ui/badge"
 import { Package, AlertTriangle, Plus } from "lucide-react"
 
+// 어종 재고 데이터 타입 정의
 interface FishStock {
   id: number;
   name: string;
@@ -15,6 +20,7 @@ interface FishStock {
   lastUpdated: string;
 }
 
+// 목업 데이터 (실제로는 API에서 가져올 예정)
 const mockFishStocks: FishStock[] = [
   {
     id: 1,
@@ -59,8 +65,10 @@ const mockFishStocks: FishStock[] = [
 ]
 
 const FishStockList: React.FC = () => {
+  // 금액 포맷팅 함수
   const formatCurrency = (amount: number): string => `₩${amount.toLocaleString()}`
 
+  // 재고 상태에 따른 배지 색상 결정
   const getStatusBadge = (status: string) => {
     const variants = {
       "충분": "default",
@@ -72,6 +80,7 @@ const FishStockList: React.FC = () => {
 
   return (
     <div className="space-y-4 sm:space-y-6">
+      {/* 페이지 헤더 */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">어종 재고</h1>
@@ -82,6 +91,7 @@ const FishStockList: React.FC = () => {
         </Button>
       </div>
 
+      {/* 재고 카드 그리드 */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
         {mockFishStocks.map((stock) => (
           <Card key={stock.id} className="shadow-sm hover:shadow-md transition-shadow">
@@ -95,6 +105,7 @@ const FishStockList: React.FC = () => {
               </div>
             </CardHeader>
             <CardContent className="space-y-3">
+              {/* 재고 상세 정보 */}
               <div className="grid grid-cols-2 gap-2 text-sm">
                 <div>
                   <span className="text-gray-500">수량:</span>

@@ -1,98 +1,169 @@
+/**
+ * 거래처 관리 훅
+ * 거래처 정보를 조회하고 관리하는 커스텀 훅입니다
+ */
 import { useState, useEffect } from 'react'
-import { Customer } from '../types'
+import { Business } from '../types'
+import { businessApi } from '../lib/api'
 
 const useCustomers = () => {
-  const [customers, setCustomers] = useState<Customer[]>([])
+  const [businesses, setBusinesses] = useState<Business[]>([])
   const [loading, setLoading] = useState<boolean>(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    fetchCustomers()
+    fetchBusinesses()
   }, [])
 
-  const fetchCustomers = async () => {
+  const fetchBusinesses = async () => {
     try {
       setLoading(true)
-      // 실제 API 호출로 대체
-      const mockCustomers: Customer[] = [
+      setError(null)
+      
+      // TODO: 백엔드 API 연동
+      // GET /api/businesses
+      // 응답 예시: { data: Business[], success: true }
+      // const response = await businessApi.getAll()
+      // if (response.success) {
+      //   setBusinesses(response.data)
+      // } else {
+      //   throw new Error(response.message || '거래처 정보를 불러오는데 실패했습니다.')
+      // }
+      
+      // 목업 데이터 (개발용)
+      const mockBusinesses: Business[] = [
         {
           id: 1,
-          name: "동해수산",
-          phone: "010-1234-5678",
+          business_name: "동해수산",
+          phone_number: "010-1234-5678",
           address: "강원도 동해시",
-          total_purchases: 2400000,
-          unpaid_amount: 2400000,
-          created_at: "2024-01-30",
-          updated_at: "2024-01-30",
         },
         {
           id: 2,
-          name: "바다마트",
-          phone: "010-2345-6789",
+          business_name: "바다마트",
+          phone_number: "010-2345-6789",
           address: "부산시 해운대구",
-          total_purchases: 1200000,
-          unpaid_amount: 0,
-          created_at: "2024-01-29",
-          updated_at: "2024-01-29",
         },
       ]
-      setCustomers(mockCustomers)
+      
+      setBusinesses(mockBusinesses)
     } catch (err) {
-      setError(err instanceof Error ? err.message : '고객 정보를 불러오는데 실패했습니다.')
+      setError(err instanceof Error ? err.message : '거래처 정보를 불러오는데 실패했습니다.')
     } finally {
       setLoading(false)
     }
   }
 
-  const addCustomer = async (customerData: Omit<Customer, 'id' | 'created_at' | 'updated_at'>) => {
+  const addBusiness = async (businessData: Omit<Business, 'id'>) => {
     try {
-      // 실제 API 호출로 대체
-      const newCustomer: Customer = {
-        id: customers.length + 1,
-        ...customerData,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
+      setError(null)
+      
+      // TODO: 백엔드 API 연동
+      // POST /api/businesses
+      // 요청 예시: { business_name: string, phone_number: string, address?: string }
+      // 응답 예시: { data: Business, success: true }
+      // const response = await businessApi.create(businessData)
+      // if (response.success) {
+      //   setBusinesses(prev => [...prev, response.data])
+      //   return response.data
+      // } else {
+      //   throw new Error(response.message || '거래처 추가에 실패했습니다.')
+      // }
+      
+      const newBusiness: Business = {
+        id: businesses.length + 1,
+        ...businessData,
       }
-      setCustomers(prev => [...prev, newCustomer])
-      return newCustomer
+      
+      setBusinesses(prev => [...prev, newBusiness])
+      return newBusiness
     } catch (err) {
-      setError(err instanceof Error ? err.message : '고객 추가에 실패했습니다.')
+      const errorMessage = err instanceof Error ? err.message : '거래처 추가에 실패했습니다.'
+      setError(errorMessage)
       throw err
     }
   }
 
-  const updateCustomer = async (id: number, customerData: Partial<Customer>) => {
+  const updateBusiness = async (id: number, businessData: Partial<Business>) => {
     try {
-      // 실제 API 호출로 대체
-      setCustomers(prev => prev.map(customer => 
-        customer.id === id 
-          ? { ...customer, ...customerData, updated_at: new Date().toISOString() }
-          : customer
+      setError(null)
+      
+      // TODO: 백엔드 API 연동
+      // PUT /api/businesses/:id
+      // 요청 예시: { business_name?: string, phone_number?: string, address?: string }
+      // 응답 예시: { data: Business, success: true }
+      // const response = await businessApi.update(id, businessData)
+      // if (response.success) {
+      //   setBusinesses(prev => prev.map(business => 
+      //     business.id === id ? response.data : business
+      //   ))
+      //   return response.data
+      // } else {
+      //   throw new Error(response.message || '거래처 수정에 실패했습니다.')
+      // }
+      
+      const updatedBusiness: Business = {
+        ...businesses.find(b => b.id === id)!,
+        ...businessData,
+      }
+      
+      setBusinesses(prev => prev.map(business => 
+        business.id === id ? updatedBusiness : business
       ))
+      return updatedBusiness
     } catch (err) {
-      setError(err instanceof Error ? err.message : '고객 정보 수정에 실패했습니다.')
+      const errorMessage = err instanceof Error ? err.message : '거래처 수정에 실패했습니다.'
+      setError(errorMessage)
       throw err
     }
   }
 
-  const deleteCustomer = async (id: number) => {
+  const deleteBusiness = async (id: number) => {
     try {
-      // 실제 API 호출로 대체
-      setCustomers(prev => prev.filter(customer => customer.id !== id))
+      setError(null)
+      
+      // TODO: 백엔드 API 연동
+      // DELETE /api/businesses/:id
+      // 응답 예시: { success: true }
+      // const response = await businessApi.delete(id)
+      // if (response.success) {
+      //   setBusinesses(prev => prev.filter(business => business.id !== id))
+      // } else {
+      //   throw new Error(response.message || '거래처 삭제에 실패했습니다.')
+      // }
+      
+      setBusinesses(prev => prev.filter(business => business.id !== id))
     } catch (err) {
-      setError(err instanceof Error ? err.message : '고객 삭제에 실패했습니다.')
+      const errorMessage = err instanceof Error ? err.message : '거래처 삭제에 실패했습니다.'
+      setError(errorMessage)
       throw err
     }
+  }
+
+  const getBusinessById = (id: number) => {
+    return businesses.find(business => business.id === id)
+  }
+
+  const searchBusinesses = (searchTerm: string) => {
+    if (!searchTerm.trim()) return businesses
+    
+    return businesses.filter(business => 
+      business.business_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      business.phone_number.includes(searchTerm) ||
+      (business.address && business.address.toLowerCase().includes(searchTerm.toLowerCase()))
+    )
   }
 
   return {
-    customers,
+    businesses,
     loading,
     error,
-    fetchCustomers,
-    addCustomer,
-    updateCustomer,
-    deleteCustomer,
+    fetchBusinesses,
+    addBusiness,
+    updateBusiness,
+    deleteBusiness,
+    getBusinessById,
+    searchBusinesses,
   }
 }
 

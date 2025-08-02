@@ -1,6 +1,12 @@
+/**
+ * 카드 컴포넌트들
+ * 콘텐츠를 카드 형태로 표시하는 컴포넌트들을 제공합니다
+ * Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter로 구성됩니다
+ */
 import * as React from "react"
 import { cn } from "../../lib/utils"
 
+// 메인 카드 컨테이너
 const Card = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement>
@@ -16,6 +22,7 @@ const Card = React.forwardRef<
 ))
 Card.displayName = "Card"
 
+// 카드 헤더 영역
 const CardHeader = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement>
@@ -28,6 +35,7 @@ const CardHeader = React.forwardRef<
 ))
 CardHeader.displayName = "CardHeader"
 
+// 카드 제목
 const CardTitle = React.forwardRef<
   HTMLParagraphElement,
   React.HTMLAttributes<HTMLHeadingElement>
@@ -43,6 +51,7 @@ const CardTitle = React.forwardRef<
 ))
 CardTitle.displayName = "CardTitle"
 
+// 카드 설명
 const CardDescription = React.forwardRef<
   HTMLParagraphElement,
   React.HTMLAttributes<HTMLParagraphElement>
@@ -55,6 +64,7 @@ const CardDescription = React.forwardRef<
 ))
 CardDescription.displayName = "CardDescription"
 
+// 카드 콘텐츠 영역
 const CardContent = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement>
@@ -63,6 +73,7 @@ const CardContent = React.forwardRef<
 ))
 CardContent.displayName = "CardContent"
 
+// 카드 푸터 영역
 const CardFooter = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement>

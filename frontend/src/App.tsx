@@ -1,3 +1,7 @@
+/**
+ * 메인 애플리케이션 컴포넌트
+ * React Router를 사용한 라우팅 설정과 전체 애플리케이션 구조를 정의합니다
+ */
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
@@ -18,6 +22,7 @@ import LoginPage from './pages/login/LoginPage';
 
 const App: React.FC = () => {
   return (
+
     <AuthProvider>
       <Router>
         <Routes>
@@ -147,8 +152,9 @@ const App: React.FC = () => {
             // </PrivateRoute>
           } 
         />
+
         
-        {/* 404 페이지 */}
+        {/* 404 페이지 - 대시보드로 리다이렉트 */}
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </Router>

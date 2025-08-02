@@ -1,3 +1,7 @@
+/**
+ * 상어 마스코트 로고 컴포넌트
+ * 애플리케이션의 브랜드 로고를 표시합니다
+ */
 import React from "react"
 
 export const SharkMascot: React.FC = () => {

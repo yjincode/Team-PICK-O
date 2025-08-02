@@ -1,3 +1,7 @@
+/**
+ * 사이드바 네비게이션 컴포넌트
+ * 데스크톱에서 메인 네비게이션을 제공하며, 계층적 메뉴 구조를 지원합니다
+ */
 "use client"
 
 import { useState } from "react"
@@ -5,6 +9,7 @@ import { Link, useLocation } from "react-router-dom"
 import { Home, Users, ShoppingCart, Package, TrendingUp, ChevronDown, ChevronRight } from "lucide-react"
 import { SharkMascot } from "../common/SharkMascot"
 
+// 메뉴 아이템 타입 정의
 interface MenuItem {
   title: string;
   url?: string;
@@ -15,6 +20,7 @@ interface MenuItem {
   }>;
 }
 
+// 네비게이션 메뉴 구성
 const menuItems: MenuItem[] = [
   {
     title: "메인 화면",
@@ -59,16 +65,20 @@ const menuItems: MenuItem[] = [
 
 const Sidebar: React.FC = () => {
   const location = useLocation()
+  // 열린 메뉴 아이템 상태 관리
   const [openItems, setOpenItems] = useState<string[]>(["고객 관리"])
 
+  // 메뉴 토글 함수
   const toggleItem = (title: string) => {
     setOpenItems((prev) => (prev.includes(title) ? prev.filter((item) => item !== title) : [...prev, title]))
   }
 
+  // 현재 활성 페이지 확인
   const isActive = (url: string) => {
     return location.pathname === url
   }
 
+  // 모바일 사이드바 닫기
   const closeMobileSidebar = () => {
     const overlay = document.getElementById('mobile-sidebar-overlay');
     if (overlay) {
@@ -78,7 +88,7 @@ const Sidebar: React.FC = () => {
 
   return (
     <aside className="w-full bg-navy text-white h-screen flex flex-col">
-      {/* Header */}
+      {/* 사이드바 헤더 */}
       <div className="p-4 sm:p-6 border-b border-white/10 relative">
         <div className="flex flex-col items-center space-y-4">
           <div className="w-16 h-16 sm:w-20 sm:h-20">
@@ -90,7 +100,7 @@ const Sidebar: React.FC = () => {
 
       </div>
 
-      {/* Navigation */}
+      {/* 네비게이션 메뉴 */}
       <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
         {menuItems.map((item) => (
           <div key={item.title}>
