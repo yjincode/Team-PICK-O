@@ -5,43 +5,28 @@ import uuid
 
 
 class User(AbstractUser):
-    """사용자 모델 - 수산물 거래업체 사장"""
-    id = models.AutoField(primary_key=True)
-    business_name = models.CharField(max_length=100, verbose_name="사업장명")
-    owner_name = models.CharField(max_length=50, verbose_name="대표자명")
-    phone_number = models.CharField(
-        max_length=15,
-        validators=[RegexValidator(r'^\d{3}-\d{3,4}-\d{4}$')],
-        verbose_name="전화번호"
-    )
-    address = models.TextField(verbose_name="주소")
-    business_registration_number = models.CharField(
-        max_length=12,
-        unique=True,
-        validators=[RegexValidator(r'^\d{3}-\d{2}-\d{5}$')],
-        verbose_name="사업자등록번호"
-    )
+    """커스텀 사용자 모델"""
     firebase_uid = models.CharField(max_length=128, unique=True, null=True, blank=True)
-    subscription_plan = models.CharField(
-        max_length=20,
-        choices=[
-            ('basic', '기본'),
-            ('premium', '프리미엄'),
-            ('enterprise', '기업')
-        ],
-        default='basic',
-        verbose_name="구독 플랜"
-    )
-    created_at = models.DateTimeField(auto_now_add=True, verbose_name="생성일시")
-
-    class Meta:
-        db_table = 'users'
-        verbose_name = "사용자"
-        verbose_name_plural = "사용자들"
-
+    business_name = models.CharField(max_length=200, blank=True)
+    owner_name = models.CharField(max_length=100, blank=True)
+    phone_number = models.CharField(max_length=20, blank=True)
+    address = models.TextField(blank=True)
+    business_registration_number = models.CharField(max_length=50, blank=True)
+    subscription_plan = models.CharField(max_length=20, default='basic')
+    
+    STATUS_CHOICES = [
+        ('pending', '승인 대기'),
+        ('approved', '승인됨'),
+        ('rejected', '거절됨'),
+        ('suspended', '정지됨'),
+    ]
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
     def __str__(self):
         return f"{self.business_name} ({self.owner_name})"
-
 
 class Business(models.Model):
     """거래처 모델"""
@@ -264,3 +249,4 @@ class PriceData(models.Model):
 
     def __str__(self):
         return f"{self.fish_type} - {self.market_name} ({self.date})"
+

@@ -1,0 +1,166 @@
+from rest_framework import status
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+from django.conf import settings
+import requests
+import json
+from datetime import datetime
+from .models import User
+
+@api_view(['POST'])
+def register_user(request):
+    """사용자 회원가입 API"""
+    try:
+        data = request.data
+        
+        # 필수 필드 검증
+        required_fields = ['firebase_uid', 'business_name', 'owner_name', 'phone_number', 'address', 'business_registration_number']
+        for field in required_fields:
+            if not data.get(field):
+                return Response({
+                    'error': f'{field} 필드가 필요합니다.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # 이미 존재하는 사용자 확인
+        if User.objects.filter(firebase_uid=data['firebase_uid']).exists():
+            return Response({
+                'error': '이미 등록된 사용자입니다.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # 사용자 생성
+        user = User.objects.create(
+            username=data['firebase_uid'],  # username은 unique해야 하므로 firebase_uid 사용
+            firebase_uid=data['firebase_uid'],
+            business_name=data['business_name'],
+            owner_name=data['owner_name'],
+            phone_number=data['phone_number'],
+            address=data['address'],
+            business_registration_number=data['business_registration_number'],
+            subscription_plan=data.get('subscription_plan', 'basic'),
+            status='pending'
+        )
+        
+        # Discord 웹훅 전송
+        send_discord_notification(user)
+        
+        return Response({
+            'message': '회원가입 신청이 완료되었습니다.',
+            'user': {
+                'firebase_uid': user.firebase_uid,
+                'business_name': user.business_name,
+                'owner_name': user.owner_name,
+                'status': user.status
+            }
+        }, status=status.HTTP_201_CREATED)
+        
+    except Exception as e:
+        print(f"❌ 회원가입 처리 오류: {e}")
+        return Response({
+            'error': '회원가입 처리 중 오류가 발생했습니다.'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['GET'])
+def check_user_status(request):
+    """사용자 상태 확인 API"""
+    try:
+        firebase_uid = request.GET.get('firebase_uid')
+        
+        if not firebase_uid:
+            return Response({
+                'error': 'firebase_uid 파라미터가 필요합니다.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            user = User.objects.get(firebase_uid=firebase_uid)
+            return Response({
+                'exists': True,
+                'user': {
+                    'firebase_uid': user.firebase_uid,
+                    'business_name': user.business_name,
+                    'owner_name': user.owner_name,
+                    'phone_number': user.phone_number,
+                    'address': user.address,
+                    'business_registration_number': user.business_registration_number,
+                    'subscription_plan': user.subscription_plan,
+                    'status': user.status,
+                    'created_at': user.created_at,
+                }
+            })
+        except User.DoesNotExist:
+            return Response({
+                'exists': False,
+                'user': None
+            })
+            
+    except Exception as e:
+        print(f"❌ 사용자 상태 확인 오류: {e}")
+        return Response({
+            'error': '사용자 상태 확인 중 오류가 발생했습니다.'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['GET'])
+def get_pending_users(request):
+    """승인 대기 사용자 목록 API"""
+    try:
+        pending_users = User.objects.filter(status='pending')
+        
+        users_data = []
+        for user in pending_users:
+            users_data.append({
+                'id': user.id,
+                'firebase_uid': user.firebase_uid,
+                'business_name': user.business_name,
+                'owner_name': user.owner_name,
+                'phone_number': user.phone_number,
+                'address': user.address,
+                'business_registration_number': user.business_registration_number,
+                'subscription_plan': user.subscription_plan,
+                'created_at': user.created_at,
+            })
+        
+        return Response({
+            'pending_users': users_data,
+            'count': len(users_data)
+        })
+        
+    except Exception as e:
+        print(f"❌ 대기 사용자 조회 오류: {e}")
+        return Response({
+            'error': '대기 사용자 조회 중 오류가 발생했습니다.'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+def send_discord_notification(user):
+    """Discord 웹훅으로 알림 전송"""
+    webhook_url = settings.DISCORD_WEBHOOK_URL
+    
+    if not webhook_url:
+        print("⚠️ Discord 웹훅 URL이 설정되지 않았습니다.")
+        return
+    
+    embed = {
+        "title": "🐟 새로운 회원가입 신청",
+        "color": 0x3498db,
+        "fields": [
+            {"name": "사업장명", "value": user.business_name, "inline": True},
+            {"name": "대표자명", "value": user.owner_name, "inline": True},
+            {"name": "전화번호", "value": user.phone_number, "inline": True},
+            {"name": "주소", "value": user.address, "inline": False},
+            {"name": "사업자등록번호", "value": user.business_registration_number, "inline": True},
+            {"name": "구독 플랜", "value": user.subscription_plan, "inline": True},
+        ],
+        "timestamp": datetime.now().isoformat()
+    }
+    
+    payload = {
+        "content": "@everyone 새로운 회원가입 신청이 있습니다!",
+        "embeds": [embed]
+    }
+    
+    try:
+        response = requests.post(webhook_url, json=payload)
+        if response.status_code == 204:
+            print("✅ Discord 알림 전송 성공")
+        else:
+            print(f"❌ Discord 알림 전송 실패: {response.status_code}")
+    except Exception as e:
+        print(f"❌ Discord 알림 전송 오류: {e}")
