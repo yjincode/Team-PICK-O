@@ -14,23 +14,27 @@ import {
   ApiResponse 
 } from '../types'
 
-// API 기본 URL (환경변수에서 가져오거나 기본값 사용)
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000'
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1'
+
 
 // axios 인스턴스 생성
 const api = axios.create({
   baseURL: API_BASE_URL,
+  timeout: 10000,
   headers: {
     'Content-Type': 'application/json',
   },
 })
 
-// 요청 인터셉터: 토큰 자동 추가
+
+// Request interceptor (Firebase 토큰 사용)
+
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token')
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
+    const firebaseToken = localStorage.getItem('firebase_token')
+    if (firebaseToken) {
+      config.headers.Authorization = `Bearer ${firebaseToken}`
     }
     return config
   },
@@ -44,7 +48,8 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem('token')
+      localStorage.removeItem('firebase_token')
+      localStorage.removeItem('userInfo')
       window.location.href = '/login'
     }
     return Promise.reject(error)
@@ -201,6 +206,7 @@ export const orderApi = {
   },
 }
 
+
 // 결제 관리 API
 export const paymentApi = {
   // 모든 결제 조회
@@ -306,13 +312,53 @@ export const priceDataApi = {
   },
 }
 
-// 인증 API
+
+// Firebase Auth API
 export const authApi = {
-  // 로그인
-  login: async (credentials: { email: string; password: string }): Promise<ApiResponse<{ token: string }>> => {
-    const response = await api.post('/auth/login', credentials)
+  // 사용자 등록 (회원가입)
+  register: async (userData: any): Promise<any> => {
+    const response = await api.post('/core/auth/register/', userData)
+
     return response.data
   },
+  
+  // 사용자 등록 (별칭 - LoginPage 호환성)
+  registerUser: async (userData: any): Promise<any> => {
+    const response = await api.post('/core/auth/register/', userData)
+    return response.data
+  },
+  
+  // 사용자 상태 확인
+  checkUserStatus: async (firebaseUid: string): Promise<any> => {
+    const response = await api.get(`/core/auth/status/?firebase_uid=${firebaseUid}`)
+    return response.data
+  },
+  
+  // 승인 대기 사용자 목록 (개발/테스트용)
+  getPendingUsers: async (): Promise<any> => {
+    const response = await api.get('/core/auth/pending/')
+    return response.data
+  },
+}
+
+// Sales API
+export const salesApi = {
+  getAll: async (): Promise<any> => {
+    const response = await api.get('/sales')
+    return response.data
+  },
+
+  getChart: async (): Promise<any> => {
+    const response = await api.get('/sales/chart')
+    return response.data
+  },
+
+  getAuctionPrediction: async (): Promise<any> => {
+    const response = await api.get('/sales/auction-prediction')
+    return response.data
+  },
+}
+
 
   // 로그아웃
   logout: async (): Promise<ApiResponse<void>> => {
@@ -323,6 +369,16 @@ export const authApi = {
   // 현재 사용자 정보 조회
   getCurrentUser: async (): Promise<ApiResponse<any>> => {
     const response = await api.get('/auth/me')
+
+// AI API
+export const aiApi = {
+  getLogs: async (): Promise<any> => {
+    const response = await api.get('/ai/logs')
+    return response.data
+  },
+
+  runAnalysis: async (data: any): Promise<any> => {
+    const response = await api.post('/ai/analysis', data)
     return response.data
   },
 }

@@ -4,6 +4,8 @@
  */
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider } from './contexts/AuthContext';
+import { PrivateRoute, PublicRoute } from './components/auth/PrivateRoute';
 import MainLayout from './components/layout/MainLayout';
 import Dashboard from './pages/dashboard/Dashboard';
 import CustomerList from './pages/customers/CustomerList';
@@ -20,83 +22,143 @@ import LoginPage from './pages/login/LoginPage';
 
 const App: React.FC = () => {
   return (
-    <Router>
-      <Routes>
-        {/* 로그인 페이지는 레이아웃 없이 독립적으로 렌더링 */}
-        <Route path="/login" element={<LoginPage />} />
+
+    <AuthProvider>
+      <Router>
+        <Routes>
+          {/* 로그인 페이지는 레이아웃 없이 */}
+          <Route 
+            path="/login" 
+            element={
+              <PublicRoute>
+                <LoginPage />
+              </PublicRoute>
+            } 
+          />
         
-        {/* 루트 경로를 대시보드로 리다이렉트 */}
+        {/* 나머지 페이지들은 메인 레이아웃과 인증 보호 적용 */}
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
+        <Route 
+          path="/dashboard" 
+          element={
+            <PrivateRoute>
+              <MainLayout>
+                <Dashboard />
+              </MainLayout>
+            </PrivateRoute>
+          } 
+        />
         
-        {/* 대시보드 - 메인 페이지 */}
-        <Route path="/dashboard" element={
-          <MainLayout>
-            <Dashboard />
-          </MainLayout>
-        } />
+        <Route 
+          path="/customers" 
+          element={
+            <PrivateRoute>
+              <MainLayout>
+                <CustomerList />
+              </MainLayout>
+            </PrivateRoute>
+          } 
+        />
+        <Route 
+          path="/customers/unpaid" 
+          element={
+            <PrivateRoute>
+              <MainLayout>
+                <UnpaidList />
+              </MainLayout>
+            </PrivateRoute>
+          } 
+        />
+        <Route 
+          path="/customers/settlement" 
+          element={
+            <PrivateRoute>
+              <MainLayout>
+                <SettlementForm />
+              </MainLayout>
+            </PrivateRoute>
+          } 
+        />
         
-        {/* 고객 관리 섹션 */}
-        <Route path="/customers" element={
-          <MainLayout>
-            <CustomerList />
-          </MainLayout>
-        } />
-        <Route path="/customers/unpaid" element={
-          <MainLayout>
-            <UnpaidList />
-          </MainLayout>
-        } />
-        <Route path="/customers/settlement" element={
-          <MainLayout>
-            <SettlementForm />
-          </MainLayout>
-        } />
+        <Route 
+          path="/orders" 
+          element={
+            <PrivateRoute>
+              <MainLayout>
+                <OrderList />
+              </MainLayout>
+            </PrivateRoute>
+          } 
+        />
+        <Route 
+          path="/orders/ai-logs" 
+          element={
+            <PrivateRoute>
+              <MainLayout>
+                <AiLogList />
+              </MainLayout>
+            </PrivateRoute>
+          } 
+        />
         
-        {/* 주문 관리 섹션 */}
-        <Route path="/orders" element={
-          <MainLayout>
-            <OrderList />
-          </MainLayout>
-        } />
-        <Route path="/orders/ai-logs" element={
-          <MainLayout>
-            <AiLogList />
-          </MainLayout>
-        } />
+        <Route 
+          path="/inventory" 
+          element={
+            <PrivateRoute>
+              <MainLayout>
+                <FishStockList />
+              </MainLayout>
+            </PrivateRoute>
+          } 
+        />
+        <Route 
+          path="/inventory/fish-form" 
+          element={
+            <PrivateRoute>
+              <MainLayout>
+                <FishItemForm />
+              </MainLayout>
+            </PrivateRoute>
+          } 
+        />
         
-        {/* 재고 관리 섹션 */}
-        <Route path="/inventory" element={
-          <MainLayout>
-            <FishStockList />
-          </MainLayout>
-        } />
-        <Route path="/inventory/fish-form" element={
-          <MainLayout>
-            <FishItemForm />
-          </MainLayout>
-        } />
-        
-        {/* 판매 관리 섹션 */}
-        <Route path="/sales" element={
-          <MainLayout>
-            <SalesList />
-          </MainLayout>
-        } />
-        <Route path="/sales/chart" element={
-          <MainLayout>
-            <SalesChart />
-          </MainLayout>
-        } />
-        <Route path="/sales/prediction" element={
-          <MainLayout>
-            <AuctionPredictionChart />
-          </MainLayout>
-        } />
+        <Route 
+          path="/sales" 
+          element={
+            <PrivateRoute>
+              <MainLayout>
+                <SalesList />
+              </MainLayout>
+            </PrivateRoute>
+          } 
+        />
+        <Route 
+          path="/sales/chart" 
+          element={
+            <PrivateRoute>
+              <MainLayout>
+                <SalesChart />
+              </MainLayout>
+            </PrivateRoute>
+          } 
+        />
+        <Route 
+          path="/sales/prediction" 
+          element={
+            <PrivateRoute>
+              <MainLayout>
+                <AuctionPredictionChart />
+              </MainLayout>
+            </PrivateRoute>
+          } 
+        />
+
         
         {/* 404 페이지 - 대시보드로 리다이렉트 */}
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </Router>
+    </AuthProvider>
   );
 };
 

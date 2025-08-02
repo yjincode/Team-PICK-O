@@ -34,6 +34,9 @@ BEGIN
 END
 $$;
 
+-- Django가 마이그레이션으로 테이블을 생성하므로 여기서는 제거
+-- 필요한 경우 초기 데이터는 Django fixtures나 데이터 마이그레이션으로 처리
+
 -- 개발용 로그 출력
 \echo '✅ Team-PICK-O 개발용 데이터베이스 초기화 완료'
 \echo '📊 데이터베이스: teamPicko_dev'
