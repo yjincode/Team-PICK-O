@@ -1,3 +1,7 @@
+/**
+ * 대시보드 페이지
+ * 주요 통계, 차트, 최근 주문 현황을 표시하는 메인 페이지입니다
+ */
 import React from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card"
 import { Button } from "../../components/ui/button"
@@ -7,24 +11,26 @@ import { WeatherWidget } from "../../components/common/WeatherWidget"
 import { StatsCard } from "../../components/common/StatsCard"
 import { OrderStatusBadge } from "../../components/common/OrderStatusBadge"
 
+// 최근 주문 데이터 타입 정의
 interface RecentOrder {
-  customer: string;
-  item: string;
-  amount: string;
-  status: string;
+  business: string;  // 거래처명으로 변경
+  item: string;      // 어종명
+  amount: string;    // 수량
+  status: string;    // 주문 상태
 }
 
+// 목업 데이터 (실제로는 API에서 가져올 예정)
 const recentOrders: RecentOrder[] = [
-  { customer: "동해수산", item: "고등어", amount: "50박스", status: "처리중" },
-  { customer: "바다마트", item: "갈치", amount: "30박스", status: "완료" },
-  { customer: "해양식품", item: "오징어", amount: "25박스", status: "대기" },
-  { customer: "신선수산", item: "명태", amount: "40박스", status: "완료" },
+  { business: "동해수산", item: "고등어", amount: "50박스", status: "처리중" },
+  { business: "바다마트", item: "갈치", amount: "30박스", status: "완료" },
+  { business: "해양식품", item: "오징어", amount: "25박스", status: "대기" },
+  { business: "신선수산", item: "명태", amount: "40박스", status: "완료" },
 ]
 
 const Dashboard: React.FC = () => {
   return (
     <div className="space-y-4 sm:space-y-6">
-      {/* Header with Search */}
+      {/* 헤더: 검색 및 날씨 위젯 */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div className="flex items-center space-x-3 flex-1 max-w-md">
           <div className="relative flex-1">
@@ -41,7 +47,7 @@ const Dashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Stats Cards */}
+      {/* 통계 카드 섹션 */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
         <StatsCard
           title="오늘 주문 건수"
@@ -68,7 +74,7 @@ const Dashboard: React.FC = () => {
         />
       </div>
 
-      {/* Charts Section */}
+      {/* 차트 섹션 */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6">
         <Card className="shadow-sm">
           <CardHeader>
@@ -93,8 +99,9 @@ const Dashboard: React.FC = () => {
         </Card>
       </div>
 
-      {/* Bottom Section */}
+      {/* 하단 섹션: 최근 주문 및 재고 현황 */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 sm:gap-6">
+        {/* 최근 주문 현황 */}
         <Card className="xl:col-span-2 shadow-sm">
           <CardHeader>
             <CardTitle className="text-base sm:text-lg font-semibold text-gray-800">최근 주문 현황</CardTitle>
@@ -104,7 +111,7 @@ const Dashboard: React.FC = () => {
               {recentOrders.map((order, index) => (
                 <div key={index} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 bg-gray-50 rounded-lg gap-2 sm:gap-0">
                   <div className="flex-1">
-                    <div className="font-medium text-gray-900 text-sm sm:text-base">{order.customer}</div>
+                    <div className="font-medium text-gray-900 text-sm sm:text-base">{order.business}</div>
                     <div className="text-xs sm:text-sm text-gray-600">
                       {order.item} · {order.amount}
                     </div>
@@ -118,6 +125,7 @@ const Dashboard: React.FC = () => {
           </CardContent>
         </Card>
 
+        {/* 어종별 재고 현황 */}
         <Card className="shadow-sm">
           <CardHeader>
             <CardTitle className="text-base sm:text-lg font-semibold text-gray-800">어종별 재고 현황</CardTitle>

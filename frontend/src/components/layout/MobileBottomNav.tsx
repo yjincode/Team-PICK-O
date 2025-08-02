@@ -1,9 +1,14 @@
+/**
+ * 모바일 하단 네비게이션 컴포넌트
+ * 모바일에서 하단 네비게이션을 제공하며, 계층적 메뉴 구조를 모달로 표시합니다
+ */
 "use client"
 
 import { useState } from "react"
 import { Link, useLocation } from "react-router-dom"
 import { Home, Users, ShoppingCart, Package, TrendingUp, ChevronUp } from "lucide-react"
 
+// 메뉴 아이템 타입 정의
 interface MenuItem {
   title: string;
   url?: string;
@@ -14,6 +19,7 @@ interface MenuItem {
   }>;
 }
 
+// 네비게이션 메뉴 구성 (사이드바와 동일)
 const menuItems: MenuItem[] = [
   {
     title: "메인 화면",
@@ -58,12 +64,15 @@ const menuItems: MenuItem[] = [
 
 const MobileBottomNav: React.FC = () => {
   const location = useLocation()
+  // 활성 모달 상태 관리
   const [activeModal, setActiveModal] = useState<string | null>(null)
 
+  // 현재 활성 페이지 확인
   const isActive = (url: string) => {
     return location.pathname === url
   }
 
+  // 메뉴 아이템 클릭 핸들러
   const handleItemClick = (item: MenuItem) => {
     if (item.url) {
       // 직접 링크인 경우 바로 이동
@@ -74,13 +83,14 @@ const MobileBottomNav: React.FC = () => {
     }
   }
 
+  // 모달 닫기
   const closeModal = () => {
     setActiveModal(null)
   }
 
   return (
     <>
-      {/* Bottom Navigation Bar */}
+      {/* 하단 네비게이션 바 */}
       <nav className="flex justify-around items-center h-16 px-2">
         {menuItems.map((item) => (
           <div key={item.title} className="flex flex-col items-center">

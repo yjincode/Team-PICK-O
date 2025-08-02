@@ -1,6 +1,12 @@
+/**
+ * 텍스트 영역 컴포넌트
+ * 여러 줄의 텍스트 입력을 위한 컴포넌트입니다
+ * 접근성과 포커스 스타일이 최적화되어 있습니다
+ */
 import * as React from "react"
 import { cn } from "../../lib/utils"
 
+// 텍스트 영역 Props 타입 정의
 export interface TextareaProps
   extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {}
 

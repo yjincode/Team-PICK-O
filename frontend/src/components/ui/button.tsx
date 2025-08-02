@@ -1,7 +1,13 @@
+/**
+ * 버튼 컴포넌트
+ * 다양한 스타일과 크기의 버튼을 제공합니다
+ * class-variance-authority를 사용하여 variant와 size를 관리합니다
+ */
 import * as React from "react"
 import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "../../lib/utils"
 
+// 버튼 스타일 변형 정의
 const buttonVariants = cva(
   "inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
   {
@@ -31,12 +37,14 @@ const buttonVariants = cva(
   }
 )
 
+// 버튼 Props 타입 정의
 export interface ButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement>,
     VariantProps<typeof buttonVariants> {
   asChild?: boolean
 }
 
+// 버튼 컴포넌트
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant, size, asChild = false, ...props }, ref) => {
     return (

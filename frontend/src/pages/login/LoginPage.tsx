@@ -1,3 +1,4 @@
+
 "use client"
 
 import React from "react"
@@ -23,6 +24,7 @@ interface StepInfo {
   title: string;
   subtitle: string;
 }
+
 
 export default function LoginPage(): JSX.Element {
   const [step, setStep] = useState<LoginStep>('phone')

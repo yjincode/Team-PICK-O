@@ -1,7 +1,15 @@
+/**
+ * 메인 CSS 파일
+ * Tailwind CSS 설정과 커스텀 스타일을 정의합니다
+ */
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/**
+ * CSS 변수 정의 (색상 테마)
+ */
 @layer base {
   :root {
     --background: 0 0% 100%;
@@ -87,7 +95,7 @@ code {
   box-sizing: border-box;
 }
 
-/* Korean text rendering optimization */
+/* 한글 텍스트 렌더링 최적화 */
 .korean-text {
   font-family: 'Noto Sans KR', sans-serif;
   font-feature-settings: 'liga' 1, 'kern' 1;
@@ -96,7 +104,7 @@ code {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Responsive Design Utilities */
+/* 반응형 디자인 유틸리티 클래스 */
 @layer utilities {
   .container-responsive {
     @apply w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8;

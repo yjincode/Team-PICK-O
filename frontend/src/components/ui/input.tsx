@@ -1,6 +1,12 @@
+/**
+ * 입력 필드 컴포넌트
+ * 폼에서 사용되는 기본 입력 필드를 제공합니다
+ * 접근성과 포커스 스타일이 최적화되어 있습니다
+ */
 import * as React from "react"
 import { cn } from "../../lib/utils"
 
+// 입력 필드 Props 타입 정의
 export interface InputProps
   extends React.InputHTMLAttributes<HTMLInputElement> {}
 

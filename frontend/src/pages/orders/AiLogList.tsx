@@ -1,17 +1,23 @@
+/**
+ * AI 분석 로그 페이지
+ * AI 분석 결과와 로그를 조회하는 페이지입니다
+ */
 import React from "react"
 import { Card, CardContent } from "../../components/ui/card"
 import { Badge } from "../../components/ui/badge"
 import { Brain, Clock, TrendingUp } from "lucide-react"
 
+// AI 로그 데이터 타입 정의
 interface AiLog {
   id: number;
-  type: string;
-  description: string;
-  accuracy: number;
-  timestamp: string;
-  status: string;
+  type: string;           // 분석 유형
+  description: string;     // 분석 설명
+  accuracy: number;        // 정확도
+  timestamp: string;       // 타임스탬프
+  status: string;         // 처리 상태
 }
 
+// 목업 데이터 (실제로는 API에서 가져올 예정)
 const mockAiLogs: AiLog[] = [
   {
     id: 1,
@@ -40,6 +46,7 @@ const mockAiLogs: AiLog[] = [
 ]
 
 const AiLogList: React.FC = () => {
+  // AI 로그 상태에 따른 배지 색상 결정
   const getStatusBadge = (status: string) => {
     const variants = {
       "완료": "default",
@@ -51,17 +58,20 @@ const AiLogList: React.FC = () => {
 
   return (
     <div className="space-y-4 sm:space-y-6">
+      {/* 페이지 헤더 */}
       <div>
         <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">AI 분석 로그</h1>
         <p className="text-sm sm:text-base text-gray-600 mt-1">AI 분석 결과 및 로그</p>
       </div>
 
+      {/* AI 로그 목록 */}
       <div className="space-y-4">
         {mockAiLogs.map((log) => (
           <Card key={log.id} className="shadow-sm hover:shadow-md transition-shadow">
             <CardContent className="p-4 sm:p-6">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div className="flex-1">
+                  {/* 로그 헤더: 분석 유형과 상태 */}
                   <div className="flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:space-x-3 mb-3">
                     <div className="flex items-center space-x-2">
                       <Brain className="h-5 w-5 text-blue-500" />
@@ -69,7 +79,11 @@ const AiLogList: React.FC = () => {
                     </div>
                     {getStatusBadge(log.status)}
                   </div>
+                  
+                  {/* 분석 설명 */}
                   <p className="text-sm text-gray-600 mb-3">{log.description}</p>
+                  
+                  {/* 분석 상세 정보 */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                     <div className="flex items-center space-x-2">
                       <TrendingUp className="h-4 w-4 text-green-500" />
