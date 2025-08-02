@@ -1,11 +1,16 @@
+/**
+ * 매출 통계 페이지
+ * 월별 매출 현황과 상세 분석을 제공하는 페이지입니다
+ * TODO: 실제 차트 라이브러리(Chart.js, Recharts 등) 연동 필요
+ */
 "use client"
-
 
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card"
 import { Button } from "../../components/ui/button"
 import { Badge } from "../../components/ui/badge"
 import { BarChart3, TrendingUp, TrendingDown, DollarSign, Calendar } from "lucide-react"
 
+// 월별 매출 데이터 타입 정의
 interface MonthlySales {
   month: string
   sales: number
@@ -13,6 +18,7 @@ interface MonthlySales {
   isPositive: boolean
 }
 
+// 목업 데이터 (실제로는 API에서 가져올 예정)
 const mockMonthlySales: MonthlySales[] = [
   { month: "1월", sales: 45600000, change: 12.5, isPositive: true },
   { month: "2월", sales: 52300000, change: 14.7, isPositive: true },
@@ -22,6 +28,7 @@ const mockMonthlySales: MonthlySales[] = [
   { month: "6월", sales: 58400000, change: -4.6, isPositive: false },
 ]
 
+// 인기 어종 데이터
 const topProducts = [
   { name: "고등어", sales: 12800000, percentage: 28.1, trend: "상승" },
   { name: "갈치", sales: 9600000, percentage: 21.1, trend: "하락" },
@@ -30,6 +37,7 @@ const topProducts = [
   { name: "연어", sales: 4800000, percentage: 10.5, trend: "하락" },
 ]
 
+// 결제 방법별 매출 데이터
 const paymentMethods = [
   { method: "카드", amount: 28400000, percentage: 45.2 },
   { method: "계좌이체", amount: 19800000, percentage: 31.5 },
@@ -38,14 +46,16 @@ const paymentMethods = [
 ]
 
 export default function SalesChart() {
+  // 금액 포맷팅 함수
   const formatCurrency = (amount: number) => `₩${amount.toLocaleString()}`
 
+  // 총 매출 및 평균 계산
   const totalSales = mockMonthlySales.reduce((sum, month) => sum + month.sales, 0)
   const avgMonthlySales = totalSales / mockMonthlySales.length
 
   return (
     <div className="flex-1 space-y-6 p-6 bg-light-blue-gray min-h-screen">
-      {/* Header */}
+      {/* 페이지 헤더 */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center space-x-3">
           <BarChart3 className="h-6 w-6 sm:h-8 sm:w-8 text-accent-blue flex-shrink-0" />
@@ -67,7 +77,7 @@ export default function SalesChart() {
         </div>
       </div>
 
-      {/* Summary Stats */}
+      {/* 요약 통계 카드들 */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <Card className="shadow-sm">
           <CardContent className="p-4">
@@ -118,12 +128,13 @@ export default function SalesChart() {
         </Card>
       </div>
 
-      {/* Main Chart */}
+      {/* 메인 차트 */}
       <Card className="shadow-sm">
         <CardHeader>
           <CardTitle className="text-xl font-semibold text-gray-800">월별 매출 추이</CardTitle>
         </CardHeader>
         <CardContent>
+          {/* 차트 플레이스홀더 */}
           <div className="h-60 bg-muted rounded-lg flex items-center justify-center mb-6">
             <div className="text-center text-gray-500">
               <BarChart3 className="h-16 w-16 mx-auto mb-4 opacity-50" />
@@ -132,7 +143,7 @@ export default function SalesChart() {
             </div>
           </div>
 
-          {/* Monthly Sales Data */}
+          {/* 월별 매출 데이터 */}
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
             {mockMonthlySales.map((month) => (
               <div key={month.month} className="text-center p-3 bg-gray-50 rounded-lg">
@@ -155,9 +166,9 @@ export default function SalesChart() {
         </CardContent>
       </Card>
 
-      {/* Additional Charts */}
+      {/* 추가 차트들 */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Top Products */}
+        {/* 인기 어종 TOP 5 */}
         <Card className="shadow-sm">
           <CardHeader>
             <CardTitle className="text-lg font-semibold text-gray-800">인기 어종 TOP 5</CardTitle>
@@ -196,12 +207,13 @@ export default function SalesChart() {
           </CardContent>
         </Card>
 
-        {/* Payment Methods */}
+        {/* 결제 방법별 매출 */}
         <Card className="shadow-sm">
           <CardHeader>
             <CardTitle className="text-lg font-semibold text-gray-800">결제 방법별 매출</CardTitle>
           </CardHeader>
           <CardContent>
+            {/* 결제 방법 차트 플레이스홀더 */}
             <div className="h-60 bg-muted rounded-lg flex items-center justify-center mb-4">
               <div className="text-center text-gray-500">
                 <BarChart3 className="h-12 w-12 mx-auto mb-2 opacity-50" />
@@ -209,6 +221,7 @@ export default function SalesChart() {
               </div>
             </div>
 
+            {/* 결제 방법별 데이터 */}
             <div className="space-y-3">
               {paymentMethods.map((method) => (
                 <div key={method.method} className="flex items-center justify-between">

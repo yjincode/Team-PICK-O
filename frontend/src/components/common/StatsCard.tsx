@@ -1,14 +1,18 @@
+/**
+ * 통계 카드 컴포넌트
+ * 대시보드에서 통계 정보를 표시하는 카드 형태의 컴포넌트입니다
+ */
 import React from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card"
 
 interface StatsCardProps {
-  title: string;
-  value: string | number;
-  subtitle?: string;
-  icon: React.ComponentType<{ className?: string }>;
-  iconColor?: string;
-  valueColor?: string;
-  subtitleColor?: string;
+  title: string;           // 카드 제목
+  value: string | number;  // 주요 통계 값
+  subtitle?: string;       // 부제목 (선택사항)
+  icon: React.ComponentType<{ className?: string }>;  // 아이콘 컴포넌트
+  iconColor?: string;      // 아이콘 색상 (기본값: text-accent-blue)
+  valueColor?: string;     // 값 색상 (기본값: text-gray-900)
+  subtitleColor?: string;  // 부제목 색상 (기본값: text-gray-600)
 }
 
 export const StatsCard: React.FC<StatsCardProps> = ({

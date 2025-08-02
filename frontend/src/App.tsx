@@ -1,3 +1,7 @@
+/**
+ * 메인 애플리케이션 컴포넌트
+ * React Router를 사용한 라우팅 설정과 전체 애플리케이션 구조를 정의합니다
+ */
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import MainLayout from './components/layout/MainLayout';
@@ -18,17 +22,20 @@ const App: React.FC = () => {
   return (
     <Router>
       <Routes>
-        {/* 로그인 페이지는 레이아웃 없이 */}
+        {/* 로그인 페이지는 레이아웃 없이 독립적으로 렌더링 */}
         <Route path="/login" element={<LoginPage />} />
         
-        {/* 나머지 페이지들은 메인 레이아웃 적용 */}
+        {/* 루트 경로를 대시보드로 리다이렉트 */}
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
+        
+        {/* 대시보드 - 메인 페이지 */}
         <Route path="/dashboard" element={
           <MainLayout>
             <Dashboard />
           </MainLayout>
         } />
         
+        {/* 고객 관리 섹션 */}
         <Route path="/customers" element={
           <MainLayout>
             <CustomerList />
@@ -45,6 +52,7 @@ const App: React.FC = () => {
           </MainLayout>
         } />
         
+        {/* 주문 관리 섹션 */}
         <Route path="/orders" element={
           <MainLayout>
             <OrderList />
@@ -56,6 +64,7 @@ const App: React.FC = () => {
           </MainLayout>
         } />
         
+        {/* 재고 관리 섹션 */}
         <Route path="/inventory" element={
           <MainLayout>
             <FishStockList />
@@ -67,6 +76,7 @@ const App: React.FC = () => {
           </MainLayout>
         } />
         
+        {/* 판매 관리 섹션 */}
         <Route path="/sales" element={
           <MainLayout>
             <SalesList />
@@ -83,7 +93,7 @@ const App: React.FC = () => {
           </MainLayout>
         } />
         
-        {/* 404 페이지 */}
+        {/* 404 페이지 - 대시보드로 리다이렉트 */}
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </Router>

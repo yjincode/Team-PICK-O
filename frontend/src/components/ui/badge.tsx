@@ -1,7 +1,13 @@
+/**
+ * 배지 컴포넌트
+ * 상태, 카테고리, 태그 등을 표시하는 작은 배지입니다
+ * class-variance-authority를 사용하여 다양한 스타일을 지원합니다
+ */
 import * as React from "react"
 import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "../../lib/utils"
 
+// 배지 스타일 변형 정의
 const badgeVariants = cva(
   "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
   {
@@ -22,6 +28,7 @@ const badgeVariants = cva(
   }
 )
 
+// 배지 Props 타입 정의
 export interface BadgeProps
   extends React.HTMLAttributes<HTMLDivElement>,
     VariantProps<typeof badgeVariants> {}

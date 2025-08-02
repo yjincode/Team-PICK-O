@@ -1,7 +1,12 @@
+/**
+ * 경매 시세 예측 페이지
+ * AI 기반 어류 경매가 예측을 제공하는 페이지입니다
+ */
 import React from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card"
 import { TrendingUp, Brain, AlertTriangle } from "lucide-react"
 
+// 예측 데이터 타입 정의
 interface PredictionData {
   date: string;
   predictedPrice: number;
@@ -9,6 +14,7 @@ interface PredictionData {
   confidence: number;
 }
 
+// 목업 데이터 (실제로는 API에서 가져올 예정)
 const mockPredictionData: PredictionData[] = [
   { date: "2024-02-01", predictedPrice: 48000, confidence: 85 },
   { date: "2024-02-02", predictedPrice: 52000, confidence: 78 },
@@ -18,16 +24,20 @@ const mockPredictionData: PredictionData[] = [
 ]
 
 const AuctionPredictionChart: React.FC = () => {
+  // 금액 포맷팅 함수
   const formatCurrency = (amount: number): string => `₩${amount.toLocaleString()}`
 
   return (
     <div className="space-y-4 sm:space-y-6">
+      {/* 페이지 헤더 */}
       <div>
         <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">경매 시세 예측</h1>
         <p className="text-sm sm:text-base text-gray-600 mt-1">AI 기반 고등어 경매가 예측</p>
       </div>
 
+      {/* 예측 요약 카드들 */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
+        {/* AI 예측 모델 카드 */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
@@ -50,6 +60,7 @@ const AuctionPredictionChart: React.FC = () => {
           </CardContent>
         </Card>
 
+        {/* 다음 주 예측 카드 */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
@@ -72,6 +83,7 @@ const AuctionPredictionChart: React.FC = () => {
           </CardContent>
         </Card>
 
+        {/* 주의사항 카드 */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
@@ -98,6 +110,7 @@ const AuctionPredictionChart: React.FC = () => {
         </Card>
       </div>
 
+      {/* 예측 결과 상세 카드 */}
       <Card>
         <CardHeader>
           <CardTitle>예측 결과 상세</CardTitle>
@@ -106,6 +119,7 @@ const AuctionPredictionChart: React.FC = () => {
           <div className="space-y-4">
             {mockPredictionData.map((prediction, index) => (
               <div key={index} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 bg-gray-50 rounded-lg">
+                {/* 예측 날짜와 가격 */}
                 <div className="flex-1">
                   <div className="flex items-center space-x-4">
                     <span className="font-medium">{prediction.date}</span>
@@ -114,6 +128,8 @@ const AuctionPredictionChart: React.FC = () => {
                     </span>
                   </div>
                 </div>
+                
+                {/* 신뢰도 및 실제 가격 */}
                 <div className="flex items-center space-x-4 mt-2 sm:mt-0">
                   <span className="text-sm text-gray-600">
                     신뢰도: <span className="font-semibold">{prediction.confidence}%</span>
