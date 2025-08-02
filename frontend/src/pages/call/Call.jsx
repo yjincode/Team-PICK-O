@@ -281,9 +281,9 @@ const Call = () => {
               <div className="h-24 w-24 bg-gradient-primary rounded-full flex items-center justify-center mx-auto">
                 <Video className="h-12 w-12 text-primary-foreground" />
               </div>
-              <h2 className="text-2xl font-bold">VidVo Chat Hub</h2>
+              <h2 className="text-2xl font-bold"></h2>
               <p className="text-muted-foreground">
-                팀원을 선택하여 화상 통화를 시작하세요
+                
               </p>
             </div>
           </div>
