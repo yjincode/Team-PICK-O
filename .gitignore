@@ -49,6 +49,17 @@ config/secret_settings.py
 *.sqlite3
 db.sqlite3
 
+# 데이터 백업 및 덤프 파일 (보안상 중요)
+*.json
+!package.json
+!package-lock.json
+!tsconfig.json
+!*.config.json
+*_data.json
+user_data.json
+backup_*.json
+dump_*.json
+
 # 업로드된 파일
 uploads/
 media/

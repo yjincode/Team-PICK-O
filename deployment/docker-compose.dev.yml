@@ -22,6 +22,23 @@ services:
       timeout: 5s
       retries: 5
 
+  # pgAdmin (PostgreSQL 관리 도구)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: teamPicko-dev-pgadmin
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=admin@picko.com
+      - PGADMIN_DEFAULT_PASSWORD=admin123
+      - PGADMIN_LISTEN_PORT=80
+    volumes:
+      - pgadmin-dev-data:/var/lib/pgadmin
+    ports:
+      - "8080:80"
+    depends_on:
+      database:
+        condition: service_healthy
+    restart: unless-stopped
+
   # 개발용 Redis (캐시, 세션 저장용 - 선택사항)
   # redis:
   #   image: redis:7-alpine
@@ -40,5 +57,7 @@ services:
 volumes:
   postgres-dev-data:
     name: teamPicko-dev-postgres
+  pgadmin-dev-data:
+    name: teamPicko-dev-pgadmin
   # redis-dev-data:
   #   name: teamPicko-dev-redis

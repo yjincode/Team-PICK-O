@@ -99,31 +99,47 @@ export const setupRecaptcha = (containerId: string): RecaptchaVerifier => {
   
   console.log('📍 reCAPTCHA 컨테이너 확인됨:', container);
   
-  // 새로운 RecaptchaVerifier 생성
+  // 새로운 RecaptchaVerifier 생성 (테스트 환경에서 더 관대한 설정)
   const recaptchaVerifier = new RecaptchaVerifier(auth, containerId, {
-    'size': 'normal',
+    'size': 'invisible',  // invisible로 변경하여 테스트 번호에서 덜 방해받도록
     'callback': (response: string) => {
-      console.log('✅ reCAPTCHA 검증 완료:', response.substring(0, 20) + '...');
+      console.log('✅ reCAPTCHA 검증 완료:', response ? '성공' : '자동 처리됨');
     },
     'expired-callback': () => {
-      console.log('❌ reCAPTCHA 만료');
-      // reCAPTCHA 만료 시 자동 재설정
-      if (window.recaptchaVerifier) {
-        window.recaptchaVerifier.clear();
-        window.recaptchaVerifier = undefined;
-      }
+      console.log('❌ reCAPTCHA 만료 - 재설정 시도');
+      // 테스트 환경에서는 자동으로 재시도
+      setTimeout(() => {
+        if (window.recaptchaVerifier) {
+          try {
+            window.recaptchaVerifier.clear();
+            window.recaptchaVerifier = undefined;
+          } catch (e) {
+            console.warn('reCAPTCHA 정리 실패:', e);
+          }
+        }
+      }, 100);
     },
     'error-callback': (error: any) => {
-      console.error('❌ reCAPTCHA 오류:', error);
+      console.warn('⚠️ reCAPTCHA 오류 (테스트 환경에서는 무시될 수 있음):', error);
     }
   });
   
-  console.log('🔨 reCAPTCHA verifier 생성됨');
+  console.log('🔨 reCAPTCHA verifier 생성됨 (invisible 모드)');
   
   // window 객체에 저장
   window.recaptchaVerifier = recaptchaVerifier;
   
   return recaptchaVerifier;
+};
+
+// 테스트 전화번호 확인 함수
+const isTestPhoneNumber = (phoneNumber: string): boolean => {
+  // Firebase Console에서 설정한 테스트 전화번호: 01012341234
+  const testNumbers = [
+    '+8201012341234',  // Firebase에서 설정한 테스트 번호
+  ];
+  
+  return testNumbers.includes(phoneNumber);
 };
 
 // 전화번호 인증 코드 전송
@@ -140,7 +156,11 @@ export const sendPhoneVerification = async (phoneNumber: string): Promise<AuthRe
       };
     }
     
-    console.log('📱 전화번호 인증 시작:', normalizedPhone);
+    console.log('📱 정규화된 전화번호:', normalizedPhone);
+    
+    // 테스트 전화번호인지 확인
+    const isTestNumber = isTestPhoneNumber(normalizedPhone);
+    console.log('🧪 테스트 전화번호 여부:', isTestNumber);
     
     // reCAPTCHA verifier 설정
     const recaptchaVerifier = setupRecaptcha('recaptcha-container');
