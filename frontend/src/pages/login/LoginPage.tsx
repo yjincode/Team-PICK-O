@@ -46,11 +46,9 @@ export default function LoginPage(): JSX.Element {
   useEffect(() => {
     // 컴포넌트 마운트 시 reCAPTCHA 설정
     try {
-      console.log('🔧 reCAPTCHA 초기화 중...');
       setupRecaptcha('recaptcha-container');
-      console.log('✅ reCAPTCHA 초기화 완료');
     } catch (error) {
-      console.error('❌ reCAPTCHA 초기화 실패:', error);
+      console.error('reCAPTCHA 초기화 실패:', error);
       setError('reCAPTCHA 초기화에 실패했습니다. 페이지를 새로고침해주세요.');
     }
     
@@ -90,13 +88,10 @@ export default function LoginPage(): JSX.Element {
         localStorage.setItem('userInfo', JSON.stringify(userData))
         
         if (userData.status === 'approved') {
-          // 승인된 사용자 -> 대시보드로 이동
           window.location.href = '/dashboard'
         } else if (userData.status === 'pending') {
-          // 승인 대기 상태
           setStep('pending')
         } else {
-          // 거절 또는 정지 상태
           setError('계정이 비활성화되었습니다. 관리자에게 문의하세요.')
         }
       } else {
@@ -446,7 +441,7 @@ export default function LoginPage(): JSX.Element {
               
               {step === 'phone' && (
                 <div className="text-xs text-center text-gray-500 mt-2">
-                  실제 전화번호 사용 시 reCAPTCHA 인증이 필요합니다.
+                  테스트: 01012341234 (인증번호: 123456)
                 </div>
               )}
             </div>

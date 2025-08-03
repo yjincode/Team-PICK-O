@@ -39,7 +39,7 @@ THIRD_PARTY_APPS = [
 
 LOCAL_APPS = [
     'core',
-    'fish_analysis',
+    # 'fish_analysis',  # 임시 비활성화 (torch 의존성)
     'accounts',
     'dashboard',
 ]
@@ -77,15 +77,15 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'config.wsgi.application'
 
-# Database
+# Database - PostgreSQL 사용 (하드코딩으로 임시 해결)
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.getenv('POSTGRES_DB', 'teamPicko'),
-        'USER': os.getenv('POSTGRES_USER', 'teamPicko'),
-        'PASSWORD': os.getenv('POSTGRES_PASSWORD', '12341234'),
-        'HOST': os.getenv('DB_HOST', 'localhost'),
-        'PORT': os.getenv('DB_PORT', '5432'),
+        'NAME': 'teamPicko',
+        'USER': 'teamPicko', 
+        'PASSWORD': '12341234',
+        'HOST': 'localhost',
+        'PORT': '5432',
     }
 }
 
@@ -159,17 +159,14 @@ SPECTACULAR_SETTINGS = {
 }
 
 # CORS settings
-CORS_ALLOWED_ORIGINS = []
-cors_origins = os.getenv('BACKEND_CORS_ORIGINS', '["http://localhost:3000","http://localhost:8080"]')
-try:
-    CORS_ALLOWED_ORIGINS = ast.literal_eval(cors_origins)
-except (ValueError, SyntaxError):
-    CORS_ALLOWED_ORIGINS = [
-        "http://localhost:3000",
-        "http://localhost:8080", 
-        "http://127.0.0.1:3000",
-        "http://127.0.0.1:8080",
-    ]
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    "http://localhost:8080", 
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:8080",
+    "http://localhost:5173",  # Vite default port
+    "http://127.0.0.1:5173",
+]
 
 CORS_ALLOW_CREDENTIALS = True
 
@@ -231,6 +228,9 @@ AI_MODELS = {
     'CONFIDENCE_THRESHOLD': float(os.getenv('CONFIDENCE_THRESHOLD', '0.5')),
     'MODEL_CACHE_DIR': BASE_DIR / 'models',
 }
+
+# Discord Webhook settings
+DISCORD_WEBHOOK_URL = os.getenv('DISCORD_WEBHOOK_URL', 'https://discordapp.com/api/webhooks/1401000206480314388/EpCMlxFdR7UYny-FBF7cEVst7g-D9KfHaW4N8UtwDvnxu-jVrm9opVwnwdvJgwYjYL-I')
 
 # Create necessary directories
 os.makedirs(BASE_DIR / 'logs', exist_ok=True)
