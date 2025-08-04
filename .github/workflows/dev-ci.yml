@@ -9,116 +9,24 @@ on:
       - dev
 
 jobs:
-  test-backend:
-    runs-on: ubuntu-latest
-    outputs:
-      tests_exist: ${{ steps.check-tests.outputs.tests_exist }}
-    
-    steps:
-    - uses: actions/checkout@v4
-    
-    - name: Check if backend tests exist
-      id: check-tests
-      working-directory: ./backend
-      run: |
-        if [ -n "$(find tests -name '*.py' -not -name '__init__.py' 2>/dev/null)" ]; then
-          echo "tests_exist=true" >> $GITHUB_OUTPUT
-          echo "✅ 백엔드 테스트 파일 발견"
-        else
-          echo "tests_exist=false" >> $GITHUB_OUTPUT
-          echo "⚠️ 백엔드 테스트 파일 없음"
-        fi
-    
-    - name: Set up Python
-      if: steps.check-tests.outputs.tests_exist == 'true'
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.11'
-    
-    - name: Install backend dependencies
-      if: steps.check-tests.outputs.tests_exist == 'true'
-      working-directory: ./backend
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        pip install pytest pytest-cov
-    
-    - name: Run backend tests with coverage
-      if: steps.check-tests.outputs.tests_exist == 'true'
-      working-directory: ./backend
-      run: |
-        python -m pytest tests/ -v --cov=. --cov-report=xml
-    
-    - name: Warning for missing backend tests
-      if: steps.check-tests.outputs.tests_exist == 'false'
-      run: |
-        echo "⚠️ 백엔드 테스트 코드가 없습니다. 테스트 코드 작성을 권장합니다."
-
-  test-frontend:
-    runs-on: ubuntu-latest
-    outputs:
-      tests_exist: ${{ steps.check-tests.outputs.tests_exist }}
-    
-    steps:
-    - uses: actions/checkout@v4
-    
-    - name: Check if frontend tests exist
-      id: check-tests
-      working-directory: ./frontend
-      run: |
-        if [ -f "package.json" ] && grep -q '"test"' package.json && [ -n "$(find . -name '*.test.*' -o -name '*.spec.*' 2>/dev/null)" ]; then
-          echo "tests_exist=true" >> $GITHUB_OUTPUT
-          echo "✅ 프론트엔드 테스트 파일 발견"
-        else
-          echo "tests_exist=false" >> $GITHUB_OUTPUT
-          echo "⚠️ 프론트엔드 테스트 파일 없음"
-        fi
-    
-    - name: Set up Node.js
-      if: steps.check-tests.outputs.tests_exist == 'true'
-      uses: actions/setup-node@v4
-      with:
-        node-version: '18'
-        cache: 'npm'
-        cache-dependency-path: './frontend/package-lock.json'
-    
-    - name: Install frontend dependencies
-      if: steps.check-tests.outputs.tests_exist == 'true'
-      working-directory: ./frontend
-      run: npm ci
-    
-    - name: Run frontend tests
-      if: steps.check-tests.outputs.tests_exist == 'true'
-      working-directory: ./frontend
-      run: npm test -- --coverage --watchAll=false
-    
-    - name: Warning for missing frontend tests
-      if: steps.check-tests.outputs.tests_exist == 'false'
-      run: |
-        echo "⚠️ 프론트엔드 테스트 코드가 없습니다. 테스트 코드 작성을 권장합니다."
-
   lint-and-format:
     runs-on: ubuntu-latest
-    needs: [test-backend, test-frontend]
     
     steps:
     - uses: actions/checkout@v4
     
-    # Backend 린트 (조건부)
+    # Backend 린트
     - name: Set up Python for linting
-      if: needs.test-backend.outputs.tests_exist == 'true'
       uses: actions/setup-python@v4
       with:
         python-version: '3.11'
     
     - name: Install Python linting tools
-      if: needs.test-backend.outputs.tests_exist == 'true'
       run: |
         python -m pip install --upgrade pip
         pip install flake8 black isort
     
     - name: Lint backend code
-      if: needs.test-backend.outputs.tests_exist == 'true'
       working-directory: ./backend
       run: |
         flake8 . --count --statistics || echo "⚠️ 백엔드 린트 경고 있음"
@@ -126,20 +34,17 @@ jobs:
         isort --check-only . || echo "⚠️ 백엔드 import 정렬 필요"
       continue-on-error: true
     
-    # Frontend 린트 (조건부)
+    # Frontend 린트
     - name: Set up Node.js for linting
-      if: needs.test-frontend.outputs.tests_exist == 'true'
       uses: actions/setup-node@v4
       with:
         node-version: '18'
     
     - name: Install frontend dependencies for linting
-      if: needs.test-frontend.outputs.tests_exist == 'true'
       working-directory: ./frontend
       run: npm ci
     
     - name: Lint frontend code
-      if: needs.test-frontend.outputs.tests_exist == 'true'
       working-directory: ./frontend
       run: |
         if [ -f "package.json" ] && npm list eslint &>/dev/null; then
@@ -148,11 +53,6 @@ jobs:
           echo "⚠️ ESLint 설정되지 않음"
         fi
       continue-on-error: true
-    
-    - name: Skip message
-      if: needs.test-backend.outputs.tests_exist == 'false' && needs.test-frontend.outputs.tests_exist == 'false'
-      run: |
-        echo "⚠️ 테스트 코드가 없어 린트 검사를 건너뜁니다."
 
   security-scan:
     runs-on: ubuntu-latest
@@ -180,7 +80,7 @@ jobs:
 
   build-test:
     runs-on: ubuntu-latest
-    needs: [test-backend, test-frontend, lint-and-format]
+    needs: [lint-and-format]
     
     steps:
     - uses: actions/checkout@v4

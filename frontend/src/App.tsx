@@ -41,115 +41,115 @@ const App: React.FC = () => {
         <Route 
           path="/dashboard" 
           element={
-            // <PrivateRoute>
+            <PrivateRoute>
               <MainLayout>
                 <Dashboard />
               </MainLayout>
-            // </PrivateRoute>
+            </PrivateRoute>
           } 
         />
         
         <Route 
           path="/customers" 
           element={
-            // <PrivateRoute>
+            <PrivateRoute>
               <MainLayout>
                 <CustomerList />
               </MainLayout>
-            // </PrivateRoute>
+            </PrivateRoute>
           } 
         />
         <Route 
           path="/customers/unpaid" 
           element={
-            // <PrivateRoute>
+            <PrivateRoute>
               <MainLayout>
                 <UnpaidList />
               </MainLayout>
-            // </PrivateRoute>
+            </PrivateRoute>
           } 
         />
         <Route 
           path="/customers/settlement" 
           element={
-            // <PrivateRoute>
+            <PrivateRoute>
               <MainLayout>
                 <SettlementForm />
               </MainLayout>
-            // </PrivateRoute>
+            </PrivateRoute>
           } 
         />
         
         <Route 
           path="/orders" 
           element={
-            // <PrivateRoute>
+            <PrivateRoute>
               <MainLayout>
                 <OrderList />
               </MainLayout>
-            // </PrivateRoute>
+            </PrivateRoute>
           } 
         />
         <Route 
           path="/orders/ai-logs" 
           element={
-            // <PrivateRoute>
+            <PrivateRoute>
               <MainLayout>
                 <AiLogList />
               </MainLayout>
-            // </PrivateRoute>
+            </PrivateRoute>
           } 
         />
         
         <Route 
           path="/inventory" 
           element={
-            // <PrivateRoute>
+            <PrivateRoute>
               <MainLayout>
                 <FishStockList />
               </MainLayout>
-            // </PrivateRoute>
+            </PrivateRoute>
           } 
         />
         <Route 
           path="/inventory/fish-form" 
           element={
-            // <PrivateRoute>
+            <PrivateRoute>
               <MainLayout>
                 <FishItemForm />
               </MainLayout>
-            // </PrivateRoute>
+            </PrivateRoute>
           } 
         />
         
         <Route 
           path="/sales" 
           element={
-            // <PrivateRoute>
+            <PrivateRoute>
               <MainLayout>
                 <SalesList />
               </MainLayout>
-            // </PrivateRoute>
+            </PrivateRoute>
           } 
         />
         <Route 
           path="/sales/chart" 
           element={
-            // <PrivateRoute>
+            <PrivateRoute>
               <MainLayout>
                 <SalesChart />
               </MainLayout>
-            // </PrivateRoute>
+            </PrivateRoute>
           } 
         />
         <Route 
           path="/sales/prediction" 
           element={
-            // <PrivateRoute>
+            <PrivateRoute>
               <MainLayout>
                 <AuctionPredictionChart />
               </MainLayout>
-            // </PrivateRoute>
+            </PrivateRoute>
           } 
         />
 

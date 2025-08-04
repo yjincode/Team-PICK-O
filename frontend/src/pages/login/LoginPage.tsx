@@ -46,11 +46,9 @@ export default function LoginPage(): JSX.Element {
   useEffect(() => {
     // 컴포넌트 마운트 시 reCAPTCHA 설정
     try {
-      console.log('🔧 reCAPTCHA 초기화 중...');
       setupRecaptcha('recaptcha-container');
-      console.log('✅ reCAPTCHA 초기화 완료');
     } catch (error) {
-      console.error('❌ reCAPTCHA 초기화 실패:', error);
+      console.error('reCAPTCHA 초기화 실패:', error);
       setError('reCAPTCHA 초기화에 실패했습니다. 페이지를 새로고침해주세요.');
     }
     
@@ -90,13 +88,10 @@ export default function LoginPage(): JSX.Element {
         localStorage.setItem('userInfo', JSON.stringify(userData))
         
         if (userData.status === 'approved') {
-          // 승인된 사용자 -> 대시보드로 이동
           window.location.href = '/dashboard'
         } else if (userData.status === 'pending') {
-          // 승인 대기 상태
           setStep('pending')
         } else {
-          // 거절 또는 정지 상태
           setError('계정이 비활성화되었습니다. 관리자에게 문의하세요.')
         }
       } else {
@@ -120,12 +115,10 @@ export default function LoginPage(): JSX.Element {
     setError('')
     
     try {
-      console.log('📱 전화번호 인증 시작:', phoneNumber);
       
       const result = await sendPhoneVerification(phoneNumber)
       
       if (result.success) {
-        console.log('✅ SMS 전송 요청 성공');
         setStep('code')
         // 성공 시 60초 쿨다운
         setCooldown(60)
@@ -139,7 +132,6 @@ export default function LoginPage(): JSX.Element {
           })
         }, 1000)
       } else {
-        console.error('❌ SMS 전송 실패:', result.error);
         setError(result.message || '인증번호 전송에 실패했습니다.')
         
         // too-many-requests 오류인 경우 긴 쿨다운
@@ -158,7 +150,6 @@ export default function LoginPage(): JSX.Element {
         
         // reCAPTCHA 관련 오류인 경우 재설정
         if (result.error?.includes('captcha') || result.error?.includes('internal-error')) {
-          console.log('🔄 reCAPTCHA 재설정 시도...');
           try {
             setupRecaptcha('recaptcha-container');
           } catch (recaptchaError) {
@@ -167,7 +158,6 @@ export default function LoginPage(): JSX.Element {
         }
       }
     } catch (error: any) {
-      console.error('❌ 전화번호 인증 오류:', error);
       setError('인증번호 전송 중 오류가 발생했습니다. 페이지를 새로고침하고 다시 시도해주세요.')
     } finally {
       setLoading(false)
@@ -180,19 +170,15 @@ export default function LoginPage(): JSX.Element {
     setError('')
     
     try {
-      console.log('🔐 인증번호 확인 시작:', verificationCode);
       
       const result = await verifyPhoneCode(verificationCode)
       
       if (result.success) {
-        console.log('✅ 인증번호 확인 성공');
         // Firebase 인증 성공 -> onAuthStateChange에서 자동으로 처리됨
       } else {
-        console.error('❌ 인증번호 확인 실패:', result.error);
         setError(result.message || '인증번호 확인에 실패했습니다.')
       }
     } catch (error: any) {
-      console.error('❌ 인증번호 확인 오류:', error);
       setError('인증번호 확인 중 오류가 발생했습니다.')
     } finally {
       setLoading(false)
@@ -446,7 +432,7 @@ export default function LoginPage(): JSX.Element {
               
               {step === 'phone' && (
                 <div className="text-xs text-center text-gray-500 mt-2">
-                  실제 전화번호 사용 시 reCAPTCHA 인증이 필요합니다.
+                  테스트: 01012341234 (인증번호: 123456)
                 </div>
               )}
             </div>

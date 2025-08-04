@@ -317,26 +317,32 @@ export const priceDataApi = {
 export const authApi = {
   // 사용자 등록 (회원가입)
   register: async (userData: any): Promise<any> => {
-    const response = await api.post('/core/auth/register/', userData)
-
+    const response = await api.post('/auth/register/', userData)
     return response.data
   },
   
   // 사용자 등록 (별칭 - LoginPage 호환성)
   registerUser: async (userData: any): Promise<any> => {
-    const response = await api.post('/core/auth/register/', userData)
+    const response = await api.post('/auth/register/', userData)
     return response.data
   },
   
   // 사용자 상태 확인
   checkUserStatus: async (firebaseUid: string): Promise<any> => {
-    const response = await api.get(`/core/auth/status/?firebase_uid=${firebaseUid}`)
+    const response = await api.get(`/auth/status/?firebase_uid=${firebaseUid}`)
     return response.data
   },
   
-  // 승인 대기 사용자 목록 (개발/테스트용)
-  getPendingUsers: async (): Promise<any> => {
-    const response = await api.get('/core/auth/pending/')
+
+  // 로그아웃
+  logout: async (): Promise<ApiResponse<void>> => {
+    const response = await api.post('/auth/logout')
+    return response.data
+  },
+
+  // 현재 사용자 정보 조회
+  getCurrentUser: async (): Promise<ApiResponse<any>> => {
+    const response = await api.get('/auth/me')
     return response.data
   },
 }
@@ -359,17 +365,6 @@ export const salesApi = {
   },
 }
 
-
-  // 로그아웃
-  logout: async (): Promise<ApiResponse<void>> => {
-    const response = await api.post('/auth/logout')
-    return response.data
-  },
-
-  // 현재 사용자 정보 조회
-  getCurrentUser: async (): Promise<ApiResponse<any>> => {
-    const response = await api.get('/auth/me')
-
 // AI API
 export const aiApi = {
   getLogs: async (): Promise<any> => {
@@ -384,4 +379,4 @@ export const aiApi = {
 }
 
 // 기존 호환성을 위한 별칭 (점진적 마이그레이션)
-export const customerApi = businessApi 
+export const customerApi = businessApi
