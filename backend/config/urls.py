@@ -41,8 +41,8 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     
     # API endpoints
-    path('api/v1/', include('core.urls')),
-    # path('api/v1/fish/', include('fish_analysis.urls')),  # 임시 비활성화
+    path('api/v1/fish/', include('fish_analysis.urls')),
+    path('api/v1/fish-registry/', include('fish_registry.urls')),
     path('api/v1/accounts/', include('accounts.urls')),
     path('api/v1/dashboard/', include('dashboard.urls')),
     
