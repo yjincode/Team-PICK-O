@@ -10,6 +10,7 @@ import { Button } from "../../components/ui/button"
 import { Input } from "../../components/ui/input"
 import { Badge } from "../../components/ui/badge"
 import { Search, Plus, Phone, Mail, Eye, Edit } from "lucide-react"
+import axios from "axios"
 
 // 거래처 데이터 타입 정의
 interface Business {
@@ -65,19 +66,58 @@ const mockBusinesses: Business[] = [
 
 const CustomerList: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState<string>("")
+  const [isModalOpen, setIsModalOpen] = useState<boolean>(false)
 
+
+  const [newName, setNewName] = useState("")
+  const [newPhone, setNewPhone] = useState("")
+  const [newAddress, setNewAddress] = useState("")
+  
+  const handleRegister = async () => {
+    try {
+      const response = await axios.post("http://localhost:8000/api/customers/", {
+        business_name: newName,
+        phone_number: newPhone,
+        address: newAddress,
+      })
+      console.log("등록 성공:", response.data)
+      setIsModalOpen(false)
+      // 새로고침 또는 데이터 다시 불러오기 로직 필요
+    } catch (error) {
+      console.error("등록 실패:", error)
+    }
+  }
   // 금액 포맷팅 함수
   const formatCurrency = (amount: number): string => `₩${amount.toLocaleString()}`
 
   return (
     <div className="flex-1 space-y-4 sm:space-y-6 p-4 sm:p-6 bg-light-blue-gray min-h-screen">
+       {/* 모달 */}
+      {isModalOpen && (
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-lg p-6 w-full max-w-md shadow-lg">
+          <h2 className="text-xl font-bold mb-4">새 거래처 등록</h2>
+          <div className="space-y-3">
+            <Input placeholder="고객명" value={newName} onChange={(e) => setNewName(e.target.value)} />
+            <Input placeholder="전화번호" value={newPhone} onChange={(e) => setNewPhone(e.target.value)} />
+            <Input placeholder="주소" value={newAddress} onChange={(e) => setNewAddress(e.target.value)} />
+          </div>
+          <div className="mt-4 flex justify-end space-x-2">
+            <Button variant="outline" onClick={() => setIsModalOpen(false)}>취소</Button>
+            <Button className="bg-blue-500 hover:bg-blue-600" onClick={handleRegister}>등록</Button>
+          </div>
+        </div>
+      </div>
+    )}
       {/* 페이지 헤더 */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">거래처 리스트</h1>
           <p className="text-sm sm:text-base text-gray-600 mt-1">거래처 정보 및 관리</p>
         </div>
-        <Button className="bg-accent-blue hover:bg-accent-blue/90 w-full sm:w-auto">
+        <Button className="bg-accent-blue hover:bg-accent-blue/90 w-full sm:w-auto"
+          onClick={() => setIsModalOpen(true)}
+        >
           <Plus className="h-4 w-4 mr-2" />새 거래처 등록
         </Button>
       </div>
