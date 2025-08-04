@@ -60,7 +60,7 @@ api.interceptors.response.use(
 export const businessApi = {
   // 모든 거래처 조회
   getAll: async (): Promise<ApiResponse<Business[]>> => {
-    const response = await api.get('/businesses')
+    const response = await api.get('/businesses/')
     return response.data
   },
 
