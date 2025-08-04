@@ -1,8 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from .models import (
-    User, Business, FishType, Inventory, Order, OrderItem, 
-    SMSRecommendation, Payment, PriceData
+    User, Business, SMSRecommendation, PriceData
 )
 
 
@@ -27,55 +26,11 @@ class BusinessAdmin(admin.ModelAdmin):
     search_fields = ('business_name', 'phone_number', 'user__business_name')
 
 
-@admin.register(FishType)
-class FishTypeAdmin(admin.ModelAdmin):
-    list_display = ('fish_name', 'user', 'created_at')
-    list_filter = ('created_at',)
-    search_fields = ('fish_name', 'aliases', 'user__business_name')
-
-
-@admin.register(Inventory)
-class InventoryAdmin(admin.ModelAdmin):
-    list_display = ('fish_type', 'user', 'stock_quantity', 'unit', 'status', 'updated_at')
-    list_filter = ('status', 'unit', 'updated_at')
-    search_fields = ('fish_type__fish_name', 'user__business_name')
-
-
-@admin.register(Order)
-class OrderAdmin(admin.ModelAdmin):
-    list_display = ('business', 'user', 'total_price', 'delivery_date', 'status', 'order_datetime')
-    list_filter = ('status', 'source_type', 'order_datetime', 'delivery_date')
-    search_fields = ('business__business_name', 'user__business_name')
-    inlines = []
-
-
-class OrderItemInline(admin.TabularInline):
-    model = OrderItem
-    extra = 1
-
-
-OrderAdmin.inlines = [OrderItemInline]
-
-
-@admin.register(OrderItem)
-class OrderItemAdmin(admin.ModelAdmin):
-    list_display = ('order', 'fish_type', 'quantity', 'unit_price', 'unit')
-    list_filter = ('unit',)
-    search_fields = ('fish_type__fish_name', 'order__business__business_name')
-
-
 @admin.register(SMSRecommendation)
 class SMSRecommendationAdmin(admin.ModelAdmin):
     list_display = ('business', 'user', 'fish_type', 'price_trend', 'is_sent', 'created_at')
     list_filter = ('is_sent', 'price_trend', 'created_at')
     search_fields = ('business__business_name', 'fish_type', 'user__business_name')
-
-
-@admin.register(Payment)
-class PaymentAdmin(admin.ModelAdmin):
-    list_display = ('business', 'user', 'amount', 'method', 'status', 'paid_at')
-    list_filter = ('method', 'status', 'created_at', 'paid_at')
-    search_fields = ('business__business_name', 'user__business_name')
 
 
 @admin.register(PriceData)

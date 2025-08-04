@@ -1,0 +1,1 @@
+# Django management 명령어를 위한 __init__.py 파일 

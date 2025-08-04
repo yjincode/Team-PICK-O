@@ -2,11 +2,12 @@
  * 주문 목록 페이지
  * 주문 내역을 조회하고 관리하는 페이지입니다
  */
-import React from "react"
+import React, { useState } from "react"
 import { Card, CardContent } from "../../components/ui/card"
 import { Button } from "../../components/ui/button"
 import { Badge } from "../../components/ui/badge"
 import { Plus, Eye, Edit, Phone, Calendar } from "lucide-react"
+import OrderForm from "./OrderForm"
 
 // 주문 데이터 타입 정의 (새로운 DB 스키마 기반)
 interface Order {
@@ -15,7 +16,7 @@ interface Order {
   total_price: number;
   order_datetime: string;
   memo?: string;
-  source_type: 'voice' | 'text';
+  source_type: 'voice' | 'text' | 'manual';
   transcribed_text?: string;
   delivery_date?: string;
   status: 'success' | 'failed' | 'pending';
@@ -128,8 +129,14 @@ const mockOrders: Order[] = [
 ]
 
 const OrderList: React.FC = () => {
+  const [showOrderForm, setShowOrderForm] = useState(false)
+  const [orders, setOrders] = useState(mockOrders)
+
   // 금액 포맷팅 함수
-  const formatCurrency = (amount: number): string => `₩${amount.toLocaleString()}`
+  const formatCurrency = (amount: number | undefined): string => {
+    if (amount === undefined || amount === null) return '₩0'
+    return `₩${amount.toLocaleString()}`
+  }
 
   // 주문 상태에 따른 배지 색상 결정
   const getStatusBadge = (status: string) => {
@@ -143,7 +150,44 @@ const OrderList: React.FC = () => {
 
   // 주문 소스 타입에 따른 아이콘
   const getSourceTypeIcon = (sourceType: string) => {
-    return sourceType === 'voice' ? '🎤' : '📝'
+    if (sourceType === 'voice') return '🎤'
+    if (sourceType === 'manual') return '✏️'
+    return '📝'
+  }
+
+  // 새 주문 처리
+  const handleNewOrder = (orderData: any) => {
+    console.log('받은 주문 데이터:', orderData) // 디버깅용
+    
+    // 백엔드에서 받은 데이터를 프론트엔드 형식으로 변환
+    const newOrder: Order = {
+      id: orderData.order_id || Math.max(...orders.map(o => o.id)) + 1,
+      business_id: orderData.business_id,
+      total_price: orderData.total_price || 0,
+      order_datetime: orderData.order_datetime || new Date().toISOString(),
+      memo: orderData.memo || '',
+      source_type: orderData.source_type || 'manual',
+      transcribed_text: orderData.transcribed_text || '',
+      delivery_date: orderData.delivery_date || '',
+      status: orderData.status || 'pending',
+      business: {
+        id: orderData.business_id,
+        business_name: orderData.business_name || '거래처명 없음',
+        phone_number: orderData.phone_number || '연락처 없음',
+      },
+      items: orderData.order_items?.map((item: any, index: number) => ({
+        id: index + 1,
+        fish_type_id: item.fish_type_id,
+        quantity: item.quantity,
+        unit_price: item.unit_price,
+        unit: item.unit
+      })) || []
+    }
+    
+    console.log('변환된 주문 데이터:', newOrder) // 디버깅용
+    
+    setOrders(prev => [newOrder, ...prev])
+    setShowOrderForm(false)
   }
 
   return (
@@ -154,14 +198,17 @@ const OrderList: React.FC = () => {
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">주문 내역</h1>
           <p className="text-sm sm:text-base text-gray-600 mt-1">주문 관리 및 현황</p>
         </div>
-        <Button className="bg-accent-blue hover:bg-accent-blue/90 w-full sm:w-auto">
+        <Button 
+          className="bg-accent-blue hover:bg-accent-blue/90 w-full sm:w-auto"
+          onClick={() => setShowOrderForm(true)}
+        >
           <Plus className="h-4 w-4 mr-2" />새 주문
         </Button>
       </div>
 
       {/* 주문 목록 */}
       <div className="space-y-4">
-        {mockOrders.map((order) => (
+        {orders.map((order) => (
           <Card key={order.id} className="shadow-sm hover:shadow-md transition-shadow">
             <CardContent className="p-4 sm:p-6">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -172,9 +219,12 @@ const OrderList: React.FC = () => {
                       {order.business?.business_name}
                     </h3>
                     {getStatusBadge(order.status)}
-                    <span className="text-sm text-gray-500">
-                      {getSourceTypeIcon(order.source_type)} {order.source_type === 'voice' ? '음성' : '텍스트'}
-                    </span>
+                                         <span className="text-sm text-gray-500">
+                       {getSourceTypeIcon(order.source_type)} {
+                         order.source_type === 'voice' ? '음성' : 
+                         order.source_type === 'manual' ? '수동' : '문자'
+                       }
+                     </span>
                   </div>
                   
                   {/* 주문 상세 정보 */}
@@ -240,6 +290,27 @@ const OrderList: React.FC = () => {
           </Card>
         ))}
       </div>
+
+             {/* 주문 폼 모달 */}
+       {showOrderForm && (
+         <OrderForm
+           onClose={() => setShowOrderForm(false)}
+           onSubmit={handleNewOrder}
+           // 테스트용 자동 주문 데이터 (주석 해제하여 테스트)
+           parsedOrderData={{
+             order: {
+               business_id: 5678,
+               contact: "010-1234-5678",
+               delivery_date: "2025-08-05",
+               transcribed_text: "안녕하세요, 이번에 도미 10kg이랑 방어 5마리 주문할게요. 납품은 8월 5일 오전 중으로 부탁드립니다."
+             },
+             order_items: [
+               { fish_type_id: 201, quantity: 10, unit_price: 20000, unit: "kg" },
+               { fish_type_id: 202, quantity: 5, unit_price: 15000, unit: "마리" }
+             ]
+           }}
+         />
+       )}
     </div>
   )
 }
