@@ -39,7 +39,7 @@ THIRD_PARTY_APPS = [
 
 LOCAL_APPS = [
     'core',
-    # 'fish_analysis',  # 임시 비활성화 (torch 의존성)
+    'fish_analysis',  # 광어 질병 분석 기능 활성화
     'accounts',
     'dashboard',
 ]
@@ -257,7 +257,7 @@ AI_MODELS = {
 }
 
 # Discord Webhook settings
-DISCORD_WEBHOOK_URL = os.getenv('DISCORD_WEBHOOK_URL', 'https://discordapp.com/api/webhooks/1401000206480314388/EpCMlxFdR7UYny-FBF7cEVst7g-D9KfHaW4N8UtwDvnxu-jVrm9opVwnwdvJgwYjYL-I')
+DISCORD_WEBHOOK_URL = os.getenv('DISCORD_WEBHOOK_URL', '')
 
 # Create necessary directories
 os.makedirs(BASE_DIR / 'logs', exist_ok=True)

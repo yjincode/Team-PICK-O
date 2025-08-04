@@ -30,6 +30,7 @@ from .serializers import (
     MobileAnalysisRequestSerializer
 )
 from .analyzer import django_fish_analyzer
+from .flounder_analyzer import flounder_analyzer
 
 logger = logging.getLogger(__name__)
 
@@ -482,3 +483,97 @@ def mobile_analyze_fish_image(request):
     
     # 기본 분석 로직과 동일하지만 추가 메타데이터 처리
     return analyze_fish_image(request)
+
+
+# 광어 질병 분석 전용 API
+@extend_schema(
+    summary="광어 질병 분석",
+    description="광어 이미지를 분석하여 YOLO 모델로 광어를 탐지하고 질병 의심 부분을 표기합니다.",
+    request={
+        'multipart/form-data': {
+            'type': 'object',
+            'properties': {
+                'image': {'type': 'string', 'format': 'binary', 'description': '분석할 광어 이미지'},
+            },
+            'required': ['image']
+        }
+    },
+    responses={
+        200: {
+            'type': 'object',
+            'properties': {
+                'success': {'type': 'boolean'},
+                'message': {'type': 'string'},
+                'flounder_detected': {'type': 'boolean'},
+                'flounder_count': {'type': 'integer'},
+                'disease_regions': {
+                    'type': 'array',
+                    'items': {
+                        'type': 'object',
+                        'properties': {
+                            'bbox': {'type': 'array', 'items': {'type': 'integer'}},
+                            'disease_type': {'type': 'string'},
+                            'disease_name': {'type': 'string'},
+                            'confidence': {'type': 'number'},
+                            'severity': {'type': 'string'},
+                            'description': {'type': 'string'}
+                        }
+                    }
+                },
+                'annotated_image': {'type': 'string', 'description': 'Base64 encoded annotated image'},
+                'confidence_scores': {'type': 'object'}
+            }
+        },
+        400: "잘못된 요청",
+        500: "서버 오류"
+    },
+    tags=["광어 질병 분석"]
+)
+@api_view(['POST'])
+@parser_classes([MultiPartParser, FormParser])
+@permission_classes([permissions.AllowAny])  # 인증 불필요한 1회성 분석
+def analyze_flounder_disease(request):
+    """광어 질병 분석 API - 1회성 분석, 데이터베이스 저장 없음"""
+    
+    try:
+        # 이미지 파일 검증
+        if 'image' not in request.FILES:
+            return Response(
+                {"error": "이미지 파일이 필요합니다."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        image_file = request.FILES['image']
+        
+        # 파일 타입 검증
+        if image_file.content_type not in SUPPORTED_IMAGE_TYPES:
+            return Response(
+                {"error": f"지원되지 않는 파일 형식입니다. 지원 형식: {', '.join(SUPPORTED_IMAGE_TYPES)}"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 파일 크기 검증
+        if image_file.size > MAX_FILE_SIZE:
+            return Response(
+                {"error": f"파일 크기가 너무 큽니다. 최대 {MAX_FILE_SIZE // (1024*1024)}MB까지 허용됩니다."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        logger.info(f"🐟 광어 질병 분석 시작 - 파일명: {image_file.name}, 크기: {image_file.size} bytes")
+        
+        # 이미지 바이트 읽기
+        image_bytes = image_file.read()
+        
+        # 광어 질병 분석 수행
+        analysis_result = flounder_analyzer.analyze_flounder_image(image_bytes)
+        
+        logger.info(f"✅ 광어 질병 분석 완료 - 성공: {analysis_result['success']}")
+        
+        return Response(analysis_result, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        logger.error(f"❌ 광어 질병 분석 실패: {str(e)}")
+        return Response(
+            {"error": f"분석 중 오류가 발생했습니다: {str(e)}"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
