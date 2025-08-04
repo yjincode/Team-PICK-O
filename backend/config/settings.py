@@ -29,6 +29,7 @@ DJANGO_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'prediction',
 ]
 
 THIRD_PARTY_APPS = [
@@ -42,6 +43,7 @@ LOCAL_APPS = [
     'fish_analysis',  # 광어 질병 분석 기능 활성화
     'accounts',
     'dashboard',
+    'order',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
