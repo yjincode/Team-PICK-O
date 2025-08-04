@@ -42,6 +42,7 @@ LOCAL_APPS = [
     # 'fish_analysis',  # 임시 비활성화 (torch 의존성)
     'accounts',
     'dashboard',
+    'order',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
