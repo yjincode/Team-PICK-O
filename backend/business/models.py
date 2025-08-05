@@ -36,7 +36,7 @@ class User(AbstractUser):
 class Business(models.Model):
     """거래처 모델"""
     id = models.AutoField(primary_key=True)
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='businesses')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='businesses', null=True, blank=True)
     business_name = models.CharField(max_length=100, verbose_name="거래처명")
     phone_number = models.CharField(
         max_length=15,

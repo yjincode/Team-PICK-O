@@ -11,6 +11,8 @@ import { Input } from "../../components/ui/input"
 import { Badge } from "../../components/ui/badge"
 import { Search, Plus, Phone, Mail, Eye, Edit } from "lucide-react"
 import axios from "axios"
+import { useAuth } from "../../contexts/AuthContext";
+
 
 // 거래처 데이터 타입 정의
 interface Business {
@@ -65,6 +67,7 @@ const mockBusinesses: Business[] = [
 ]
 
 const CustomerList: React.FC = () => {
+  const { userData } = useAuth();
   const [searchTerm, setSearchTerm] = useState<string>("")
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false)
 
@@ -75,16 +78,24 @@ const CustomerList: React.FC = () => {
   
   const handleRegister = async () => {
     try {
-      const response = await axios.post("http://localhost:8000/api/customers/", {
+      const token = localStorage.getItem("token")
+      const response = await axios.post("http://localhost:8000/api/v1/business/customers/", {
         business_name: newName,
         phone_number: newPhone,
         address: newAddress,
-      })
+        user: userData?.id, // user id 추가
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },}
+      )
       console.log("등록 성공:", response.data)
       setIsModalOpen(false)
       // 새로고침 또는 데이터 다시 불러오기 로직 필요
     } catch (error) {
-      console.error("등록 실패:", error)
+      const err = error as any;
+      console.error("등록 실패:", err.response?.data || error);
     }
   }
   // 금액 포맷팅 함수

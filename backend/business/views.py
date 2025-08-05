@@ -9,6 +9,13 @@ import requests
 import json
 from datetime import datetime
 from .models import User
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from .models import Business
+from .serializers import BusinessSerializer
+from rest_framework.permissions import AllowAny
+
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
@@ -152,3 +159,13 @@ def send_discord_notification(user):
             print(f"❌ Discord 알림 전송 실패: {response.status_code}")
     except Exception as e:
         print(f"❌ Discord 알림 전송 오류: {e}")
+
+
+class BusinessCreateAPIView(APIView):
+    permission_classes = [AllowAny]
+    def post(self, request):
+        serializer = BusinessSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()  # 인증된 사용자 정보 저장
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
