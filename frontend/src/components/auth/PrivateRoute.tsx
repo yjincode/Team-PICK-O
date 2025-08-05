@@ -11,8 +11,18 @@ export function PrivateRoute({ children, requireApproval = true }: PrivateRouteP
   const { user, userData, loading, isAuthenticated, isApproved } = useAuth();
   const location = useLocation();
 
+  console.log('🛡️ PrivateRoute 체크:', {
+    loading,
+    user: user ? `있음 (${user.uid})` : '없음',
+    userData: userData ? `있음 (${userData.business_name})` : '없음',
+    isAuthenticated,
+    isApproved,
+    currentPath: location.pathname
+  });
+
   // 로딩 중일 때
   if (loading) {
+    console.log('⏳ PrivateRoute: 로딩 중...');
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-navy"></div>
@@ -22,11 +32,13 @@ export function PrivateRoute({ children, requireApproval = true }: PrivateRouteP
 
   // Firebase 인증되지 않은 경우
   if (!user) {
+    console.log('🚫 PrivateRoute: Firebase 사용자 없음 -> 로그인 페이지로');
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
   // 사용자 데이터가 없는 경우 (미등록 사용자)
   if (!userData) {
+    console.log('🚫 PrivateRoute: 사용자 데이터 없음 -> 로그인 페이지로');
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
@@ -72,6 +84,7 @@ export function PrivateRoute({ children, requireApproval = true }: PrivateRouteP
   }
 
   // 모든 인증 조건을 만족하는 경우
+  console.log('✅ PrivateRoute: 인증 성공 -> 컨텐츠 렌더링');
   return <>{children}</>;
 }
 

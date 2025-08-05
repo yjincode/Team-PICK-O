@@ -39,8 +39,9 @@ THIRD_PARTY_APPS = [
 ]
 
 LOCAL_APPS = [
+    'core',  # 공통 모듈 (인증 등)
     'business',  # 고객 관리 앱
-    'fish_analysis',  # 광어 질병 분석 기능 활성화
+    # 'fish_analysis',  # 광어 질병 분석 기능 (PyTorch 의존성으로 임시 비활성화)
     'accounts',
     'dashboard',
     'order',
@@ -130,6 +131,22 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # Custom User Model
 AUTH_USER_MODEL = 'business.User'
 
+# Firebase Admin SDK 설정
+FIREBASE_ADMIN_CREDENTIALS = os.path.join(BASE_DIR, 'firebase-admin-key.json')
+
+# Firebase Admin SDK 초기화 확인
+FIREBASE_ADMIN_INITIALIZED = False
+try:
+    if os.path.exists(FIREBASE_ADMIN_CREDENTIALS):
+        FIREBASE_ADMIN_INITIALIZED = True
+        print("✅ Firebase Admin SDK 인증서 파일 발견")
+    else:
+        print("⚠️ Firebase Admin SDK 인증서 파일이 없습니다.")
+        print(f"   경로: {FIREBASE_ADMIN_CREDENTIALS}")
+        print("   Firebase Console에서 Service Account Key를 다운로드하세요.")
+except Exception as e:
+    print(f"❌ Firebase Admin SDK 설정 오류: {e}")
+
 # REST Framework configuration
 REST_FRAMEWORK = {
     'DEFAULT_API_VERSION': 'v1',
@@ -138,11 +155,12 @@ REST_FRAMEWORK = {
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 20,
     'DEFAULT_AUTHENTICATION_CLASSES': [
+        'core.authentication.FirebaseAuthentication',
         'rest_framework.authentication.SessionAuthentication',
         'rest_framework.authentication.TokenAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.IsAuthenticatedOrReadOnly',
+        'rest_framework.permissions.AllowAny',
     ],
     'DEFAULT_RENDERER_CLASSES': [
         'rest_framework.renderers.JSONRenderer',

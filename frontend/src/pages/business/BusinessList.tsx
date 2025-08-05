@@ -8,9 +8,8 @@ import React, { useState } from "react"
 import { Card, CardContent, CardHeader } from "../../components/ui/card"
 import { Button } from "../../components/ui/button"
 import { Input } from "../../components/ui/input"
-import { Badge } from "../../components/ui/badge"
 import { Search, Plus, Phone, Mail, Eye, Edit } from "lucide-react"
-import axios from "axios"
+import { businessApi } from "../../lib/api"
 import { useAuth } from "../../contexts/AuthContext";
 
 
@@ -66,7 +65,7 @@ const mockBusinesses: Business[] = [
   },
 ]
 
-const CustomerList: React.FC = () => {
+const BusinessList: React.FC = () => {
   const { userData } = useAuth();
   const [searchTerm, setSearchTerm] = useState<string>("")
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false)
@@ -78,18 +77,11 @@ const CustomerList: React.FC = () => {
   
   const handleRegister = async () => {
     try {
-      const token = localStorage.getItem("token")
-      const response = await axios.post("http://localhost:8000/api/v1/business/customers/", {
+      const response = await businessApi.create({
         business_name: newName,
         phone_number: newPhone,
         address: newAddress,
-        user: userData?.id, // user id 추가
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },}
-      )
+      })
       console.log("등록 성공:", response.data)
       setIsModalOpen(false)
       // 새로고침 또는 데이터 다시 불러오기 로직 필요
@@ -192,4 +184,4 @@ const CustomerList: React.FC = () => {
   )
 }
 
-export default CustomerList; 
+export default BusinessList; 

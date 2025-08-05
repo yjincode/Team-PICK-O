@@ -3,6 +3,8 @@
 
 import React from "react"
 import { useState, useEffect } from "react"
+import { useNavigate } from "react-router-dom"
+import { useAuth } from "../../contexts/AuthContext"
 import { User } from "firebase/auth"
 import { Button } from "../../components/ui/button"
 import { Input } from "../../components/ui/input"
@@ -27,6 +29,8 @@ interface StepInfo {
 
 
 export default function LoginPage(): JSX.Element {
+  const navigate = useNavigate()
+  const { login } = useAuth()
   const [step, setStep] = useState<LoginStep>('phone')
   const [phoneNumber, setPhoneNumber] = useState<string>('')
   const [verificationCode, setVerificationCode] = useState<string>('')
@@ -52,16 +56,8 @@ export default function LoginPage(): JSX.Element {
       setError('reCAPTCHA 초기화에 실패했습니다. 페이지를 새로고침해주세요.');
     }
     
-    // 이미 로그인된 사용자가 있는지 확인
-    const unsubscribe = onAuthStateChange(async (user: User | null) => {
-      if (user) {
-        await handleAuthenticatedUser(user)
-      }
-    })
-    
     // 컴포넌트 언마운트 시 정리
     return () => {
-      unsubscribe();
       // reCAPTCHA 정리
       try {
         if (window.recaptchaVerifier) {
@@ -77,22 +73,25 @@ export default function LoginPage(): JSX.Element {
 
   const handleAuthenticatedUser = async (user: User): Promise<void> => {
     try {
-      const idToken = await user.getIdToken()
-      tokenManager.setToken(idToken)
+      // Firebase 토큰 저장
+      const idToken = await user.getIdToken();
+      tokenManager.setToken(idToken);
       
       // 사용자 상태 확인
-      const response = await authApi.checkUserStatus(user.uid)
+      const response = await authApi.checkUserStatus(user.uid);
       
       if (response.exists && response.user) {
-        const userData: UserData = response.user
-        localStorage.setItem('userInfo', JSON.stringify(userData))
+        const userData: UserData = response.user;
+        
+        // AuthContext 상태 업데이트
+        await login(user, userData);
         
         if (userData.status === 'approved') {
-          window.location.href = '/dashboard'
+          navigate('/dashboard', { replace: true });
         } else if (userData.status === 'pending') {
-          setStep('pending')
+          setStep('pending');
         } else {
-          setError('계정이 비활성화되었습니다. 관리자에게 문의하세요.')
+          setError('계정이 비활성화되었습니다. 관리자에게 문의하세요.');
         }
       } else {
         // 미등록 사용자 -> 회원가입 단계로
@@ -100,8 +99,8 @@ export default function LoginPage(): JSX.Element {
           ...prev, 
           firebase_uid: user.uid, 
           phone_number: user.phoneNumber || '' 
-        }))
-        setStep('register')
+        }));
+        setStep('register');
       }
     } catch (error) {
       console.error('사용자 상태 확인 오류:', error)
@@ -115,7 +114,6 @@ export default function LoginPage(): JSX.Element {
     setError('')
     
     try {
-      
       const result = await sendPhoneVerification(phoneNumber)
       
       if (result.success) {
@@ -170,11 +168,10 @@ export default function LoginPage(): JSX.Element {
     setError('')
     
     try {
-      
       const result = await verifyPhoneCode(verificationCode)
       
-      if (result.success) {
-        // Firebase 인증 성공 -> onAuthStateChange에서 자동으로 처리됨
+      if (result.success && result.user) {
+        await handleAuthenticatedUser(result.user)
       } else {
         setError(result.message || '인증번호 확인에 실패했습니다.')
       }

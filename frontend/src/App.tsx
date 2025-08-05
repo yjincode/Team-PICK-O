@@ -8,9 +8,9 @@ import { AuthProvider } from './contexts/AuthContext';
 import { PrivateRoute, PublicRoute } from './components/auth/PrivateRoute';
 import MainLayout from './components/layout/MainLayout';
 import Dashboard from './pages/dashboard/Dashboard';
-import CustomerList from './pages/customers/CustomerList';
-import UnpaidList from './pages/customers/UnpaidList';
-import SettlementForm from './pages/customers/SettlementForm';
+import BusinessList from './pages/business/BusinessList';
+import UnpaidList from './pages/business/UnpaidList';
+import SettlementForm from './pages/business/SettlementForm';
 import OrderList from './pages/orders/OrderList';
 import AiLogList from './pages/orders/AiLogList';
 import FishStockList from './pages/inventory/FishStockList';
@@ -50,17 +50,17 @@ const App: React.FC = () => {
         />
         
         <Route 
-          path="/customers" 
+          path="/business" 
           element={
             <PrivateRoute>
               <MainLayout>
-                <CustomerList />
+                <BusinessList />
               </MainLayout>
             </PrivateRoute>
           } 
         />
         <Route 
-          path="/customers/unpaid" 
+          path="/business/unpaid" 
           element={
             <PrivateRoute>
               <MainLayout>
@@ -70,7 +70,7 @@ const App: React.FC = () => {
           } 
         />
         <Route 
-          path="/customers/settlement" 
+          path="/business/settlement" 
           element={
             <PrivateRoute>
               <MainLayout>
