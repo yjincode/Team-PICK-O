@@ -5,8 +5,10 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from django.conf import settings
+from django.shortcuts import get_object_or_404
 
-from .serializers import OrderSerializer
+from .serializers import OrderSerializer, OrderListSerializer, OrderDetailSerializer, OrderStatusUpdateSerializer
+from .models import Order
 from .ai_parsing import parse_audio_to_order_data
 
 class OrderUploadView(APIView):
@@ -78,3 +80,68 @@ class OrderUploadView(APIView):
                 return Response({'message': '주문이 등록되었습니다.', 'order_id': order.id}, status=201)
             else:
                 return Response(serializer.errors, status=400)
+
+
+class OrderListView(APIView):
+    permission_classes = [AllowAny]
+    
+    def get(self, request):
+        """주문 목록 조회"""
+        orders = Order.objects.select_related('business').prefetch_related('items__fish_type').all()
+        
+        # 필터링 (선택사항)
+        status_filter = request.query_params.get('status')
+        if status_filter:
+            orders = orders.filter(status=status_filter)
+            
+        # 정렬 (최신순)
+        orders = orders.order_by('-order_datetime')
+        
+        serializer = OrderListSerializer(orders, many=True)
+        return Response(serializer.data)
+
+
+class OrderDetailView(APIView):
+    permission_classes = [AllowAny]
+    
+    def get(self, request, order_id):
+        """주문 상세 조회"""
+        order = get_object_or_404(Order, id=order_id)
+        serializer = OrderDetailSerializer(order)
+        return Response(serializer.data)
+
+
+class OrderStatusUpdateView(APIView):
+    permission_classes = [AllowAny]
+    
+    def patch(self, request, order_id):
+        """주문 상태 변경"""
+        order = get_object_or_404(Order, id=order_id)
+        serializer = OrderStatusUpdateSerializer(order, data=request.data, partial=True)
+        
+        if serializer.is_valid():
+            serializer.save()
+            return Response({
+                'message': '주문 상태가 변경되었습니다.',
+                'status': serializer.data['status']
+            })
+        return Response(serializer.errors, status=400)
+
+
+class OrderCancelView(APIView):
+    permission_classes = [AllowAny]
+    
+    def patch(self, request, order_id):
+        """주문 취소"""
+        order = get_object_or_404(Order, id=order_id)
+        
+        if order.status == 'cancelled':
+            return Response({'error': '이미 취소된 주문입니다.'}, status=400)
+            
+        order.status = 'cancelled'
+        order.save()
+        
+        return Response({
+            'message': '주문이 취소되었습니다.',
+            'status': 'cancelled'
+        })
