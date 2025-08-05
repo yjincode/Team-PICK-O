@@ -39,7 +39,7 @@ THIRD_PARTY_APPS = [
 ]
 
 LOCAL_APPS = [
-    'core',
+    'business',  # 고객 관리 앱
     'fish_analysis',  # 광어 질병 분석 기능 활성화
     'accounts',
     'dashboard',
@@ -128,7 +128,7 @@ MEDIA_ROOT = BASE_DIR / 'media'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Custom User Model
-AUTH_USER_MODEL = 'core.User'
+AUTH_USER_MODEL = 'business.User'
 
 # REST Framework configuration
 REST_FRAMEWORK = {

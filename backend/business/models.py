@@ -104,4 +104,3 @@ class PriceData(models.Model):
 
     def __str__(self):
         return f"{self.fish_type} - {self.market_name} ({self.date})"
-
