@@ -1,6 +1,6 @@
 from rest_framework import status
-from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import AllowAny
+from rest_framework.decorators import api_view, permission_classes, authentication_classes
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -14,10 +14,11 @@ from rest_framework.response import Response
 from rest_framework import status
 from .models import Business
 from .serializers import BusinessSerializer
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 
 
 @api_view(['POST'])
+@authentication_classes([])  # 인증 완전 비활성화
 @permission_classes([AllowAny])
 def register_user(request):
     """사용자 회원가입 API"""
@@ -48,7 +49,7 @@ def register_user(request):
             address=data['address'],
             business_registration_number=data['business_registration_number'],
             subscription_plan=data.get('subscription_plan', 'basic'),
-            status='pending'
+            status='approved'
         )
         
         # Discord 웹훅 전송
@@ -77,6 +78,7 @@ def register_user(request):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
+@authentication_classes([])  # 인증 완전 비활성화
 @permission_classes([AllowAny])
 def check_user_status(request):
     """사용자 상태 확인 API"""
@@ -162,10 +164,17 @@ def send_discord_notification(user):
 
 
 class BusinessCreateAPIView(APIView):
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
+    
     def post(self, request):
-        serializer = BusinessSerializer(data=request.data)
+        # 인증된 사용자만 접근 가능
+        data = request.data.copy()
+        
+        # 보안: 인증된 사용자의 ID를 강제로 설정
+        data['user'] = request.user.id
+        
+        serializer = BusinessSerializer(data=data)
         if serializer.is_valid():
-            serializer.save()  # 인증된 사용자 정보 저장
+            business = serializer.save(user=request.user)  # 인증된 사용자로 저장
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

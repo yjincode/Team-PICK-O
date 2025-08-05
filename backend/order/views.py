@@ -3,14 +3,14 @@ import uuid
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from django.conf import settings
 
 from .serializers import OrderSerializer
 from .ai_parsing import parse_audio_to_order_data
 
 class OrderUploadView(APIView):
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
     def post(self, request):
         # JSON 데이터 처리 (프론트엔드에서 보내는 방식)
         if request.content_type == 'application/json':

@@ -33,23 +33,45 @@ const api = axios.create({
 api.interceptors.request.use(
   (config) => {
     const firebaseToken = localStorage.getItem('firebase_token')
+    console.log('🌐 API 요청:', {
+      url: config.url,
+      method: config.method?.toUpperCase(),
+      hasToken: !!firebaseToken,
+      tokenPreview: firebaseToken ? firebaseToken.substring(0, 20) + '...' : 'None'
+    });
+    
     if (firebaseToken) {
       config.headers.Authorization = `Bearer ${firebaseToken}`
     }
     return config
   },
   (error) => {
+    console.error('🚫 API 요청 오류:', error);
     return Promise.reject(error)
   }
 )
 
 // 응답 인터셉터: 401 에러 시 자동 로그아웃
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    console.log('✅ API 성공:', {
+      url: response.config.url,
+      status: response.status,
+      method: response.config.method?.toUpperCase()
+    });
+    return response;
+  },
   (error) => {
+    console.error('❌ API 오류:', {
+      url: error.config?.url,
+      status: error.response?.status,
+      method: error.config?.method?.toUpperCase(),
+      message: error.response?.data?.message || error.message
+    });
+    
     if (error.response?.status === 401) {
+      console.log('🚫 401 오류 - 토큰 제거 및 로그인 페이지로 이동');
       localStorage.removeItem('firebase_token')
-      localStorage.removeItem('userInfo')
       window.location.href = '/login'
     }
     return Promise.reject(error)
@@ -60,31 +82,31 @@ api.interceptors.response.use(
 export const businessApi = {
   // 모든 거래처 조회
   getAll: async (): Promise<ApiResponse<Business[]>> => {
-    const response = await api.get('/businesses/')
+    const response = await api.get('/business/customers/')
     return response.data
   },
 
   // ID로 거래처 조회
   getById: async (id: number): Promise<ApiResponse<Business>> => {
-    const response = await api.get(`/businesses/${id}`)
+    const response = await api.get(`/business/customers/${id}`)
     return response.data
   },
 
   // 새 거래처 생성
   create: async (business: Omit<Business, 'id'>): Promise<ApiResponse<Business>> => {
-    const response = await api.post('/businesses', business)
+    const response = await api.post('/business/customers/', business)
     return response.data
   },
 
   // 거래처 정보 수정
   update: async (id: number, business: Partial<Business>): Promise<ApiResponse<Business>> => {
-    const response = await api.put(`/businesses/${id}`, business)
+    const response = await api.put(`/business/customers/${id}/`, business)
     return response.data
   },
 
   // 거래처 삭제
   delete: async (id: number): Promise<ApiResponse<void>> => {
-    const response = await api.delete(`/businesses/${id}`)
+    const response = await api.delete(`/business/customers/${id}/`)
     return response.data
   },
 }
@@ -317,19 +339,19 @@ export const priceDataApi = {
 export const authApi = {
   // 사용자 등록 (회원가입)
   register: async (userData: any): Promise<any> => {
-    const response = await api.post('/auth/register/', userData)
+    const response = await api.post('/business/auth/register/', userData)
     return response.data
   },
   
   // 사용자 등록 (별칭 - LoginPage 호환성)
   registerUser: async (userData: any): Promise<any> => {
-    const response = await api.post('/auth/register/', userData)
+    const response = await api.post('/business/auth/register/', userData)
     return response.data
   },
   
   // 사용자 상태 확인
   checkUserStatus: async (firebaseUid: string): Promise<any> => {
-    const response = await api.get(`/auth/status/?firebase_uid=${firebaseUid}`)
+    const response = await api.get(`/business/auth/status/?firebase_uid=${firebaseUid}`)
     return response.data
   },
   
