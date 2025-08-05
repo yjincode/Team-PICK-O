@@ -13,7 +13,8 @@ build/
 .env.local
 .env.development.local
 .env.test.local
-.env.production.local
+.env.production.local\.env
+*.env
 
 # ---------------------------
 # 🐍 Python (FastAPI or 기타 백엔드)
@@ -34,6 +35,65 @@ venv/
 ENV/
 ENV.bak/
 venv.bak/
+
+# 민감한 정보 및 설정 파일
+.env
+.env.*
+!.env.example
+config/local_settings.py
+config/secret_settings.py
+
+# 데이터베이스 파일
+*.db
+*.sqlite
+*.sqlite3
+db.sqlite3
+
+# 데이터 백업 및 덤프 파일 (보안상 중요)
+*.json
+!package.json
+!package-lock.json
+!tsconfig.json
+!*.config.json
+*_data.json
+user_data.json
+backup_*.json
+dump_*.json
+
+# 업로드된 파일
+uploads/
+media/
+static/uploads/
+
+# 로그 파일
+logs/
+*.log
+*.out
+
+# 개발 도구 설정
+.coverage
+htmlcov/
+.tox/
+coverage.xml
+*.cover
+.hypothesis/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# 보안 키 및 인증서
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+keys/
+secrets/
+
+# 임시 파일
+*.tmp
+*.temp
+.cache/
 
 # ---------------------------
 # ☕ Java / Spring Boot
@@ -69,7 +129,49 @@ out/
 # Mac OS
 .DS_Store
 
+# ---------------------------
+# 🏗️ Terraform 인프라 관리
+# ---------------------------
+# Terraform state files
+infra/*.tfstate
+infra/*.tfstate.*
+infra/*.tfplan
+infra/*.tfplan.*
+
+# Crash log files
+infra/crash.log
+infra/crash.*.log
+
+# Exclude all .tfvars files (contain sensitive data)
+infra/*.tfvars
+infra/*.tfvars.json
+!infra/*.tfvars.example
+
+# Terraform override files
+infra/override.tf
+infra/override.tf.json
+infra/*_override.tf
+infra/*_override.tf.json
+
+# Terraform CLI configuration files
+infra/.terraformrc
+infra/terraform.rc
+
+# Terraform directories
+infra/.terraform/
+infra/.terraform.lock.hcl
+
+# ---------------------------
+# 🤖 Claude Code 관련 파일
+# ---------------------------
+CLAUDE.md
+.claude/
+claude-code.log
+claude-session-*
+.claude-history
+
 # 기타
 Thumbs.db
 *.swp
 *.swo
+ 

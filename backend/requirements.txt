@@ -1,0 +1,40 @@
+# Django & DRF
+Django==4.2.7
+djangorestframework==3.15.2
+django-cors-headers==4.3.1
+python-dotenv==1.0.0
+psycopg2-binary==2.9.9
+
+# API Documentation
+drf-spectacular==0.26.5
+
+# Authentication & Security
+djangorestframework-simplejwt==5.3.0
+
+# Computer Vision & AI (기존 유지)
+opencv-python==4.8.1.78
+Pillow==10.1.0
+numpy==1.24.3
+torch==2.1.1
+torchvision==0.16.1
+
+# YOLOv8 (Ultralytics)
+ultralytics==8.0.206
+
+# Hugging Face Transformers
+transformers==4.35.2
+accelerate==0.24.1
+
+# HTTP Client for API calls
+httpx==0.25.2
+
+# Additional utilities
+scikit-image==0.21.0
+
+# Production (optional)
+gunicorn==21.2.0
+whitenoise==6.6.0
+
+# Development (optional)
+django-extensions==3.2.3
+django-debug-toolbar==4.2.0

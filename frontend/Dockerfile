@@ -1,0 +1,51 @@
+# Multi-stage build for React frontend
+FROM node:18-alpine as builder
+
+# 작업 디렉토리 설정
+WORKDIR /app
+
+# package.json과 package-lock.json 복사 (캐시 최적화)
+COPY package*.json ./
+
+# Node.js 의존성 설치
+RUN npm ci --only=production --silent
+
+# 소스 코드 복사
+COPY . .
+
+# React 앱 빌드
+RUN npm run build
+
+# Production stage with nginx
+FROM nginx:alpine
+
+# 보안을 위한 non-root 사용자 생성
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S nextjs -u 1001
+
+# nginx 설정 파일 복사
+COPY --from=builder /app/nginx.conf /etc/nginx/conf.d/default.conf
+
+# 빌드된 React 앱을 nginx 웹 루트로 복사
+COPY --from=builder /app/build /usr/share/nginx/html
+
+# nginx 사용자 권한 설정
+RUN chown -R nginx:nginx /usr/share/nginx/html && \
+    chown -R nginx:nginx /var/cache/nginx && \
+    chown -R nginx:nginx /var/log/nginx && \
+    chown -R nginx:nginx /etc/nginx/conf.d && \
+    touch /var/run/nginx.pid && \
+    chown -R nginx:nginx /var/run/nginx.pid
+
+# 포트 설정
+EXPOSE 3000
+
+# 헬스체크 추가
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:3000/ || exit 1
+
+# nginx 사용자로 실행
+USER nginx
+
+# nginx 실행
+CMD ["nginx", "-g", "daemon off;"]

@@ -1,0 +1,64 @@
+name: Feature Branch CI
+
+on:
+  push:
+    branches:
+      - 'feature/**'
+  pull_request:
+    branches:
+      - 'feature/**'
+
+jobs:
+  lint-check:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    # Backend 린트
+    - name: Set up Python for linting
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install Python linting tools
+      run: |
+        python -m pip install --upgrade pip
+        pip install flake8 black isort
+    
+    - name: Lint backend code
+      working-directory: ./backend
+      run: |
+        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+        black --check .
+        isort --check-only .
+      continue-on-error: true
+    
+    # Frontend 린트
+    - name: Set up Node.js for linting
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+    
+    - name: Install frontend dependencies for linting
+      working-directory: ./frontend
+      run: |
+        if [ -f "package.json" ]; then
+          npm ci
+        fi
+      continue-on-error: true
+    
+    - name: Lint frontend code
+      working-directory: ./frontend
+      run: |
+        if [ -f "package.json" ] && npm list eslint &>/dev/null; then
+          npm run lint
+        else
+          echo "ESLint not configured, skipping frontend linting"
+        fi
+      continue-on-error: true
+    
+    - name: Summary
+      run: |
+        echo "🎯 Feature 브랜치 CI 완료"
+        echo "- 린트 검사 완료"

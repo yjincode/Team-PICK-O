@@ -1,0 +1,16 @@
+# 프로젝트 설정
+project_name = "team-pick-o"
+environment  = "dev"
+
+# AWS 설정
+aws_region = "ap-northeast-2"
+
+# 네트워크 설정
+vpc_cidr           = "10.0.0.0/16"
+public_subnet_cidr = "10.0.1.0/24"
+
+# EC2 설정
+instance_type   = "t2.micro"
+key_pair_name   = "pick-o-key" 
+server_name     = "monolith-server"
+install_docker  = true
