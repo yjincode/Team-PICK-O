@@ -1,5 +1,5 @@
 # Multi-stage build for Python Django backend
-FROM python:3.11-slim as builder
+FROM python:3.11-slim AS builder
 
 # 시스템 패키지 업데이트 및 필수 도구 설치
 RUN apt-get update && apt-get install -y \
@@ -13,6 +13,8 @@ WORKDIR /build
 
 # requirements.txt 복사 및 의존성 설치
 COPY requirements.txt .
+
+
 RUN pip install --no-cache-dir --user -r requirements.txt
 
 # Production stage

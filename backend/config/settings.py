@@ -217,7 +217,7 @@ CORS_ALLOW_METHODS = [
     'PUT',
 ]
 
-# Logging configuration
+# Logging configuration - Console only
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
@@ -232,12 +232,6 @@ LOGGING = {
         },
     },
     'handlers': {
-        'file': {
-            'level': 'INFO',
-            'class': 'logging.FileHandler',
-            'filename': BASE_DIR / 'logs' / 'django.log',
-            'formatter': 'verbose',
-        },
         'console': {
             'level': 'DEBUG',
             'class': 'logging.StreamHandler',
@@ -245,17 +239,17 @@ LOGGING = {
         },
     },
     'root': {
-        'handlers': ['console', 'file'],
+        'handlers': ['console'],
         'level': 'INFO',
     },
     'loggers': {
         'django': {
-            'handlers': ['console', 'file'],
+            'handlers': ['console'],
             'level': os.getenv('DJANGO_LOG_LEVEL', 'INFO'),
             'propagate': False,
         },
         'fish_analysis': {
-            'handlers': ['console', 'file'],
+            'handlers': ['console'],
             'level': 'DEBUG',
             'propagate': False,
         },
@@ -278,7 +272,3 @@ AI_MODELS = {
 
 # Discord Webhook settings
 DISCORD_WEBHOOK_URL = os.getenv('DISCORD_WEBHOOK_URL', '')
-
-# Create necessary directories
-os.makedirs(BASE_DIR / 'logs', exist_ok=True)
-os.makedirs(AI_MODELS['MODEL_CACHE_DIR'], exist_ok=True)
