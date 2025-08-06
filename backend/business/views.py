@@ -184,7 +184,7 @@ class BusinessCreateAPIView(APIView):
         return Response(serializer.data)
 
 class BusinessListAPIView(APIView):
-    permission_classes = [IsAuthenticated]  
+    permission_classes = [AllowAny]  # 인증 제거 - 프론트엔드에서 Context로 관리
 
     def get(self, request):
         businesses = Business.objects.all()
