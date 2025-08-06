@@ -31,6 +31,65 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
   useEffect(() => {
     console.log('🔧 AuthContext 초기화 시작');
     
+    const initAuth = async () => {
+      // 즉시 현재 사용자 확인 (캐시된 값)
+      const currentUser = getCurrentUser();
+      if (currentUser) {
+        const token = tokenManager.getToken();
+        if (token && tokenManager.isValidToken(token)) {
+          console.log('⚡ 캐시된 사용자 정보로 즉시 복원');
+          
+          // 토큰 유효성을 더 엄격하게 검증
+          try {
+            // 토큰이 실제로 작동하는지 빠른 백엔드 검증
+            const response = await authApi.checkUserStatus(currentUser.uid);
+            if (response.exists && response.user) {
+              console.log('✅ 캐시 복원 성공 - 즉시 인증 완료');
+              setUser(currentUser);
+              setUserData(response.user);
+              setLoading(false);
+              
+              // 백그라운드에서 토큰 갱신 (사용자 경험 방해하지 않음)
+              setTimeout(async () => {
+                try {
+                  const freshToken = await currentUser.getIdToken(true);
+                  tokenManager.setToken(freshToken);
+                  console.log('🔄 백그라운드 토큰 갱신 완료');
+                } catch (tokenError) {
+                  console.warn('⚠️ 백그라운드 토큰 갱신 실패:', tokenError);
+                }
+              }, 1000);
+              
+              return; // 즉시 복원 성공하면 onAuthStateChange 기다리지 않음
+            }
+          } catch (error) {
+            console.warn('⚠️ 캐시된 정보 복원 실패 - onAuthStateChange로 폴백:', error);
+            // 토큰이 만료되었을 수 있으므로 새로 가져오기 시도
+            try {
+              const freshToken = await currentUser.getIdToken(true);
+              tokenManager.setToken(freshToken);
+              const retryResponse = await authApi.checkUserStatus(currentUser.uid);
+              if (retryResponse.exists && retryResponse.user) {
+                console.log('✅ 토큰 갱신 후 즉시 복원 성공');
+                setUser(currentUser);
+                setUserData(retryResponse.user);
+                setLoading(false);
+                return;
+              }
+            } catch (retryError) {
+              console.warn('⚠️ 토큰 갱신 후 재시도도 실패:', retryError);
+            }
+          }
+        }
+      }
+      
+      // 캐시된 정보가 없거나 실패한 경우, onAuthStateChange 기다림
+      console.log('⏳ 캐시 복원 불가 - onAuthStateChange 대기');
+    };
+    
+    initAuth();
+    
+    // 추가적으로 Auth State 변경도 감지 (백그라운드에서)
     const unsubscribe = onAuthStateChange(async (firebaseUser) => {
       console.log('🔥 Firebase Auth 상태 변경:', firebaseUser ? `사용자 있음 (${firebaseUser.uid})` : '사용자 없음');
       
@@ -135,6 +194,11 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
     if (!user) return;
 
     try {
+      // Firebase 토큰 갱신
+      const freshToken = await user.getIdToken(true);
+      tokenManager.setToken(freshToken);
+      console.log('🔄 refreshUserData - 토큰 갱신 완료');
+      
       const response = await authApi.checkUserStatus(user.uid);
       if (response.exists && response.user) {
         setUserData(response.user);

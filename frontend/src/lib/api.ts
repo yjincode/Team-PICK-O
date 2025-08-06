@@ -15,7 +15,7 @@ import {
 } from '../types'
 
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1'
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1'
 
 
 // axios 인스턴스 생성
@@ -70,9 +70,8 @@ api.interceptors.response.use(
     });
     
     if (error.response?.status === 401) {
-      console.log('🚫 401 오류 - 토큰 제거 및 로그인 페이지로 이동');
-      localStorage.removeItem('firebase_token')
-      window.location.href = '/login'
+      console.log('🚫 401 오류 - 인증 실패');
+      // 자동 리다이렉트 제거 - AuthContext에서 처리하도록 함
     }
     return Promise.reject(error)
   }
@@ -94,7 +93,7 @@ export const businessApi = {
 
   // 새 거래처 생성
   create: async (business: Omit<Business, 'id'>): Promise<ApiResponse<Business>> => {
-    const response = await api.post('/business/customers/', business)
+    const response = await api.post('/business/customers/create/', business)
     return response.data
   },
 
