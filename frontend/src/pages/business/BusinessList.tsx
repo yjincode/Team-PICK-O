@@ -4,7 +4,7 @@
  */
 "use client"
 
-import React, { useState } from "react"
+import React, { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader } from "../../components/ui/card"
 import { Button } from "../../components/ui/button"
 import { Input } from "../../components/ui/input"
@@ -25,47 +25,71 @@ interface Business {
   last_order_date?: string;
 }
 
-// 목업 데이터 (실제로는 API에서 가져올 예정)
-const mockBusinesses: Business[] = [
-  {
-    id: 1,
-    business_name: "동해수산",
-    phone_number: "010-1234-5678",
-    address: "강원도 동해시",
-    unpaid_amount: 2400000,
-    status: "정상",
-    last_order_date: "2024-01-30",
-  },
-  {
-    id: 2,
-    business_name: "바다마트",
-    phone_number: "010-2345-6789",
-    address: "부산시 해운대구",
-    unpaid_amount: 0,
-    status: "정상",
-    last_order_date: "2024-01-29",
-  },
-  {
-    id: 3,
-    business_name: "해양식품",
-    phone_number: "010-3456-7890",
-    address: "인천시 연수구",
-    unpaid_amount: 1800000,
-    status: "연체",
-    last_order_date: "2024-01-25",
-  },
-  {
-    id: 4,
-    business_name: "신선수산",
-    phone_number: "010-4567-8901",
-    address: "경기도 시흥시",
-    unpaid_amount: 3200000,
-    status: "연체",
-    last_order_date: "2024-01-20",
-  },
-]
+// // 목업 데이터 (실제로는 API에서 가져올 예정)
+// const mockBusinesses: Business[] = [
+//   {
+//     id: 1,
+//     business_name: "동해수산",
+//     phone_number: "010-1234-5678",
+//     address: "강원도 동해시",
+//     unpaid_amount: 2400000,
+//     status: "정상",
+//     last_order_date: "2024-01-30",
+//   },
+//   {
+//     id: 2,
+//     business_name: "바다마트",
+//     phone_number: "010-2345-6789",
+//     address: "부산시 해운대구",
+//     unpaid_amount: 0,
+//     status: "정상",
+//     last_order_date: "2024-01-29",
+//   },
+//   {
+//     id: 3,
+//     business_name: "해양식품",
+//     phone_number: "010-3456-7890",
+//     address: "인천시 연수구",
+//     unpaid_amount: 1800000,
+//     status: "연체",
+//     last_order_date: "2024-01-25",
+//   },
+//   {
+//     id: 4,
+//     business_name: "신선수산",
+//     phone_number: "010-4567-8901",
+//     address: "경기도 시흥시",
+//     unpaid_amount: 3200000,
+//     status: "연체",
+//     last_order_date: "2024-01-20",
+//   },
+// ]
 
 const BusinessList: React.FC = () => {
+  const [businesses, setBusinesses] = useState<Business[]>([]);
+
+  useEffect(() => {
+    const fetchBusinesses = async () => {
+      try {
+        const res = await businessApi.getAll();
+        console.log("API 응답:", res); // 디버깅용
+        // res.data가 배열인지 확인하고 설정
+        if (Array.isArray(res.data)) {
+          setBusinesses(res.data);
+        } else if (Array.isArray(res)) {
+          setBusinesses(res);
+        } else {
+          console.error("예상치 못한 응답 구조:", res);
+          setBusinesses([]);
+        }
+      } catch (error) {
+        console.error("거래처 목록 불러오기 실패:", error);
+        setBusinesses([]); // 에러 시 빈 배열로 설정
+      }
+    };
+    fetchBusinesses();
+  }, []);
+
   const { userData } = useAuth();
   const [searchTerm, setSearchTerm] = useState<string>("")
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false)
@@ -145,40 +169,46 @@ const BusinessList: React.FC = () => {
 
       {/* 거래처 목록 */}
       <div className="space-y-4">
-        {mockBusinesses.map((business) => (
-          <Card key={business.id} className="shadow-sm hover:shadow-md transition-shadow">
-            <CardContent className="p-4 sm:p-6">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="flex-1">
-                  <h3 className="text-lg sm:text-xl font-semibold text-gray-900">{business.business_name}</h3>
-                  <p className="text-sm text-gray-600 mt-1">
-                    <Phone className="inline h-3 w-3 mr-1" />
-                    {business.phone_number}
-                  </p>
-                  {business.address && (
-                    <p className="text-sm text-gray-600">{business.address}</p>
-                  )}
-                </div>
-                <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-4 items-end sm:items-center">
-                  <div className="text-right">
-                    <p className="text-sm text-gray-500">미수금</p>
-                    <p className="text-lg font-bold text-red-600">
-                      {formatCurrency(business.unpaid_amount || 0)}
+        {businesses && businesses.length > 0 ? (
+          businesses.map((business) => (
+            <Card key={business.id} className="shadow-sm hover:shadow-md transition-shadow">
+              <CardContent className="p-4 sm:p-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="flex-1">
+                    <h3 className="text-lg sm:text-xl font-semibold text-gray-900">{business.business_name}</h3>
+                    <p className="text-sm text-gray-600 mt-1">
+                      <Phone className="inline h-3 w-3 mr-1" />
+                      {business.phone_number}
                     </p>
+                    {business.address && (
+                      <p className="text-sm text-gray-600">{business.address}</p>
+                    )}
                   </div>
-                  <div className="flex space-x-2">
-                    <Button variant="outline" size="sm">
-                      <Eye className="h-4 w-4 mr-2" />상세
-                    </Button>
-                    <Button variant="outline" size="sm">
-                      <Edit className="h-4 w-4 mr-2" />수정
-                    </Button>
+                  <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-4 items-end sm:items-center">
+                    <div className="text-right">
+                      <p className="text-sm text-gray-500">미수금</p>
+                      <p className="text-lg font-bold text-red-600">
+                        {formatCurrency(business.unpaid_amount || 0)}
+                      </p>
+                    </div>
+                    <div className="flex space-x-2">
+                      <Button variant="outline" size="sm">
+                        <Eye className="h-4 w-4 mr-2" />상세
+                      </Button>
+                      <Button variant="outline" size="sm">
+                        <Edit className="h-4 w-4 mr-2" />수정
+                      </Button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+              </CardContent>
+            </Card>
+          ))
+        ) : (
+          <div className="text-center py-8 text-gray-500">
+            거래처가 없습니다.
+          </div>
+        )}
       </div>
     </div>
   )

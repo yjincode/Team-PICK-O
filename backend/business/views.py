@@ -16,7 +16,6 @@ from .models import Business
 from .serializers import BusinessSerializer
 from rest_framework.permissions import AllowAny, IsAuthenticated
 
-
 @api_view(['POST'])
 @authentication_classes([])  # 인증 완전 비활성화
 @permission_classes([AllowAny])
@@ -178,3 +177,16 @@ class BusinessCreateAPIView(APIView):
             business = serializer.save(user=request.user)  # 인증된 사용자로 저장
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+    def get(self, request):
+        businesses = Business.objects.all()
+        serializer = BusinessSerializer(businesses, many=True)
+        return Response(serializer.data)
+
+class BusinessListAPIView(APIView):
+    permission_classes = [IsAuthenticated]  
+
+    def get(self, request):
+        businesses = Business.objects.all()
+        serializer = BusinessSerializer(businesses, many=True)
+        return Response(serializer.data)
