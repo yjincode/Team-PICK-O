@@ -93,7 +93,7 @@ export const businessApi = {
 
   // 새 거래처 생성
   create: async (business: Omit<Business, 'id'>): Promise<ApiResponse<Business>> => {
-    const response = await api.post('/business/customers/create/', business)
+    const response = await api.post('/business/customers/', business)
     return response.data
   },
 

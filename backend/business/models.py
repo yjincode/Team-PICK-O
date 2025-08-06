@@ -36,20 +36,18 @@ class User(AbstractUser):
 class Business(models.Model):
     """거래처 모델"""
     id = models.AutoField(primary_key=True)
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='businesses', null=True, blank=True)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='businesses')
     business_name = models.CharField(max_length=100, verbose_name="거래처명")
     phone_number = models.CharField(
         max_length=15,
-        validators=[RegexValidator(r'^\d{3}-\d{3,4}-\d{4}$')],
+        validators=[RegexValidator(
+            regex=r'^\d{9,12}$',
+            message="전화번호는 9~12자리의 숫자여야 합니다."
+            )],
         verbose_name="전화번호"
     )
+
     address = models.TextField(verbose_name="주소")
-    business_registration_number = models.CharField(
-        max_length=12,
-        validators=[RegexValidator(r'^\d{3}-\d{2}-\d{5}$')],
-        null=True, blank=True,
-        verbose_name="사업자등록번호"
-    )
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="등록일시")
 
     class Meta:
