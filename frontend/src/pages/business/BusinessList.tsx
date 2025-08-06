@@ -182,9 +182,20 @@ const BusinessList: React.FC = () => {
     } catch (error) {
       const err = error as any;
       console.error("등록 실패:", err.response?.data || error);
+
+      const data = err.response?.data;
+
+      let errorMessage = '거래처 등록에 실패했습니다.';
+      // const errorMessage = err.response?.data?.message || '거래처 등록에 실패했습니다.';
+
+      if (data?.phone_number.length < 9){
+        errorMessage = data.phone_number[0];
+      } else if (data?.message){
+        errorMessage = data.message;
+      }
       
       // 에러 토스트
-      const errorMessage = err.response?.data?.message || '거래처 등록에 실패했습니다.';
+      // const errorMessage = err.response?.data?.message || '거래처 등록에 실패했습니다.';
       toast.error(errorMessage, {
         duration: 4000,
       });
