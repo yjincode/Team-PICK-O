@@ -1,8 +1,6 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-from .models import (
-    User, Business, SMSRecommendation, PriceData
-)
+from .models import User, Business
 
 
 @admin.register(User)
@@ -24,18 +22,3 @@ class BusinessAdmin(admin.ModelAdmin):
     list_display = ('business_name', 'user', 'phone_number', 'created_at')
     list_filter = ('created_at',)
     search_fields = ('business_name', 'phone_number', 'user__business_name')
-
-
-@admin.register(SMSRecommendation)
-class SMSRecommendationAdmin(admin.ModelAdmin):
-    list_display = ('business', 'user', 'fish_type', 'price_trend', 'is_sent', 'created_at')
-    list_filter = ('is_sent', 'price_trend', 'created_at')
-    search_fields = ('business__business_name', 'fish_type', 'user__business_name')
-
-
-@admin.register(PriceData)
-class PriceDataAdmin(admin.ModelAdmin):
-    list_display = ('fish_type', 'market_name', 'date', 'min_price', 'max_price', 'avg_price')
-    list_filter = ('market_name', 'date')
-    search_fields = ('fish_type', 'market_name')
-    date_hierarchy = 'date'

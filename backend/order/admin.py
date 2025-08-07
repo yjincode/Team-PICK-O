@@ -1,5 +1,7 @@
 from django.contrib import admin
-from .models import Order, OrderItem, Business, FishType
+from .models import Order, OrderItem
+from business.models import Business
+from fish_registry.models import FishType
 
 @admin.register(Business)
 class BusinessAdmin(admin.ModelAdmin):
@@ -8,9 +10,9 @@ class BusinessAdmin(admin.ModelAdmin):
 
 @admin.register(FishType)
 class FishTypeAdmin(admin.ModelAdmin):
-    list_display = ['fish_name', 'unit']
+    list_display = ['name', 'unit']
     list_filter = ['unit']
-    search_fields = ['fish_name']
+    search_fields = ['name']
 
 @admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
@@ -23,4 +25,4 @@ class OrderAdmin(admin.ModelAdmin):
 class OrderItemAdmin(admin.ModelAdmin):
     list_display = ['id', 'order', 'fish_type', 'quantity', 'unit_price', 'unit']
     list_filter = ['fish_type__unit']
-    search_fields = ['order__id', 'fish_type__fish_name']
+    search_fields = ['order__id', 'fish_type__name']

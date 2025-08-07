@@ -62,32 +62,7 @@ export interface OrderItem {
   fish_type?: FishType;
 }
 
-// 6. SMS 추천 테이블
-export interface SmsRecommendation {
-  id: number;
-  business_id: number;
-  recommended_text: string;
-  fish_type: string;
-  price_trend: '상승' | '하락' | '유지';
-  created_at: string;
-  is_sent: boolean;
-  sent_at?: string;
-  // 조인된 데이터
-  business?: Business;
-}
-
-// 7. 시장 시세 데이터 테이블
-export interface PriceData {
-  id: number;
-  fish_type: string;
-  market_name: string;
-  date: string;
-  min_price: number;
-  max_price: number;
-  avg_price: number;
-}
-
-// 8. 결제 이력 테이블
+// 7. 결제 이력 테이블
 export interface Payment {
   id: number;
   order_id: number;
