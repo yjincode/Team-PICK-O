@@ -25,7 +25,7 @@ def register_user(request):
         data = request.data
         
         # 필수 필드 검증
-        required_fields = ['firebase_uid', 'business_name', 'owner_name', 'phone_number', 'address', 'business_registration_number']
+        required_fields = ['firebase_uid', 'business_name', 'owner_name', 'phone_number', 'address']
         for field in required_fields:
             if not data.get(field):
                 return Response({
@@ -46,8 +46,6 @@ def register_user(request):
             owner_name=data['owner_name'],
             phone_number=data['phone_number'],
             address=data['address'],
-            business_registration_number=data['business_registration_number'],
-            subscription_plan=data.get('subscription_plan', 'basic'),
             status='approved'
         )
         
@@ -63,8 +61,6 @@ def register_user(request):
                 'owner_name': user.owner_name,
                 'phone_number': user.phone_number,
                 'address': user.address,
-                'business_registration_number': user.business_registration_number,
-                'subscription_plan': user.subscription_plan,
                 'status': user.status,
                 'created_at': user.created_at
             }
@@ -100,8 +96,6 @@ def check_user_status(request):
                     'owner_name': user.owner_name,
                     'phone_number': user.phone_number,
                     'address': user.address,
-                    'business_registration_number': user.business_registration_number,
-                    'subscription_plan': user.subscription_plan,
                     'status': user.status,
                     'created_at': user.created_at
                 }
@@ -136,8 +130,6 @@ def send_discord_notification(user):
             {"name": "👤 대표자명", "value": user.owner_name, "inline": True},
             {"name": "📱 전화번호", "value": user.phone_number, "inline": True},
             {"name": "📍 주소", "value": user.address, "inline": False},
-            {"name": "🏭 사업자등록번호", "value": user.business_registration_number, "inline": True},
-            {"name": "💳 구독 플랜", "value": user.subscription_plan, "inline": True},
             {"name": "🆔 Firebase UID", "value": user.firebase_uid, "inline": False},
             {"name": "📅 신청 시간", "value": user.created_at.strftime("%Y-%m-%d %H:%M:%S"), "inline": True},
         ],
