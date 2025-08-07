@@ -284,5 +284,15 @@ AI_MODELS = {
     'MODEL_CACHE_DIR': BASE_DIR / 'models',
 }
 
-# Discord Webhook settings
+# API Keys
+DATA_GO_KR_API_KEY = os.getenv('DATA_GO_KR_API_KEY')
+KOSIS_API_KEY = os.getenv('KOSIS_API_KEY')
+KHOA_API_KEY = os.getenv('KHOA_API_KEY')  # 한국해양조사원 API 키
+AGRICULTURE_API_KEY = os.getenv('AGRICULTURE_API_KEY')  # 농림축산식품부 API 키
+
+# Create necessary directories
+os.makedirs(BASE_DIR / 'logs', exist_ok=True)
+os.makedirs(AI_MODELS['MODEL_CACHE_DIR'], exist_ok=True)
+
 DISCORD_WEBHOOK_URL = os.getenv('DISCORD_WEBHOOK_URL', '')
+
