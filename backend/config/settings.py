@@ -57,6 +57,8 @@ LOCAL_APPS = [
     'accounts',
     'dashboard',
     'order',
+    'fish_registry',
+    'transcription',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS

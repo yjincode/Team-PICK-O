@@ -1,12 +1,6 @@
 from django.contrib import admin
 from .models import Order, OrderItem
-from business.models import Business
 from fish_registry.models import FishType
-
-@admin.register(Business)
-class BusinessAdmin(admin.ModelAdmin):
-    list_display = ['business_name', 'phone_number', 'address']
-    search_fields = ['business_name', 'phone_number']
 
 @admin.register(FishType)
 class FishTypeAdmin(admin.ModelAdmin):

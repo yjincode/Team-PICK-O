@@ -39,3 +39,14 @@ whitenoise==6.6.0
 # Development (optional)
 django-extensions==3.2.3
 django-debug-toolbar==4.2.0
+
+# OCR Dependencies
+pytesseract==0.3.10
+
+# Required for Tesseract OCR
+# On macOS: brew install tesseract
+# On Ubuntu: sudo apt-get install tesseract-ocr
+# On Windows: Download installer from https://github.com/UB-Mannheim/tesseract/wiki
+
+# Python-Tesseract is a wrapper for Google's Tesseract-OCR Engine
+# The actual Tesseract OCR engine must be installed separately
