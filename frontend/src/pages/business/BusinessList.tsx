@@ -12,6 +12,8 @@ import { Search, Plus, Phone, Mail, Eye, Edit, Loader2 } from "lucide-react"
 import { businessApi } from "../../lib/api"
 import { useAuth } from "../../contexts/AuthContext"
 import toast, { Toaster } from 'react-hot-toast';
+import { useKakaoPostcode } from "../../hooks/useKakaoPostcode";
+import { KakaoAddress } from "../../types/kakao";
 
 
 // 거래처 데이터 타입 정의
@@ -25,46 +27,6 @@ interface Business {
   status?: string;
   last_order_date?: string;
 }
-
-// // 목업 데이터 (실제로는 API에서 가져올 예정)
-// const mockBusinesses: Business[] = [
-//   {
-//     id: 1,
-//     business_name: "동해수산",
-//     phone_number: "010-1234-5678",
-//     address: "강원도 동해시",
-//     unpaid_amount: 2400000,
-//     status: "정상",
-//     last_order_date: "2024-01-30",
-//   },
-//   {
-//     id: 2,
-//     business_name: "바다마트",
-//     phone_number: "010-2345-6789",
-//     address: "부산시 해운대구",
-//     unpaid_amount: 0,
-//     status: "정상",
-//     last_order_date: "2024-01-29",
-//   },
-//   {
-//     id: 3,
-//     business_name: "해양식품",
-//     phone_number: "010-3456-7890",
-//     address: "인천시 연수구",
-//     unpaid_amount: 1800000,
-//     status: "연체",
-//     last_order_date: "2024-01-25",
-//   },
-//   {
-//     id: 4,
-//     business_name: "신선수산",
-//     phone_number: "010-4567-8901",
-//     address: "경기도 시흥시",
-//     unpaid_amount: 3200000,
-//     status: "연체",
-//     last_order_date: "2024-01-20",
-//   },
-// ]
 
 const BusinessList: React.FC = () => {
   const [businesses, setBusinesses] = useState<Business[]>([]);
@@ -139,6 +101,13 @@ const BusinessList: React.FC = () => {
   const [newName, setNewName] = useState("")
   const [newPhone, setNewPhone] = useState("")
   const [newAddress, setNewAddress] = useState("")
+  const { openPostcode } = useKakaoPostcode({
+    onComplete: (data: KakaoAddress) => {
+      const fullAddress = data.roadAddress || data.jibunAddress;
+      setNewAddress(fullAddress);
+    }
+  });
+
   
   const handleRegister = async () => {
     // 입력 검증
@@ -246,10 +215,23 @@ const BusinessList: React.FC = () => {
               <Input 
                 placeholder="주소 (선택사항)" 
                 value={newAddress} 
-                onChange={(e) => setNewAddress(e.target.value)}
+                readOnly
                 disabled={isRegistering}
+                className="flex-1"
               />
+              <Button
+               type="button"
+               onClick={openPostcode}
+               disabled={isRegistering}
+               className="h-12 px-4 bg-accent-blue hover:bg-accent-blue/90 text-white whitespace-nowrap"
+    >
+      주소검색
+    </Button>
             </div>
+            {newAddress && (
+    <p className="text-xs text-gray-500 mt-1">선택된 주소: {newAddress}</p>
+  )}
+          
           </div>
           <div className="mt-4 flex justify-end space-x-2">
             <Button 
