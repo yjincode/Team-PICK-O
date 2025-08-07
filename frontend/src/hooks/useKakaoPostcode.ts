@@ -31,12 +31,12 @@ export const useKakaoPostcode = ({
       return;
     }
 
-    // 이미 스크립트 태그가 있는지 확인
+    // 이미 스크립트 태그가 있는지 확인..
     if (document.getElementById('kakao-postcode-script')) {
       return;
     }
 
-    // 스크립트 동적 로드
+    // 스크립트 동적 로드 
     const script = document.createElement('script');
     script.id = 'kakao-postcode-script';
     script.src = '//t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js';
