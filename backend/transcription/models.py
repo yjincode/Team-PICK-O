@@ -36,7 +36,7 @@ class AudioTranscription(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     status = models.CharField(
-        max_length=20, 
+        max_length=25, 
         choices=STATUS_CHOICES, 
         default='pending',
         help_text="Current status of the transcription process"
