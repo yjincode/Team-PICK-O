@@ -46,9 +46,19 @@ class FirebaseAuthentication(BaseAuthentication):
             tuple: (user, token) 또는 None
         """
         
-        # auth/status와 register API는 인증 제외
-        if '/auth/status/' in request.path or '/auth/register/' in request.path:
+        # 인증 제외 경로들
+        excluded_paths = [
+            '/auth/status/',
+            '/auth/register/',
+        ]
+        
+        # 거래처 목록 조회 (GET 요청만)
+        if request.path == '/api/v1/business/customers/' and request.method == 'GET':
             return None
+        
+        for path in excluded_paths:
+            if path in request.path:
+                return None
             
         auth_header = request.META.get('HTTP_AUTHORIZATION')
         

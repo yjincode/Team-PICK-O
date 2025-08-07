@@ -7,14 +7,14 @@ from .models import (
 
 @admin.register(User)
 class UserAdmin(BaseUserAdmin):
-    list_display = ('username', 'business_name', 'owner_name', 'phone_number', 'subscription_plan', 'created_at')
-    list_filter = ('subscription_plan', 'created_at')
+    list_display = ('username', 'business_name', 'owner_name', 'phone_number', 'status', 'created_at')
+    list_filter = ('status', 'created_at')
     search_fields = ('username', 'business_name', 'owner_name', 'phone_number')
     
     fieldsets = BaseUserAdmin.fieldsets + (
         ('비즈니스 정보', {
             'fields': ('business_name', 'owner_name', 'phone_number', 'address', 
-                      'business_registration_number', 'firebase_uid', 'subscription_plan')
+                      'firebase_uid', 'status')
         }),
     )
 

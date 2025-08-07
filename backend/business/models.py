@@ -11,8 +11,6 @@ class User(AbstractUser):
     owner_name = models.CharField(max_length=100, blank=True)
     phone_number = models.CharField(max_length=20, blank=True)
     address = models.TextField(blank=True)
-    business_registration_number = models.CharField(max_length=50, blank=True)
-    subscription_plan = models.CharField(max_length=20, default='basic')
     
     STATUS_CHOICES = [
         ('pending', '승인 대기'),
