@@ -9,8 +9,6 @@ import {
   Order, 
   FishType,
   Payment,
-  SmsRecommendation,
-  PriceData,
   ApiResponse 
 } from '../types'
 
@@ -260,79 +258,6 @@ export const paymentApi = {
     return response.data
   },
 }
-
-// SMS 추천 API
-export const smsRecommendationApi = {
-  // 모든 SMS 추천 조회
-  getAll: async (): Promise<ApiResponse<SmsRecommendation[]>> => {
-    const response = await api.get('/sms-recommendations')
-    return response.data
-  },
-
-  // ID로 SMS 추천 조회
-  getById: async (id: number): Promise<ApiResponse<SmsRecommendation>> => {
-    const response = await api.get(`/sms-recommendations/${id}`)
-    return response.data
-  },
-
-  // 새 SMS 추천 생성
-  create: async (recommendation: Omit<SmsRecommendation, 'id' | 'created_at'>): Promise<ApiResponse<SmsRecommendation>> => {
-    const response = await api.post('/sms-recommendations', recommendation)
-    return response.data
-  },
-
-  // SMS 추천 정보 수정
-  update: async (id: number, recommendation: Partial<SmsRecommendation>): Promise<ApiResponse<SmsRecommendation>> => {
-    const response = await api.put(`/sms-recommendations/${id}`, recommendation)
-    return response.data
-  },
-
-  // SMS 추천 삭제
-  delete: async (id: number): Promise<ApiResponse<void>> => {
-    const response = await api.delete(`/sms-recommendations/${id}`)
-    return response.data
-  },
-
-  // SMS 발송 상태 업데이트
-  updateSentStatus: async (id: number, isSent: boolean): Promise<ApiResponse<SmsRecommendation>> => {
-    const response = await api.patch(`/sms-recommendations/${id}/sent`, { is_sent: isSent })
-    return response.data
-  },
-}
-
-// 시세 데이터 API
-export const priceDataApi = {
-  // 모든 시세 데이터 조회
-  getAll: async (): Promise<ApiResponse<PriceData[]>> => {
-    const response = await api.get('/price-data')
-    return response.data
-  },
-
-  // 어종별 시세 데이터 조회
-  getByFishType: async (fishType: string): Promise<ApiResponse<PriceData[]>> => {
-    const response = await api.get(`/price-data/fish-type/${fishType}`)
-    return response.data
-  },
-
-  // 새 시세 데이터 생성
-  create: async (priceData: Omit<PriceData, 'id'>): Promise<ApiResponse<PriceData>> => {
-    const response = await api.post('/price-data', priceData)
-    return response.data
-  },
-
-  // 시세 데이터 수정
-  update: async (id: number, priceData: Partial<PriceData>): Promise<ApiResponse<PriceData>> => {
-    const response = await api.put(`/price-data/${id}`, priceData)
-    return response.data
-  },
-
-  // 시세 데이터 삭제
-  delete: async (id: number): Promise<ApiResponse<void>> => {
-    const response = await api.delete(`/price-data/${id}`)
-    return response.data
-  },
-}
-
 
 // Firebase Auth API
 export const authApi = {
