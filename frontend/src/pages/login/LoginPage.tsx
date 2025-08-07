@@ -14,11 +14,12 @@ import { SharkMascot } from "../../components/common/SharkMascot"
 import { setupRecaptcha, sendPhoneVerification, verifyPhoneCode, onAuthStateChange } from "../../lib/firebase.ts"
 import { authApi } from "../../lib/api"
 import { tokenManager } from "../../lib/utils"
+import { useKakaoPostcode } from "../../hooks/useKakaoPostcode"
+import { KakaoAddress } from "../../types/kakao"
 import {
   LoginStep,
   UserRegistrationData,
   ErrorState,
-  SubscriptionPlan,
   UserData
 } from "../../types/auth"
 
@@ -43,9 +44,15 @@ export default function LoginPage(): JSX.Element {
     owner_name: '',
     phone_number: '',
     address: '',
-    business_registration_number: '',
-    subscription_plan: 'basic' as SubscriptionPlan
   })
+
+  // 카카오 주소검색 훅
+  const { openPostcode, selectedAddress } = useKakaoPostcode({
+    onComplete: (data: KakaoAddress) => {
+      const fullAddress = data.roadAddress || data.jibunAddress;
+      setUserInfo(prev => ({ ...prev, address: fullAddress }));
+    }
+  });
 
   useEffect(() => {
     // 컴포넌트 마운트 시 reCAPTCHA 설정
@@ -308,30 +315,29 @@ export default function LoginPage(): JSX.Element {
         <Label htmlFor="address" className="text-base font-medium text-gray-700">
           주소 *
         </Label>
-        <Input
-          id="address"
-          type="text"
-          placeholder="부산광역시 기장군 일광면"
-          value={userInfo.address}
-          onChange={(e) => setUserInfo(prev => ({ ...prev, address: e.target.value }))}
-          className="h-12 text-base border-gray-300 focus:border-accent-blue"
-          required
-        />
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="business_number" className="text-base font-medium text-gray-700">
-          사업자등록번호 *
-        </Label>
-        <Input
-          id="business_number"
-          type="text"
-          placeholder="123-45-67890"
-          value={userInfo.business_registration_number}
-          onChange={(e) => setUserInfo(prev => ({ ...prev, business_registration_number: e.target.value }))}
-          className="h-12 text-base border-gray-300 focus:border-accent-blue"
-          required
-        />
+        <div className="flex gap-2">
+          <Input
+            id="address"
+            type="text"
+            placeholder="주소검색 버튼을 눌러주세요"
+            value={userInfo.address}
+            readOnly
+            className="h-12 text-base border-gray-300 focus:border-accent-blue flex-1 bg-gray-50"
+            required
+          />
+          <Button
+            type="button"
+            onClick={openPostcode}
+            className="h-12 px-4 bg-accent-blue hover:bg-accent-blue/90 text-white whitespace-nowrap"
+          >
+            주소검색
+          </Button>
+        </div>
+        {userInfo.address && (
+          <p className="text-xs text-gray-500">
+            선택된 주소: {userInfo.address}
+          </p>
+        )}
       </div>
 
       <Button

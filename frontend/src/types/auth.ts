@@ -16,8 +16,6 @@ export interface UserRegistrationData {
   owner_name: string;
   phone_number: string;
   address: string;
-  business_registration_number: string;
-  subscription_plan: SubscriptionPlan;
 }
 
 // 사용자 정보 응답 데이터
@@ -27,9 +25,7 @@ export interface UserData {
   owner_name: string;
   phone_number: string;
   address: string;
-  business_registration_number: string;
   firebase_uid: string;
-  subscription_plan: SubscriptionPlan;
   status: UserStatus;
   created_at: string;
 }
@@ -67,8 +63,6 @@ export interface LoginFormData {
   businessName: string;
   ownerName: string;
   address: string;
-  businessRegistrationNumber: string;
-  subscriptionPlan: SubscriptionPlan;
 }
 
 // 에러 상태
