@@ -9,7 +9,8 @@ import {
   Order, 
   FishType,
   Payment,
-  ApiResponse 
+  ApiResponse,
+  PaginatedResponse
 } from '../types'
 
 
@@ -77,10 +78,10 @@ api.interceptors.response.use(
 
 // 거래처 관리 API
 export const businessApi = {
-  // 모든 거래처 조회
-  getAll: async (): Promise<ApiResponse<Business[]>> => {
-    const response = await api.get('/business/customers/')
-    return response.data
+  // 모든 거래처 조회 (페이지네이션 지원)
+  getAll: async (params?: { page?: number; page_size?: number }): Promise<ApiResponse<PaginatedResponse<Business>>> => {
+    const response = await api.get('/business/customers/', { params });
+    return response.data;
   },
 
   // ID로 거래처 조회
