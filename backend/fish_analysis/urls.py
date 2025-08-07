@@ -16,6 +16,9 @@ urlpatterns = [
     path('batch-analyze/', views.batch_analyze_fish_images, name='batch-analyze'),
     path('mobile-analyze/', views.mobile_analyze_fish_image, name='mobile-analyze'),
     
+    # 광어 질병 분석 API (1회성, DB 저장 없음)
+    path('flounder-disease/', views.analyze_flounder_disease, name='flounder-disease'),
+    
     # 결과 조회
     path('history/', views.AnalysisHistoryListView.as_view(), name='history'),
     path('detail/<uuid:id>/', views.AnalysisDetailView.as_view(), name='detail'),

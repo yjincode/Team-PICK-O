@@ -3,6 +3,8 @@
 
 import React from "react"
 import { useState, useEffect } from "react"
+import { useNavigate } from "react-router-dom"
+import { useAuth } from "../../contexts/AuthContext"
 import { User } from "firebase/auth"
 import { Button } from "../../components/ui/button"
 import { Input } from "../../components/ui/input"
@@ -12,11 +14,12 @@ import { SharkMascot } from "../../components/common/SharkMascot"
 import { setupRecaptcha, sendPhoneVerification, verifyPhoneCode, onAuthStateChange } from "../../lib/firebase.ts"
 import { authApi } from "../../lib/api"
 import { tokenManager } from "../../lib/utils"
+import { useKakaoPostcode } from "../../hooks/useKakaoPostcode"
+import { KakaoAddress } from "../../types/kakao"
 import {
   LoginStep,
   UserRegistrationData,
   ErrorState,
-  SubscriptionPlan,
   UserData
 } from "../../types/auth"
 
@@ -27,6 +30,8 @@ interface StepInfo {
 
 
 export default function LoginPage(): JSX.Element {
+  const navigate = useNavigate()
+  const { login } = useAuth()
   const [step, setStep] = useState<LoginStep>('phone')
   const [phoneNumber, setPhoneNumber] = useState<string>('')
   const [verificationCode, setVerificationCode] = useState<string>('')
@@ -39,9 +44,15 @@ export default function LoginPage(): JSX.Element {
     owner_name: '',
     phone_number: '',
     address: '',
-    business_registration_number: '',
-    subscription_plan: 'basic' as SubscriptionPlan
   })
+
+  // 카카오 주소검색 훅
+  const { openPostcode, selectedAddress } = useKakaoPostcode({
+    onComplete: (data: KakaoAddress) => {
+      const fullAddress = data.roadAddress || data.jibunAddress;
+      setUserInfo(prev => ({ ...prev, address: fullAddress }));
+    }
+  });
 
   useEffect(() => {
     // 컴포넌트 마운트 시 reCAPTCHA 설정
@@ -52,16 +63,8 @@ export default function LoginPage(): JSX.Element {
       setError('reCAPTCHA 초기화에 실패했습니다. 페이지를 새로고침해주세요.');
     }
     
-    // 이미 로그인된 사용자가 있는지 확인
-    const unsubscribe = onAuthStateChange(async (user: User | null) => {
-      if (user) {
-        await handleAuthenticatedUser(user)
-      }
-    })
-    
     // 컴포넌트 언마운트 시 정리
     return () => {
-      unsubscribe();
       // reCAPTCHA 정리
       try {
         if (window.recaptchaVerifier) {
@@ -77,22 +80,25 @@ export default function LoginPage(): JSX.Element {
 
   const handleAuthenticatedUser = async (user: User): Promise<void> => {
     try {
-      const idToken = await user.getIdToken()
-      tokenManager.setToken(idToken)
+      // Firebase 토큰 저장
+      const idToken = await user.getIdToken();
+      tokenManager.setToken(idToken);
       
       // 사용자 상태 확인
-      const response = await authApi.checkUserStatus(user.uid)
+      const response = await authApi.checkUserStatus(user.uid);
       
       if (response.exists && response.user) {
-        const userData: UserData = response.user
-        localStorage.setItem('userInfo', JSON.stringify(userData))
+        const userData: UserData = response.user;
+        
+        // AuthContext 상태 업데이트
+        await login(user, userData);
         
         if (userData.status === 'approved') {
-          window.location.href = '/dashboard'
+          navigate('/dashboard', { replace: true });
         } else if (userData.status === 'pending') {
-          setStep('pending')
+          setStep('pending');
         } else {
-          setError('계정이 비활성화되었습니다. 관리자에게 문의하세요.')
+          setError('계정이 비활성화되었습니다. 관리자에게 문의하세요.');
         }
       } else {
         // 미등록 사용자 -> 회원가입 단계로
@@ -100,8 +106,8 @@ export default function LoginPage(): JSX.Element {
           ...prev, 
           firebase_uid: user.uid, 
           phone_number: user.phoneNumber || '' 
-        }))
-        setStep('register')
+        }));
+        setStep('register');
       }
     } catch (error) {
       console.error('사용자 상태 확인 오류:', error)
@@ -115,7 +121,6 @@ export default function LoginPage(): JSX.Element {
     setError('')
     
     try {
-      
       const result = await sendPhoneVerification(phoneNumber)
       
       if (result.success) {
@@ -170,11 +175,10 @@ export default function LoginPage(): JSX.Element {
     setError('')
     
     try {
-      
       const result = await verifyPhoneCode(verificationCode)
       
-      if (result.success) {
-        // Firebase 인증 성공 -> onAuthStateChange에서 자동으로 처리됨
+      if (result.success && result.user) {
+        await handleAuthenticatedUser(result.user)
       } else {
         setError(result.message || '인증번호 확인에 실패했습니다.')
       }
@@ -311,30 +315,29 @@ export default function LoginPage(): JSX.Element {
         <Label htmlFor="address" className="text-base font-medium text-gray-700">
           주소 *
         </Label>
-        <Input
-          id="address"
-          type="text"
-          placeholder="부산광역시 기장군 일광면"
-          value={userInfo.address}
-          onChange={(e) => setUserInfo(prev => ({ ...prev, address: e.target.value }))}
-          className="h-12 text-base border-gray-300 focus:border-accent-blue"
-          required
-        />
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="business_number" className="text-base font-medium text-gray-700">
-          사업자등록번호 *
-        </Label>
-        <Input
-          id="business_number"
-          type="text"
-          placeholder="123-45-67890"
-          value={userInfo.business_registration_number}
-          onChange={(e) => setUserInfo(prev => ({ ...prev, business_registration_number: e.target.value }))}
-          className="h-12 text-base border-gray-300 focus:border-accent-blue"
-          required
-        />
+        <div className="flex gap-2">
+          <Input
+            id="address"
+            type="text"
+            placeholder="주소검색 버튼을 눌러주세요"
+            value={userInfo.address}
+            readOnly
+            className="h-12 text-base border-gray-300 focus:border-accent-blue flex-1 bg-gray-50"
+            required
+          />
+          <Button
+            type="button"
+            onClick={openPostcode}
+            className="h-12 px-4 bg-accent-blue hover:bg-accent-blue/90 text-white whitespace-nowrap"
+          >
+            주소검색
+          </Button>
+        </div>
+        {userInfo.address && (
+          <p className="text-xs text-gray-500">
+            선택된 주소: {userInfo.address}
+          </p>
+        )}
       </div>
 
       <Button

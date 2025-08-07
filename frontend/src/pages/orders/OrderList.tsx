@@ -2,24 +2,41 @@
  * 주문 목록 페이지
  * 주문 내역을 조회하고 관리하는 페이지입니다
  */
-import React from "react"
-import { Card, CardContent } from "../../components/ui/card"
-import { Button } from "../../components/ui/button"
-import { Badge } from "../../components/ui/badge"
-import { Plus, Eye, Edit, Phone, Calendar } from "lucide-react"
+import React, { useState } from "react"
+import { format } from "date-fns"
+import { ko } from "date-fns/locale"
+import { CalendarDays, FileText, Home, Package, Search, Settings, ShoppingCart, Users } from "lucide-react"
 
-// 주문 데이터 타입 정의 (새로운 DB 스키마 기반)
+import { Badge } from "../../components/ui/badge"
+import { Button } from "../../components/ui/button"
+import { Calendar } from "../../components/ui/calendar"
+import { Input } from "../../components/ui/input"
+import { Label } from "../../components/ui/label"
+import { Popover, PopoverContent, PopoverTrigger } from "../../components/ui/popover"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../components/ui/table"
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "../../components/ui/pagination"
+import OrderForm from "./OrderForm"
+
+// 주문 데이터 타입 정의
 interface Order {
   id: number;
   business_id: number;
   total_price: number;
   order_datetime: string;
   memo?: string;
-  source_type: 'voice' | 'text';
+  source_type: 'voice' | 'text' | 'manual';
   transcribed_text?: string;
   delivery_date?: string;
   status: 'success' | 'failed' | 'pending';
-  // 조인된 데이터
   business?: {
     id: number;
     business_name: string;
@@ -34,21 +51,21 @@ interface Order {
   }>;
 }
 
-// 목업 데이터 (실제로는 API에서 가져올 예정)
+// 목업 데이터를 테이블 형식에 맞게 변환
 const mockOrders: Order[] = [
   {
     id: 1,
     business_id: 1,
     total_price: 2400000,
-    order_datetime: "2024-01-30T10:30:00",
+    order_datetime: "2024-01-15T10:30:00",
     memo: "급한 주문입니다",
     source_type: "voice",
     transcribed_text: "고등어 50박스, 갈치 30박스 주문해주세요",
-    delivery_date: "2024-02-05",
+    delivery_date: "2024-01-17",
     status: "pending",
     business: {
       id: 1,
-      business_name: "동해수산",
+      business_name: "해양수산 마트",
       phone_number: "010-1234-5678",
     },
     items: [
@@ -72,15 +89,15 @@ const mockOrders: Order[] = [
     id: 2,
     business_id: 2,
     total_price: 1200000,
-    order_datetime: "2024-01-29T14:15:00",
+    order_datetime: "2024-01-15T14:15:00",
     memo: "정기 주문",
     source_type: "text",
     transcribed_text: "오징어 25박스 주문",
-    delivery_date: "2024-02-03",
+    delivery_date: "2024-01-16",
     status: "success",
     business: {
       id: 2,
-      business_name: "바다마트",
+      business_name: "바다횟집",
       phone_number: "010-2345-6789",
     },
     items: [
@@ -97,15 +114,15 @@ const mockOrders: Order[] = [
     id: 3,
     business_id: 3,
     total_price: 1800000,
-    order_datetime: "2024-01-28T09:00:00",
+    order_datetime: "2024-01-14T09:00:00",
     memo: "신규 거래처",
     source_type: "voice",
     transcribed_text: "명태 40박스, 고등어 20박스 주문",
-    delivery_date: "2024-02-10",
+    delivery_date: "2024-01-18",
     status: "pending",
     business: {
       id: 3,
-      business_name: "해양식품",
+      business_name: "신선마켓",
       phone_number: "010-3456-7890",
     },
     items: [
@@ -125,123 +142,311 @@ const mockOrders: Order[] = [
       },
     ],
   },
+  {
+    id: 4,
+    business_id: 4,
+    total_price: 1500000,
+    order_datetime: "2024-01-14T11:00:00",
+    memo: "신선도 중요",
+    source_type: "manual",
+    transcribed_text: "연어 3kg, 새우 2kg 주문",
+    delivery_date: "2024-01-16",
+    status: "success",
+    business: {
+      id: 4,
+      business_name: "오션푸드",
+      phone_number: "010-4567-8901",
+    },
+    items: [
+      {
+        id: 6,
+        fish_type_id: 5,
+        quantity: 3,
+        unit_price: 500000,
+        unit: "kg",
+      },
+      {
+        id: 7,
+        fish_type_id: 6,
+        quantity: 2,
+        unit_price: 75000,
+        unit: "kg",
+      },
+    ],
+  },
+  {
+    id: 5,
+    business_id: 5,
+    total_price: 800000,
+    order_datetime: "2024-01-13T16:00:00",
+    memo: "소량 주문",
+    source_type: "voice",
+    transcribed_text: "문어 1kg, 오징어 3kg 주문",
+    delivery_date: "2024-01-15",
+    status: "success",
+    business: {
+      id: 5,
+      business_name: "프레시마트",
+      phone_number: "010-5678-9012",
+    },
+    items: [
+      {
+        id: 8,
+        fish_type_id: 7,
+        quantity: 1,
+        unit_price: 300000,
+        unit: "kg",
+      },
+      {
+        id: 9,
+        fish_type_id: 8,
+        quantity: 3,
+        unit_price: 166667,
+        unit: "kg",
+      },
+    ],
+  },
 ]
 
-const OrderList: React.FC = () => {
-  // 금액 포맷팅 함수
-  const formatCurrency = (amount: number): string => `₩${amount.toLocaleString()}`
-
-  // 주문 상태에 따른 배지 색상 결정
-  const getStatusBadge = (status: string) => {
-    const variants = {
-      "success": "default",
-      "pending": "secondary",
-      "failed": "destructive",
-    } as const
-    return <Badge variant={variants[status as keyof typeof variants] || "outline"}>{status}</Badge>
+// 상태별 글씨색 스타일
+const getStatusText = (status: string) => {
+  switch (status) {
+    case "success":
+      return <span className="text-green-600 font-medium">완료</span>
+    case "pending":
+      return <span className="text-yellow-600 font-medium">출고 준비</span>
+    case "failed":
+      return <span className="text-red-600 font-medium">실패</span>
+    default:
+      return <span className="text-gray-600 font-medium">등록</span>
   }
+}
 
-  // 주문 소스 타입에 따른 아이콘
-  const getSourceTypeIcon = (sourceType: string) => {
-    return sourceType === 'voice' ? '🎤' : '📝'
+const getPaymentStatusText = (status: string) => {
+  switch (status) {
+    case "success":
+      return <span className="text-blue-600 font-medium">결제 완료</span>
+    case "pending":
+      return <span className="text-red-600 font-medium">미결제</span>
+    default:
+      return <span className="text-red-600 font-medium">미결제</span>
+  }
+}
+
+// 주문 아이템을 문자열로 변환
+const getItemsSummary = (items?: Array<{ fish_type_id: number; quantity: number; unit?: string }>) => {
+  if (!items || items.length === 0) return "품목 없음"
+  
+  return items.map(item => {
+    const fishNames = ["고등어", "갈치", "오징어", "명태", "연어", "새우", "문어", "방어"]
+    const fishName = fishNames[item.fish_type_id - 1] || "기타"
+    return `${fishName} ${item.quantity}${item.unit || "개"}`
+  }).join(", ")
+}
+
+const OrderList: React.FC = () => {
+  const [showOrderForm, setShowOrderForm] = useState(false)
+  const [orders, setOrders] = useState(mockOrders)
+  const [date, setDate] = React.useState<Date>()
+  const [statusFilter, setStatusFilter] = React.useState<string>("all")
+  const [searchQuery, setSearchQuery] = React.useState<string>("")
+
+  // 새 주문 처리
+  const handleNewOrder = (orderData: any) => {
+    console.log('받은 주문 데이터:', orderData)
+    
+    const newOrder: Order = {
+      id: orderData.order_id || Math.max(...orders.map(o => o.id)) + 1,
+      business_id: orderData.business_id,
+      total_price: orderData.total_price || 0,
+      order_datetime: orderData.order_datetime || new Date().toISOString(),
+      memo: orderData.memo || '',
+      source_type: orderData.source_type || 'manual',
+      transcribed_text: orderData.transcribed_text || '',
+      delivery_date: orderData.delivery_date || '',
+      status: orderData.status || 'pending',
+      business: {
+        id: orderData.business_id,
+        business_name: orderData.business_name || '거래처명 없음',
+        phone_number: orderData.phone_number || '연락처 없음',
+      },
+      items: orderData.order_items?.map((item: any, index: number) => ({
+        id: index + 1,
+        fish_type_id: item.fish_type_id,
+        quantity: item.quantity,
+        unit_price: item.unit_price,
+        unit: item.unit
+      })) || []
+    }
+    
+    setOrders(prev => [newOrder, ...prev])
+    setShowOrderForm(false)
   }
 
   return (
-    <div className="space-y-4 sm:space-y-6">
-      {/* 페이지 헤더 */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">주문 내역</h1>
-          <p className="text-sm sm:text-base text-gray-600 mt-1">주문 관리 및 현황</p>
+    <div className="min-h-screen bg-gray-50">
+      {/* 헤더 */}
+      <header className="px-6 py-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">정산 처리</h1>
+            <p className="text-sm sm:text-base text-gray-600 mt-1">미수금 정산 및 결제 처리</p>
+          </div>
         </div>
-        <Button className="bg-accent-blue hover:bg-accent-blue/90 w-full sm:w-auto">
-          <Plus className="h-4 w-4 mr-2" />새 주문
-        </Button>
-      </div>
+      </header>
 
-      {/* 주문 목록 */}
-      <div className="space-y-4">
-        {mockOrders.map((order) => (
-          <Card key={order.id} className="shadow-sm hover:shadow-md transition-shadow">
-            <CardContent className="p-4 sm:p-6">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="flex-1">
-                  {/* 주문 헤더: 거래처명과 상태 */}
-                  <div className="flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:space-x-3 mb-3">
-                    <h3 className="text-lg sm:text-xl font-semibold text-gray-900">
-                      {order.business?.business_name}
-                    </h3>
-                    {getStatusBadge(order.status)}
-                    <span className="text-sm text-gray-500">
-                      {getSourceTypeIcon(order.source_type)} {order.source_type === 'voice' ? '음성' : '텍스트'}
-                    </span>
-                  </div>
-                  
-                  {/* 주문 상세 정보 */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-4 text-sm">
-                    <div className="flex items-center space-x-2">
-                      <Phone className="h-4 w-4 text-gray-400" />
-                      <span className="text-gray-500">연락처:</span>
-                      <span className="font-medium">{order.business?.phone_number}</span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <Calendar className="h-4 w-4 text-gray-400" />
-                      <span className="text-gray-500">주문일:</span>
-                      <span className="font-medium">
-                        {new Date(order.order_datetime).toLocaleDateString('ko-KR')}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-gray-500">총 금액:</span>
-                      <div className="font-semibold text-lg">{formatCurrency(order.total_price)}</div>
-                    </div>
-                  </div>
-
-                  {/* 주문 메모 및 음성/텍스트 내용 */}
-                  {order.memo && (
-                    <div className="mt-2">
-                      <span className="text-gray-500">메모:</span>
-                      <p className="text-gray-700">{order.memo}</p>
-                    </div>
-                  )}
-                  {order.transcribed_text && (
-                    <div className="mt-2">
-                      <span className="text-gray-500">원문:</span>
-                      <p className="text-gray-700 italic">"{order.transcribed_text}"</p>
-                    </div>
-                  )}
-
-                  {/* 주문 아이템 */}
-                  {order.items && order.items.length > 0 && (
-                    <div className="mt-3">
-                      <span className="text-gray-500">주문 품목:</span>
-                      <div className="mt-1 space-y-1">
-                        {order.items.map((item, index) => (
-                          <div key={index} className="text-gray-700">
-                            • {item.quantity}{item.unit} (₩{item.unit_price?.toLocaleString()}/개)
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* 액션 버튼들 */}
-                <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
-                  <Button variant="outline" size="sm" className="w-full sm:w-auto">
-                    <Eye className="h-4 w-4 mr-2" />상세보기
-                  </Button>
-                  <Button variant="outline" size="sm" className="w-full sm:w-auto">
-                    <Edit className="h-4 w-4 mr-2" />수정
-                  </Button>
-                </div>
+      <div className="p-6">
+        {/* 필터 바 */}
+        <div className="flex flex-col gap-4 rounded-lg border border-gray-200 bg-white p-4 shadow-sm mb-6">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center">
+              <div className="flex items-center gap-2">
+                <Label htmlFor="status-filter" className="text-sm font-medium text-gray-700">
+                  주문 상태
+                </Label>
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="w-[140px]">
+                    <SelectValue placeholder="전체" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">전체</SelectItem>
+                    <SelectItem value="등록">등록</SelectItem>
+                    <SelectItem value="결제 완료">결제 완료</SelectItem>
+                    <SelectItem value="출고 준비">출고 준비</SelectItem>
+                    <SelectItem value="완료">완료</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-            </CardContent>
-          </Card>
-        ))}
+              <div className="flex items-center gap-2">
+                <Label className="text-sm font-medium text-gray-700">주문일자</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className="w-[140px] justify-start text-left font-normal bg-transparent"
+                    >
+                      <CalendarDays className="mr-2 h-4 w-4" />
+                      {date ? format(date, "yyyy-MM-dd", { locale: ko }) : "날짜 선택"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0">
+                    <Calendar mode="single" selected={date} onSelect={setDate} initialFocus />
+                  </PopoverContent>
+                </Popover>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                <Input
+                  placeholder="거래처명 또는 주문번호 검색"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10 w-[280px]"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* 주문 테이블 */}
+        <div className="rounded-lg border border-gray-200 bg-white shadow-sm">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-gray-50">
+                <TableHead className="font-semibold text-gray-900">번호</TableHead>
+                <TableHead className="font-semibold text-gray-900">거래처명</TableHead>
+                <TableHead className="font-semibold text-gray-900">주문일자</TableHead>
+                <TableHead className="font-semibold text-gray-900">납기일</TableHead>
+                <TableHead className="font-semibold text-gray-900">품목 요약</TableHead>
+                <TableHead className="font-semibold text-gray-900">결제 상태</TableHead>
+                <TableHead className="font-semibold text-gray-900">주문 상태</TableHead>
+                <TableHead className="font-semibold text-gray-900 text-center">상세</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {orders.map((order, index) => (
+                <TableRow key={order.id} className="hover:bg-gray-50">
+                  <TableCell className="font-medium text-gray-900">
+                    {index + 1}
+                  </TableCell>
+                  <TableCell className="font-medium">{order.business?.business_name}</TableCell>
+                  <TableCell className="text-gray-600">
+                    {format(new Date(order.order_datetime), "yyyy-MM-dd")}
+                  </TableCell>
+                  <TableCell className="text-gray-600">
+                    {order.delivery_date ? format(new Date(order.delivery_date), "yyyy-MM-dd") : "-"}
+                  </TableCell>
+                  <TableCell className="text-gray-600 max-w-[200px] truncate">
+                    {getItemsSummary(order.items)}
+                  </TableCell>
+                  <TableCell>{getPaymentStatusText(order.status)}</TableCell>
+                  <TableCell>{getStatusText(order.status)}</TableCell>
+                  <TableCell className="text-center">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="border-blue-600 text-blue-600 hover:bg-blue-50 bg-transparent"
+                    >
+                      상세보기
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+
+        {/* 페이지네이션 */}
+        <div className="flex justify-center mt-6">
+          <Pagination>
+            <PaginationContent>
+              <PaginationItem>
+                <PaginationPrevious href="#" />
+              </PaginationItem>
+              <PaginationItem>
+                <PaginationLink href="#" isActive>
+                  1
+                </PaginationLink>
+              </PaginationItem>
+              <PaginationItem>
+                <PaginationLink href="#">2</PaginationLink>
+              </PaginationItem>
+              <PaginationItem>
+                <PaginationLink href="#">3</PaginationLink>
+              </PaginationItem>
+              <PaginationItem>
+                <PaginationEllipsis />
+              </PaginationItem>
+              <PaginationItem>
+                <PaginationNext href="#" />
+              </PaginationItem>
+            </PaginationContent>
+          </Pagination>
+        </div>
       </div>
+
+      {/* 주문 폼 모달 */}
+      {showOrderForm && (
+        <OrderForm
+          onClose={() => setShowOrderForm(false)}
+          onSubmit={handleNewOrder}
+          parsedOrderData={{
+            order: {
+              business_id: 5678,
+              contact: "010-1234-5678",
+              delivery_date: "2025-08-05",
+              transcribed_text: "안녕하세요, 이번에 도미 10kg이랑 방어 5마리 주문할게요. 납품은 8월 5일 오전 중으로 부탁드립니다."
+            },
+            order_items: [
+              { fish_type_id: 201, quantity: 10, unit_price: 20000, unit: "kg" },
+              { fish_type_id: 202, quantity: 5, unit_price: 15000, unit: "마리" }
+            ]
+          }}
+        />
+      )}
     </div>
   )
 }
 
-export default OrderList; 
+export default OrderList 

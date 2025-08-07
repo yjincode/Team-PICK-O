@@ -13,6 +13,18 @@ load_dotenv()
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# Media files (user uploaded files)
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+# Tesseract OCR Configuration
+TESSERACT_CMD = os.getenv('TESSERACT_CMD', '/usr/bin/tesseract')
+TESSERACT_TESSDATA_DIR = os.getenv('TESSERACT_TESSDATA_DIR', '/usr/share/tesseract-ocr/4.00/tessdata')
+
+# File upload settings
+FILE_UPLOAD_PERMISSIONS = 0o644
+FILE_UPLOAD_DIRECTORY_PERMISSIONS = 0o755
+
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-change-me-in-production')
 
@@ -39,10 +51,14 @@ THIRD_PARTY_APPS = [
 ]
 
 LOCAL_APPS = [
-    'core',
-    # 'fish_analysis',  # 임시 비활성화 (torch 의존성)
+    'core',  # 공통 모듈 (인증 등)
+    'business',  # 고객 관리 앱
+    # 'fish_analysis',  # 광어 질병 분석 기능 (PyTorch 의존성으로 임시 비활성화)
     'accounts',
     'dashboard',
+    'order',
+    'fish_registry',
+    'transcription',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -127,7 +143,23 @@ MEDIA_ROOT = BASE_DIR / 'media'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Custom User Model
-AUTH_USER_MODEL = 'core.User'
+AUTH_USER_MODEL = 'business.User'
+
+# Firebase Admin SDK 설정
+FIREBASE_ADMIN_CREDENTIALS = os.path.join(BASE_DIR, 'firebase-admin-key.json')
+
+# Firebase Admin SDK 초기화 확인
+FIREBASE_ADMIN_INITIALIZED = False
+try:
+    if os.path.exists(FIREBASE_ADMIN_CREDENTIALS):
+        FIREBASE_ADMIN_INITIALIZED = True
+        print("✅ Firebase Admin SDK 인증서 파일 발견")
+    else:
+        print("⚠️ Firebase Admin SDK 인증서 파일이 없습니다.")
+        print(f"   경로: {FIREBASE_ADMIN_CREDENTIALS}")
+        print("   Firebase Console에서 Service Account Key를 다운로드하세요.")
+except Exception as e:
+    print(f"❌ Firebase Admin SDK 설정 오류: {e}")
 
 # REST Framework configuration
 REST_FRAMEWORK = {
@@ -137,11 +169,12 @@ REST_FRAMEWORK = {
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 20,
     'DEFAULT_AUTHENTICATION_CLASSES': [
+        'core.authentication.FirebaseAuthentication',
         'rest_framework.authentication.SessionAuthentication',
         'rest_framework.authentication.TokenAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.IsAuthenticatedOrReadOnly',
+        'rest_framework.permissions.AllowAny',
     ],
     'DEFAULT_RENDERER_CLASSES': [
         'rest_framework.renderers.JSONRenderer',
@@ -198,7 +231,7 @@ CORS_ALLOW_METHODS = [
     'PUT',
 ]
 
-# Logging configuration
+# Logging configuration - Console only
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
@@ -213,12 +246,6 @@ LOGGING = {
         },
     },
     'handlers': {
-        'file': {
-            'level': 'INFO',
-            'class': 'logging.FileHandler',
-            'filename': BASE_DIR / 'logs' / 'django.log',
-            'formatter': 'verbose',
-        },
         'console': {
             'level': 'DEBUG',
             'class': 'logging.StreamHandler',
@@ -226,17 +253,17 @@ LOGGING = {
         },
     },
     'root': {
-        'handlers': ['console', 'file'],
+        'handlers': ['console'],
         'level': 'INFO',
     },
     'loggers': {
         'django': {
-            'handlers': ['console', 'file'],
+            'handlers': ['console'],
             'level': os.getenv('DJANGO_LOG_LEVEL', 'INFO'),
             'propagate': False,
         },
         'fish_analysis': {
-            'handlers': ['console', 'file'],
+            'handlers': ['console'],
             'level': 'DEBUG',
             'propagate': False,
         },
@@ -257,9 +284,6 @@ AI_MODELS = {
     'MODEL_CACHE_DIR': BASE_DIR / 'models',
 }
 
-# Discord Webhook settings
-DISCORD_WEBHOOK_URL = os.getenv('DISCORD_WEBHOOK_URL', 'https://discordapp.com/api/webhooks/1401000206480314388/EpCMlxFdR7UYny-FBF7cEVst7g-D9KfHaW4N8UtwDvnxu-jVrm9opVwnwdvJgwYjYL-I')
-
 # API Keys
 DATA_GO_KR_API_KEY = os.getenv('DATA_GO_KR_API_KEY')
 KOSIS_API_KEY = os.getenv('KOSIS_API_KEY')
@@ -269,3 +293,6 @@ AGRICULTURE_API_KEY = os.getenv('AGRICULTURE_API_KEY')  # 농림축산식품부 
 # Create necessary directories
 os.makedirs(BASE_DIR / 'logs', exist_ok=True)
 os.makedirs(AI_MODELS['MODEL_CACHE_DIR'], exist_ok=True)
+
+DISCORD_WEBHOOK_URL = os.getenv('DISCORD_WEBHOOK_URL', '')
+

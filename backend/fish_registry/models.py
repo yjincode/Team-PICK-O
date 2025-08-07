@@ -1,21 +1,17 @@
 from django.db import models
 
 class FishType(models.Model):
-    UNIT_CHOICES = [
-        ('kg', '킬로그램'),
-        ('ea', '마리'),
-        ('box', '박스'),
-    ]
-
-    name = models.CharField(max_length=100, unique=True)
-    aliases = models.TextField(blank=True, null=True)
-    scientific_name = models.TextField(blank=True, null=True)
-    unit = models.CharField(max_length=10, choices=UNIT_CHOICES)
-    notes = models.TextField(blank=True, null=True)
-    created_at = models.DateTimeField(auto_now_add=True)
+    """어종 모델"""
+    id = models.AutoField(primary_key=True)
+    name = models.CharField(max_length=100, verbose_name="어종명")
+    aliases = models.TextField(blank=True, null=True, verbose_name="별칭")
+    scientific_name = models.TextField(blank=True, null=True, verbose_name="학명")
+    unit = models.CharField(max_length=10, verbose_name="단위")
+    notes = models.TextField(blank=True, null=True, verbose_name="설명")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="생성 시각")
 
     class Meta:
-        db_table = 'fish_registry_fish_types'
+        db_table = 'fish_types'
         verbose_name = '어종'
         verbose_name_plural = '어종 목록'
 

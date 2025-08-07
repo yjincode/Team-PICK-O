@@ -30,9 +30,9 @@ const menuItems: MenuItem[] = [
     title: "고객 관리",
     icon: Users,
     items: [
-      { title: "거래처 리스트", url: "/customers" },
-      { title: "미수금 내역", url: "/customers/unpaid" },
-      { title: "정산 처리", url: "/customers/settlement" },
+      { title: "거래처 리스트", url: "/business" },
+      { title: "미수금 내역", url: "/business/unpaid" },
+      { title: "정산 처리", url: "/business/settlement" },
     ],
   },
   {

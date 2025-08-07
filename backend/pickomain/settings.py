@@ -44,7 +44,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework',
     'corsheaders',
-    'core',  # 인증 앱
+    'business',  # 고객 관리 앱
     'accounts',  # 계정 관리 앱
 ]
 
@@ -156,4 +156,4 @@ REST_FRAMEWORK = {
 DISCORD_WEBHOOK_URL = os.getenv('DISCORD_WEBHOOK_URL')
 
 # 커스텀 User 모델 설정
-AUTH_USER_MODEL = 'core.User'
+AUTH_USER_MODEL = 'business.User'

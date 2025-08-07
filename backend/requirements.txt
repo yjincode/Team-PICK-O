@@ -10,6 +10,7 @@ drf-spectacular==0.26.5
 
 # Authentication & Security
 djangorestframework-simplejwt==5.3.0
+firebase-admin==6.2.0
 
 # Computer Vision & AI (기존 유지)
 opencv-python==4.8.1.78
@@ -38,3 +39,14 @@ whitenoise==6.6.0
 # Development (optional)
 django-extensions==3.2.3
 django-debug-toolbar==4.2.0
+
+# OCR Dependencies
+pytesseract==0.3.10
+
+# Required for Tesseract OCR
+# On macOS: brew install tesseract
+# On Ubuntu: sudo apt-get install tesseract-ocr
+# On Windows: Download installer from https://github.com/UB-Mannheim/tesseract/wiki
+
+# Python-Tesseract is a wrapper for Google's Tesseract-OCR Engine
+# The actual Tesseract OCR engine must be installed separately

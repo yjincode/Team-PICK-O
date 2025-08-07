@@ -1,5 +1,5 @@
-# Multi-stage build for Python FastAPI backend
-FROM python:3.11-slim as builder
+# Multi-stage build for Python Django backend
+FROM python:3.11-slim AS builder
 
 # 시스템 패키지 업데이트 및 필수 도구 설치
 RUN apt-get update && apt-get install -y \
@@ -13,6 +13,8 @@ WORKDIR /build
 
 # requirements.txt 복사 및 의존성 설치
 COPY requirements.txt .
+
+
 RUN pip install --no-cache-dir --user -r requirements.txt
 
 # Production stage
@@ -52,5 +54,5 @@ HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
 # non-root 사용자로 전환
 USER appuser
 
-# 애플리케이션 실행
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
+# Django 애플리케이션 실행
+CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
