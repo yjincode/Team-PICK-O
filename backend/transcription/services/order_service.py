@@ -3,7 +3,9 @@ import re
 from typing import Dict, List, Optional, Tuple
 
 from django.db import transaction
-from order.models import Order, OrderItem, Business, FishType
+from order.models import Order, OrderItem
+from business.models import Business
+from fish_registry.models import FishType
 from accounts.models import UserProfile
 
 class OrderCreationService:
@@ -94,13 +96,12 @@ class OrderCreationService:
             order = Order.objects.create(
                 business=business,
                 total_price=0,  # Will be updated after creating items
-                order_datetime=datetime.now(),
-                delivery_date=order_data['delivery_date'],
+                delivery_datetime=order_data['delivery_date'],
                 source_type=order_data['source_type'],
                 raw_input_path=f"transcription/{self.user.id}/{datetime.now().strftime('%Y%m%d_%H%M%S')}",
                 transcribed_text=text,
                 memo=order_data['memo'],
-                status='pending'
+                order_status='placed'
             )
             
             # Create order items
@@ -111,7 +112,7 @@ class OrderCreationService:
                 # Find or create fish type
                 fish_name = item_data['fish_name']
                 fish_type, created = FishType.objects.get_or_create(
-                    fish_name=fish_name,
+                    name=fish_name,
                     defaults={'unit': item_data['unit']}
                 )
                 

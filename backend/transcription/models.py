@@ -57,7 +57,7 @@ class AudioTranscription(models.Model):
         help_text="Whether to create an order from this transcription"
     )
     business = models.ForeignKey(
-        'order.Business',
+        'business.Business',
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
