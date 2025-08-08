@@ -65,23 +65,47 @@ class OrderSerializer(serializers.ModelSerializer):
 
 
 class OrderListSerializer(serializers.ModelSerializer):
-    business_name = serializers.CharField(source='business.business_name')
-    business_phone = serializers.CharField(source='business.phone_number')
+    business = serializers.SerializerMethodField()
     items_summary = serializers.SerializerMethodField()
     
     class Meta:
         model = Order
         fields = [
-            'id', 'business_name', 'business_phone', 'total_price', 
+            'id', 'business', 'total_price', 
             'order_datetime', 'delivery_datetime', 'order_status', 'is_urgent', 'items_summary'
         ]
+    
+    def get_business(self, obj):
+        if obj.business:
+            return {
+                'id': obj.business.id,
+                'business_name': obj.business.business_name,
+                'phone_number': obj.business.phone_number
+            }
+        return {
+            'id': obj.business_id,
+            'business_name': '거래처명 없음',
+            'phone_number': '연락처 없음'
+        }
     
     def get_items_summary(self, obj):
         items = obj.items.all()
         if not items:
             return "주문 항목 없음"
         
-        item_names = [f"{item.fish_type.name} {item.quantity}{item.unit}" for item in items]
+        item_names = []
+        for item in items:
+            quantity = item.quantity
+            unit = item.unit or "개"
+            
+            # kg 단위일 때만 소수점 표시, 나머지는 정수로 표시
+            if unit.lower() in ['kg', '킬로그램']:
+                quantity_str = f"{quantity:.1f}" if quantity % 1 != 0 else f"{int(quantity)}"
+            else:
+                quantity_str = str(int(quantity))
+            
+            item_names.append(f"{item.fish_type.name} {quantity_str}{unit}")
+        
         return ", ".join(item_names[:3]) + ("..." if len(item_names) > 3 else "")
 
 
