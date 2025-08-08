@@ -176,6 +176,17 @@ class BusinessCreateAPIView(APIView):
         businesses = Business.objects.all()
         serializer = BusinessSerializer(businesses, many=True)
         return Response(serializer.data)
+    
+    def put(self, request, pk):
+        try:
+            business = Business.objects.get(id=pk)
+            serializer = BusinessSerializer(business, data=request.data, partial=True)
+            if serializer.is_valid():
+                serializer.save()
+                return Response(serializer.data, status=status.HTTP_200_OK)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except Business.DoesNotExist:
+            return Response({'error': '거래처를 찾을 수 없습니다.'}, status=status.HTTP_404_NOT_FOUND)
 
 class BusinessPagination(PageNumberPagination):
     page_size = 10  # 한 페이지에 10개 아이템
