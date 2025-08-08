@@ -8,9 +8,11 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from django.conf import settings
 from django.shortcuts import get_object_or_404
 from django.db import transaction
+from django.core.files.storage import default_storage
 
 from .serializers import OrderSerializer, OrderListSerializer, OrderDetailSerializer, OrderStatusUpdateSerializer
 from .models import Order
+from .ocr_utils import extract_text_from_image
 from transcription.services.order_service import OrderCreationService
 from transcription.models import AudioTranscription
 from fish_registry.models import FishType
@@ -25,6 +27,7 @@ class OrderUploadView(APIView):
         1. 음성 파일 업로드 (source_type: 'voice') - 음성 파일을 업로드하여 자동 파싱
         2. 텍스트 파싱 (source_type: 'text') - 텍스트 내용을 직접 입력하여 파싱
         3. 수동 입력 (source_type: 'manual') - 수동으로 주문 정보 입력
+        4. 이미지 업로드 (source_type: 'image') - 이미지를 업로드하여 OCR로 텍스트 추출
         """
         source_type = request.data.get('source_type', 'manual')
         
@@ -34,9 +37,11 @@ class OrderUploadView(APIView):
             return self._handle_text_order(request)
         elif source_type == 'manual':
             return self._handle_manual_order(request)
+        elif source_type == 'image':
+            return self._handle_image_order(request)
         else:
             return Response(
-                {'error': '지원하지 않는 source_type입니다. (voice, text, manual)'}, 
+                {'error': '지원하지 않는 source_type입니다. (voice, text, manual, image)'}, 
                 status=status.HTTP_400_BAD_REQUEST
             )
     
@@ -179,6 +184,79 @@ class OrderUploadView(APIView):
         else:
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
+    def _handle_image_order(self, request):
+        """이미지 업로드를 통한 주문 등록 (OCR 사용)"""
+        # 이미지 파일이 업로드되었는지 확인
+        if 'image' not in request.FILES:
+            return Response(
+                {'error': '이미지 파일이 제공되지 않았습니다'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        image_file = request.FILES['image']
+        business_id = request.data.get('business_id')
+        
+        try:
+            # 업로드된 이미지를 임시로 저장
+            file_ext = os.path.splitext(image_file.name)[1]
+            filename = f"ocr_uploads/{uuid.uuid4()}{file_ext}"
+            filepath = default_storage.save(filename, image_file)
+            
+            try:
+                # OCR을 사용하여 텍스트 추출
+                extracted_text = extract_text_from_image(image_file)
+                
+                # 추출된 텍스트에서 주문 생성
+                order_service = OrderCreationService(request.user)
+                
+                # 주문 파싱 및 생성
+                with transaction.atomic():
+                    order, order_items = order_service.create_order(
+                        text=extracted_text,
+                        business_id=business_id
+                    )
+                
+                # 응답 데이터 준비
+                response_data = {
+                    'message': '이미지에서 주문이 성공적으로 생성되었습니다',
+                    'order_id': order.id,
+                    'extracted_text': extracted_text,
+                    'order': {
+                        'id': order.id,
+                        'business_id': order.business.id,
+                        'business_name': order.business.business_name,
+                        'total_price': order.total_price,
+                        'status': order.status,
+                        'source_type': 'image',
+                        'transcribed_text': extracted_text,
+                        'created_at': order.order_datetime.isoformat(),
+                        'delivery_date': order.delivery_date.isoformat() if order.delivery_date else None,
+                        'items': [
+                            {
+                                'fish_type': item.fish_type.fish_name,
+                                'quantity': item.quantity,
+                                'unit': item.unit,
+                                'unit_price': str(item.unit_price)
+                            }
+                            for item in order.items.all()
+                        ]
+                    }
+                }
+                
+                return Response(response_data, status=status.HTTP_201_CREATED)
+                
+            except Exception as e:
+                # 오류가 발생한 경우 저장된 파일 정리
+                if 'filepath' in locals():
+                    default_storage.delete(filepath)
+                raise
+                
+        except Exception as e:
+            return Response(
+                {'error': f'이미지 처리 중 오류가 발생했습니다: {str(e)}'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
     def _parse_audio_file_with_transcription(self, audio_file):
         """
         transcription 모듈을 사용한 실제 음성 파일 파싱
@@ -272,6 +350,86 @@ class OrderUploadView(APIView):
                 'memo': '음성 파싱 실패',
                 'order_items': []
             }
+
+
+class OCRImageUploadView(APIView):
+    """
+    한국어 주문 정보가 포함된 이미지를 업로드하기 위한 API 엔드포인트.
+    OCR을 사용하여 텍스트를 추출하고 추출된 텍스트에서 주문을 생성합니다.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        # 이미지 파일이 업로드되었는지 확인
+        if 'image' not in request.FILES:
+            return Response(
+                {'error': '이미지 파일이 제공되지 않았습니다'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        image_file = request.FILES['image']
+        business_id = request.data.get('business_id')
+        
+        try:
+            # 업로드된 이미지를 임시로 저장
+            file_ext = os.path.splitext(image_file.name)[1]
+            filename = f"ocr_uploads/{uuid.uuid4()}{file_ext}"
+            filepath = default_storage.save(filename, image_file)
+            
+            try:
+                # OCR을 사용하여 텍스트 추출
+                extracted_text = extract_text_from_image(image_file)
+                
+                # 추출된 텍스트에서 주문 생성
+                order_service = OrderCreationService(request.user)
+                
+                # 주문 파싱 및 생성
+                with transaction.atomic():
+                    order, order_items = order_service.create_order(
+                        text=extracted_text,
+                        business_id=business_id
+                    )
+                
+                # 응답 데이터 준비
+                response_data = {
+                    'message': '이미지에서 주문이 성공적으로 생성되었습니다',
+                    'order_id': order.id,
+                    'extracted_text': extracted_text,
+                    'order': {
+                        'id': order.id,
+                        'business_id': order.business.id,
+                        'business_name': order.business.business_name,
+                        'total_price': order.total_price,
+                        'status': order.status,
+                        'source_type': 'image',
+                        'transcribed_text': extracted_text,
+                        'created_at': order.order_datetime.isoformat(),
+                        'delivery_date': order.delivery_date.isoformat() if order.delivery_date else None,
+                        'items': [
+                            {
+                                'fish_type': item.fish_type.fish_name,
+                                'quantity': item.quantity,
+                                'unit': item.unit,
+                                'unit_price': str(item.unit_price)
+                            }
+                            for item in order.items.all()
+                        ]
+                    }
+                }
+                
+                return Response(response_data, status=status.HTTP_201_CREATED)
+                
+            except Exception as e:
+                # 오류가 발생한 경우 저장된 파일 정리
+                if 'filepath' in locals():
+                    default_storage.delete(filepath)
+                raise
+                
+        except Exception as e:
+            return Response(
+                {'error': f'이미지 처리 중 오류가 발생했습니다: {str(e)}'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 class OrderListView(APIView):

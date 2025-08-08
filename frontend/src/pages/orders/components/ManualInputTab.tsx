@@ -8,6 +8,7 @@ import { Input } from "../../../components/ui/input"
 import { Label } from "../../../components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../../components/ui/select"
 import { Plus } from "lucide-react"
+import type { FishType } from "../../../types"
 
 // 주문 항목 타입 정의
 interface OrderItem {
@@ -25,7 +26,7 @@ interface ManualInputTabProps {
   currentItem: Partial<OrderItem>
   setCurrentItem: (item: Partial<OrderItem>) => void
   onAddItem: () => void
-  fishTypes: Array<{ id: number; name: string; default_price: number }>
+  fishTypes: FishType[]
 }
 
 const ManualInputTab: React.FC<ManualInputTabProps> = ({
@@ -40,8 +41,8 @@ const ManualInputTab: React.FC<ManualInputTabProps> = ({
       setCurrentItem({
         ...currentItem,
         fish_type_id: fishType.id,
-        fish_name: fishType.name,
-        unit_price: fishType.default_price
+        fish_name: fishType.fish_name,
+        unit_price: 0 // default_price가 없으므로 0으로 설정
       })
     }
   }
@@ -58,7 +59,7 @@ const ManualInputTab: React.FC<ManualInputTabProps> = ({
             <SelectContent>
               {fishTypes.map((fish) => (
                 <SelectItem key={fish.id} value={fish.id.toString()}>
-                  {fish.name}
+                  {fish.fish_name}
                 </SelectItem>
               ))}
             </SelectContent>

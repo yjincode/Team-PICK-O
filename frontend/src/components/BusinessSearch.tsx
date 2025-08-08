@@ -7,16 +7,8 @@ import { Input } from "./ui/input"
 import { Button } from "./ui/button"
 import { Card, CardContent } from "./ui/card"
 import { Search, User, Phone, Check } from "lucide-react"
-import { formatPhoneNumber } from "../utils/phoneFormatter"
-
-interface Business {
-  id: number;
-  business_name: string;
-  phone_number: string;
-  address?: string;
-  memo?: string;
-}
-
+import type { Business } from "../types"
+        
 interface BusinessSearchProps {
   onSelect: (business: Business) => void;
   onClose: () => void;
