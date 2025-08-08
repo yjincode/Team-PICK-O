@@ -5,7 +5,7 @@
 import React, { useState } from "react"
 import { format } from "date-fns"
 import { ko } from "date-fns/locale"
-import { CalendarDays, FileText, Home, Package, Search, Settings, ShoppingCart, Users } from "lucide-react"
+import { CalendarDays, FileText, Home, Package, Search, Settings, ShoppingCart, Users, Plus } from "lucide-react"
 
 import { Badge } from "../../components/ui/badge"
 import { Button } from "../../components/ui/button"
@@ -289,9 +289,16 @@ const OrderList: React.FC = () => {
       <header className="px-6 py-4">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">정산 처리</h1>
-            <p className="text-sm sm:text-base text-gray-600 mt-1">미수금 정산 및 결제 처리</p>
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">주문 목록</h1>
+            <p className="text-sm sm:text-base text-gray-600 mt-1">주문 내역 조회 및 관리</p>
           </div>
+          <Button 
+            onClick={() => setShowOrderForm(true)} 
+            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700"
+          >
+            <Plus className="h-4 w-4" />
+            새 주문 등록
+          </Button>
         </div>
       </header>
 
@@ -431,18 +438,6 @@ const OrderList: React.FC = () => {
         <OrderForm
           onClose={() => setShowOrderForm(false)}
           onSubmit={handleNewOrder}
-          parsedOrderData={{
-            order: {
-              business_id: 5678,
-              contact: "010-1234-5678",
-              delivery_date: "2025-08-05",
-              transcribed_text: "안녕하세요, 이번에 도미 10kg이랑 방어 5마리 주문할게요. 납품은 8월 5일 오전 중으로 부탁드립니다."
-            },
-            order_items: [
-              { fish_type_id: 201, quantity: 10, unit_price: 20000, unit: "kg" },
-              { fish_type_id: 202, quantity: 5, unit_price: 15000, unit: "마리" }
-            ]
-          }}
         />
       )}
     </div>

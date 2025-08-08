@@ -1,39 +1,40 @@
 import io
+import os
 import pytesseract
 from PIL import Image
 from django.conf import settings
 
 def extract_text_from_image(image_file):
     """
-    Extract Korean text from an image file using Tesseract OCR.
+    Tesseract OCR을 사용하여 이미지 파일에서 한국어 텍스트를 추출합니다.
     
     Args:
-        image_file: InMemoryUploadedFile or similar file-like object
+        image_file: InMemoryUploadedFile 또는 유사한 파일 객체
         
     Returns:
-        str: Extracted text from the image
+        str: 이미지에서 추출된 텍스트
     """
-    # Read the image file
+    # 이미지 파일 읽기
     image_bytes = image_file.read()
     image = Image.open(io.BytesIO(image_bytes))
     
-    # Get the directory containing this script
+    # 이 스크립트가 포함된 디렉토리 가져오기
     current_dir = os.path.dirname(os.path.abspath(__file__))
     
-    # Path to the local kor.traineddata file
+    # 로컬 kor.traineddata 파일 경로
     kor_data_path = os.path.join(current_dir, 'kor.traineddata')
     
-    # Configure Tesseract to use the local kor.traineddata file
+    # Tesseract가 로컬 kor.traineddata 파일을 사용하도록 설정
     tessdata_dir = os.path.dirname(kor_data_path)
     tessdata_dir_config = f'--tessdata-dir "{tessdata_dir}"'
     
-    # Set the TESSDATA_PREFIX environment variable to the directory containing kor.traineddata
+    # kor.traineddata가 포함된 디렉토리를 TESSDATA_PREFIX 환경 변수로 설정
     os.environ['TESSDATA_PREFIX'] = tessdata_dir
     
-    # Extract text with Korean language
+    # 한국어 언어로 텍스트 추출
     text = pytesseract.image_to_string(
         image,
-        lang='kor',  # Using local Korean language data
+        lang='kor',  # 로컬 한국어 언어 데이터 사용
         config=tessdata_dir_config
     )
     
