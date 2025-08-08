@@ -86,11 +86,10 @@ export interface ApiResponse<T> {
 }
 
 export interface PaginatedResponse<T> {
-  data: T[];
-  total: number;
-  page: number;
-  per_page: number;
-  total_pages: number;
+  count: number;
+  next?: string | null;
+  previous?: string | null;
+  results: T[];
 }
 
 // ==================== 폼 데이터 관련 타입 ====================

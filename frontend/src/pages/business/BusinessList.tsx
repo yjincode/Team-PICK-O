@@ -5,15 +5,24 @@
 "use client"
 
 import React, { useState, useEffect } from "react"
-import { Card, CardContent, CardHeader } from "../../components/ui/card"
+import { Card, CardContent } from "../../components/ui/card"
 import { Button } from "../../components/ui/button"
 import { Input } from "../../components/ui/input"
-import { Search, Plus, Phone, Mail, Eye, Edit, Loader2 } from "lucide-react"
+import { Search, Plus, Phone, Eye, Edit, Loader2 } from "lucide-react"
 import { businessApi } from "../../lib/api"
 import { useAuth } from "../../contexts/AuthContext"
 import toast, { Toaster } from 'react-hot-toast';
 import { useKakaoPostcode } from "../../hooks/useKakaoPostcode";
 import { KakaoAddress } from "../../types/kakao";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationPrevious,
+  PaginationNext,
+  PaginationEllipsis,
+} from "../../components/ui/pagination";
 
 
 // 거래처 데이터 타입 정의
@@ -32,37 +41,53 @@ const BusinessList: React.FC = () => {
   const [businesses, setBusinesses] = useState<Business[]>([]);
   const [isLoadingBusinesses, setIsLoadingBusinesses] = useState<boolean>(false);
   const [hasInitialized, setHasInitialized] = useState<boolean>(false);
+  const [page, setPage] = useState(1);
+  const [pageSize] = useState(10); // 고정값, 필요시 변경 가능
+  const [count, setCount] = useState(0); // 전체 개수
 
   const { userData, user, isAuthenticated, loading } = useAuth();
 
   // 거래처 목록을 가져오는 함수 (재사용 가능)
-  const fetchBusinesses = async () => {
+  const fetchBusinesses = async (pageNum = page) => {
     if (isLoadingBusinesses) {
       console.log('⏸️ 이미 로딩 중이므로 API 호출 생략');
       return;
     }
-
     try {
-      console.log('🔄 거래처 목록 API 호출 시작');
+      console.log('🔄 거래처 목록 API 호출 시작 - 페이지:', pageNum);
       setIsLoadingBusinesses(true);
-      
-      const res = await businessApi.getAll();
+      const res = await businessApi.getAll({ page: pageNum, page_size: pageSize });
       console.log("✅ API 응답:", res);
-      
-      // res.data가 배열인지 확인하고 설정
-      if (Array.isArray(res.data)) {
+      console.log("📊 응답 데이터 - count:", res.data?.count, "results 개수:", res.data?.results?.length);
+      // 다양한 응답 구조에 대응
+      let data: any = null;
+      // 1. res가 바로 {count, results} 구조일 때
+      if (res && Array.isArray((res as any).results)) {
+        data = res as unknown as { results: Business[]; count: number };
+      }
+      // 2. res.data가 {count, results} 구조일 때
+      else if (res.data && Array.isArray(res.data.results)) {
+        data = res.data as unknown as { results: Business[]; count: number };
+      }
+      if (data) {
+        setBusinesses(data.results);
+        setCount(data.count || 0);
+      } else if (Array.isArray(res.data)) {
         setBusinesses(res.data);
+        setCount(res.data.length);
       } else if (Array.isArray(res)) {
         setBusinesses(res);
+        setCount(res.length);
       } else {
         console.error("예상치 못한 응답 구조:", res);
         setBusinesses([]);
+        setCount(0);
       }
     } catch (error: any) {
       console.error("❌ 거래처 목록 불러오기 실패:", error);
       setBusinesses([]);
+      setCount(0);
     } finally {
-      console.log('🏁 API 호출 완료, 로딩 상태 해제');
       setIsLoadingBusinesses(false);
     }
   };
@@ -91,8 +116,16 @@ const BusinessList: React.FC = () => {
 
     console.log('🚀 거래처 목록 로드 (인증 상태와 관계없이)');
     setHasInitialized(true);
-    fetchBusinesses();
-  }, [loading, hasInitialized]); // 인증 상태 의존성 제거
+    fetchBusinesses(1); // 첫 페이지 로드
+  }, [loading, hasInitialized]);
+
+  // 페이지 변경 시 목록 새로고침
+  useEffect(() => {
+    if (hasInitialized) {
+      fetchBusinesses(page);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page]);
 
   const [searchTerm, setSearchTerm] = useState<string>("")
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false)
@@ -146,7 +179,7 @@ const BusinessList: React.FC = () => {
       setIsModalOpen(false);
       
       // 목록 새로고침 (백그라운드에서)
-      fetchBusinesses();
+      fetchBusinesses(page);
       
     } catch (error) {
       const err = error as any;
@@ -174,6 +207,8 @@ const BusinessList: React.FC = () => {
   }
   // 금액 포맷팅 함수
   const formatCurrency = (amount: number): string => `₩${amount.toLocaleString()}`
+
+  const totalPages = Math.max(1, Math.ceil(count / pageSize));
 
   return (
     <div className="flex-1 space-y-4 sm:space-y-6 p-4 sm:p-6 bg-light-blue-gray min-h-screen">
@@ -335,6 +370,63 @@ const BusinessList: React.FC = () => {
                 거래처가 없습니다.
               </div>
             )}
+            {/* Pagination UI */}
+            <Pagination className="mt-6">
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationPrevious
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    aria-disabled={page === 1}
+                    tabIndex={page === 1 ? -1 : 0}
+                    style={{ pointerEvents: page === 1 ? "none" : "auto" }}
+                  />
+                </PaginationItem>
+                {/* 페이지 번호들 (최대 5개만 노출, ... 처리) */}
+                {page > 3 && totalPages > 5 && (
+                  <PaginationItem>
+                    <PaginationLink onClick={() => setPage(1)}>1</PaginationLink>
+                  </PaginationItem>
+                )}
+                {page > 4 && totalPages > 5 && (
+                  <PaginationItem>
+                    <PaginationEllipsis />
+                  </PaginationItem>
+                )}
+                {Array.from({ length: totalPages }, (_, i) => i + 1)
+                  .filter((p) =>
+                    totalPages <= 5 ||
+                    (p >= page - 2 && p <= page + 2)
+                  )
+                  .map((p) => (
+                    <PaginationItem key={p}>
+                      <PaginationLink
+                        isActive={page === p}
+                        onClick={() => setPage(p)}
+                      >
+                        {p}
+                      </PaginationLink>
+                    </PaginationItem>
+                  ))}
+                {page < totalPages - 3 && totalPages > 5 && (
+                  <PaginationItem>
+                    <PaginationEllipsis />
+                  </PaginationItem>
+                )}
+                {page < totalPages - 2 && totalPages > 5 && (
+                  <PaginationItem>
+                    <PaginationLink onClick={() => setPage(totalPages)}>{totalPages}</PaginationLink>
+                  </PaginationItem>
+                )}
+                <PaginationItem>
+                  <PaginationNext
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                    aria-disabled={page === totalPages}
+                    tabIndex={page === totalPages ? -1 : 0}
+                    style={{ pointerEvents: page === totalPages ? "none" : "auto" }}
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
           </>
         )}
       </div>

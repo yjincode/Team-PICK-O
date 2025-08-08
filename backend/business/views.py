@@ -15,6 +15,8 @@ from rest_framework import status
 from .models import Business
 from .serializers import BusinessSerializer
 from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.pagination import PageNumberPagination
+from rest_framework.generics import ListAPIView
 
 @api_view(['POST'])
 @authentication_classes([])  # 인증 완전 비활성화
@@ -175,10 +177,13 @@ class BusinessCreateAPIView(APIView):
         serializer = BusinessSerializer(businesses, many=True)
         return Response(serializer.data)
 
-class BusinessListAPIView(APIView):
-    permission_classes = [AllowAny]  # 인증 제거 - 프론트엔드에서 Context로 관리
+class BusinessPagination(PageNumberPagination):
+    page_size = 10  # 한 페이지에 10개 아이템
+    page_size_query_param = 'page_size'  # 클라이언트에서 페이지 크기 조정 가능
+    max_page_size = 50
 
-    def get(self, request):
-        businesses = Business.objects.all()
-        serializer = BusinessSerializer(businesses, many=True)
-        return Response(serializer.data)
+class BusinessListAPIView(ListAPIView):
+    queryset = Business.objects.all().order_by('-id')
+    serializer_class = BusinessSerializer
+    pagination_class = BusinessPagination
+    permission_classes = [AllowAny]
