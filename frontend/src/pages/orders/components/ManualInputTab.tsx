@@ -36,16 +36,19 @@ const ManualInputTab: React.FC<ManualInputTabProps> = ({
   fishTypes
 }) => {
   const handleFishTypeChange = (fishTypeId: string) => {
-    const fishType = fishTypes.find(f => f.id === parseInt(fishTypeId))
+    const fishType = fishTypes?.find(f => f.id === parseInt(fishTypeId))
     if (fishType) {
       setCurrentItem({
         ...currentItem,
         fish_type_id: fishType.id,
-        fish_name: fishType.fish_name,
+        fish_name: fishType.name,  // fish_name에서 name으로 변경
         unit_price: 0 // default_price가 없으므로 0으로 설정
       })
     }
   }
+
+  // fishTypes가 배열인지 확인하고 안전하게 처리
+  const safeFishTypes = Array.isArray(fishTypes) ? fishTypes : []
 
   return (
     <div className="space-y-4">
@@ -57,9 +60,9 @@ const ManualInputTab: React.FC<ManualInputTabProps> = ({
               <SelectValue placeholder="어종을 선택하세요" />
             </SelectTrigger>
             <SelectContent>
-              {fishTypes.map((fish) => (
+              {safeFishTypes.map((fish) => (
                 <SelectItem key={fish.id} value={fish.id.toString()}>
-                  {fish.fish_name}
+                  {fish.name}  {/* fish_name에서 name으로 변경 */}
                 </SelectItem>
               ))}
             </SelectContent>

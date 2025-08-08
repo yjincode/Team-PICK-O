@@ -8,9 +8,14 @@ class OrderItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = OrderItem
         fields = [
-            'fish_type_id', 'item_name_snapshot', 
-            'quantity', 'unit_price', 'unit_price_snapshot', 'unit', 'remarks'
+            'fish_type_id', 'quantity', 'unit_price', 'unit', 'remarks'
         ]
+        extra_kwargs = {
+            'item_name_snapshot': {'required': False},
+            'unit_price_snapshot': {'required': False},
+            'remarks': {'required': False},
+            'unit': {'required': False}
+        }
 
 
 class OrderSerializer(serializers.ModelSerializer):
@@ -23,7 +28,6 @@ class OrderSerializer(serializers.ModelSerializer):
             'id',
             'business_id',
             'total_price',
-            'order_datetime',
             'delivery_datetime',
             'ship_out_datetime',
             'source_type',
@@ -36,6 +40,16 @@ class OrderSerializer(serializers.ModelSerializer):
             'last_updated_at',
             'order_items'
         ]
+        extra_kwargs = {
+            'delivery_datetime': {'required': False},
+            'ship_out_datetime': {'required': False},
+            'raw_input_path': {'required': False},
+            'transcribed_text': {'required': False},
+            'memo': {'required': False},
+            'cancel_reason': {'required': False},
+            'is_urgent': {'required': False},
+            'last_updated_at': {'required': False}
+        }
 
     def create(self, validated_data):
         order_items_data = validated_data.pop('order_items')

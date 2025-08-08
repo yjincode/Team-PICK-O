@@ -113,37 +113,37 @@ export const businessApi = {
 export const fishTypeApi = {
   // 모든 어종 조회
   getAll: async (): Promise<ApiResponse<FishType[]>> => {
-    const response = await api.get('/fish-types')
+    const response = await api.get('/fish-registry/fish-types/')
     return response.data
   },
 
   // ID로 어종 조회
   getById: async (id: number): Promise<ApiResponse<FishType>> => {
-    const response = await api.get(`/fish-types/${id}`)
+    const response = await api.get(`/fish-registry/fish-types/${id}/`)
     return response.data
   },
 
   // 새 어종 생성
   create: async (fishType: Omit<FishType, 'id'>): Promise<ApiResponse<FishType>> => {
-    const response = await api.post('/fish-types', fishType)
+    const response = await api.post('/fish-registry/fish-types/', fishType)
     return response.data
   },
 
   // 어종 정보 수정
   update: async (id: number, fishType: Partial<FishType>): Promise<ApiResponse<FishType>> => {
-    const response = await api.put(`/fish-types/${id}`, fishType)
+    const response = await api.put(`/fish-registry/fish-types/${id}/`, fishType)
     return response.data
   },
 
   // 어종 삭제
   delete: async (id: number): Promise<ApiResponse<void>> => {
-    const response = await api.delete(`/fish-types/${id}`)
+    const response = await api.delete(`/fish-registry/fish-types/${id}/`)
     return response.data
   },
 
   // 어종 검색 (벡터 검색)
   search: async (query: string): Promise<ApiResponse<FishType[]>> => {
-    const response = await api.get('/fish-types/search', { params: { q: query } })
+    const response = await api.get('/fish-registry/fish-types/', { params: { search: query } })
     return response.data
   },
 }
