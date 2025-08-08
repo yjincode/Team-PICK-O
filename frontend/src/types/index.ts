@@ -16,9 +16,12 @@ export interface Business {
 // 2. 어종 테이블
 export interface FishType {
   id: number;
-  fish_name: string;
-  aliases?: string[];  // 동의어 배열
-  embedding?: number[]; // 벡터 검색용 (선택사항)
+  name: string;  // fish_name에서 name으로 변경
+  aliases?: string;  // 배열에서 문자열로 변경 (백엔드 모델과 일치)
+  scientific_name?: string;
+  unit?: string;
+  notes?: string;
+  created_at?: string;
 }
 
 // 3. 재고 테이블

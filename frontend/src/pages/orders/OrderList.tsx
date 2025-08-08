@@ -2,10 +2,20 @@
  * 주문 목록 페이지
  * 주문 내역을 조회하고 관리하는 페이지입니다
  */
-import React, { useState } from "react"
+import React, { useState, useEffect } from "react"
 import { format } from "date-fns"
 import { ko } from "date-fns/locale"
-import { CalendarDays, FileText, Home, Package, Search, Settings, ShoppingCart, Users, Plus } from "lucide-react"
+import axios from "axios"
+import { 
+  CalendarDays, 
+  Search, 
+  Plus, 
+  Eye, 
+  CreditCard,
+  Filter,
+  ChevronLeft,
+  ChevronRight
+} from "lucide-react"
 
 import { Badge } from "../../components/ui/badge"
 import { Button } from "../../components/ui/button"
@@ -15,28 +25,49 @@ import { Label } from "../../components/ui/label"
 import { Popover, PopoverContent, PopoverTrigger } from "../../components/ui/popover"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../components/ui/table"
-import {
-  Pagination,
-  PaginationContent,
-  PaginationEllipsis,
-  PaginationItem,
-  PaginationLink,
-  PaginationNext,
-  PaginationPrevious,
-} from "../../components/ui/pagination"
+import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card"
 import OrderForm from "./OrderForm"
 
-// 주문 데이터 타입 정의
+// API 설정
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1'
+
+// axios 인스턴스 생성
+const api = axios.create({
+  baseURL: API_BASE_URL,
+  timeout: 10000,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+})
+
+// Request interceptor (Firebase 토큰 사용)
+api.interceptors.request.use(
+  (config) => {
+    const firebaseToken = localStorage.getItem('firebase_token')
+    if (firebaseToken) {
+      config.headers.Authorization = `Bearer ${firebaseToken}`
+    }
+    return config
+  },
+  (error) => {
+    console.error('API 요청 오류:', error)
+    return Promise.reject(error)
+  }
+)
+
+// 주문 데이터 타입 정의 (DB 구조 반영)
 interface Order {
   id: number;
   business_id: number;
   total_price: number;
   order_datetime: string;
+  delivery_datetime?: string;
   memo?: string;
-  source_type: 'voice' | 'text' | 'manual';
+  source_type: 'manual' | 'voice' | 'text';
   transcribed_text?: string;
-  delivery_date?: string;
-  status: 'success' | 'failed' | 'pending';
+  order_status: 'placed' | 'ready' | 'delivered' | 'cancelled';
+  is_urgent: boolean;
+  last_updated_at: string;
   business?: {
     id: number;
     business_name: string;
@@ -45,24 +76,35 @@ interface Order {
   items?: Array<{
     id: number;
     fish_type_id: number;
+    item_name_snapshot: string;
     quantity: number;
     unit_price?: number;
     unit?: string;
+    remarks?: string;
   }>;
+  payment?: {
+    id: number;
+    payment_status: 'pending' | 'paid' | 'refunded';
+    amount: number;
+    method: 'cash' | 'bank_transfer' | 'card';
+    paid_at?: string;
+  };
 }
 
-// 목업 데이터를 테이블 형식에 맞게 변환
+// 목업 데이터 (DB 구조 반영)
 const mockOrders: Order[] = [
   {
     id: 1,
     business_id: 1,
     total_price: 2400000,
     order_datetime: "2024-01-15T10:30:00",
+    delivery_datetime: "2024-01-17T09:00:00",
     memo: "급한 주문입니다",
     source_type: "voice",
     transcribed_text: "고등어 50박스, 갈치 30박스 주문해주세요",
-    delivery_date: "2024-01-17",
-    status: "pending",
+    order_status: "ready",
+    is_urgent: true,
+    last_updated_at: "2024-01-15T10:30:00",
     business: {
       id: 1,
       business_name: "해양수산 마트",
@@ -72,6 +114,7 @@ const mockOrders: Order[] = [
       {
         id: 1,
         fish_type_id: 1,
+        item_name_snapshot: "고등어",
         quantity: 50,
         unit_price: 48000,
         unit: "박스",
@@ -79,22 +122,32 @@ const mockOrders: Order[] = [
       {
         id: 2,
         fish_type_id: 2,
+        item_name_snapshot: "갈치",
         quantity: 30,
         unit_price: 65000,
         unit: "박스",
       },
     ],
+    payment: {
+      id: 1,
+      payment_status: "paid",
+      amount: 2400000,
+      method: "bank_transfer",
+      paid_at: "2024-01-15T11:00:00",
+    },
   },
   {
     id: 2,
     business_id: 2,
     total_price: 1200000,
     order_datetime: "2024-01-15T14:15:00",
+    delivery_datetime: "2024-01-16T09:00:00",
     memo: "정기 주문",
     source_type: "text",
     transcribed_text: "오징어 25박스 주문",
-    delivery_date: "2024-01-16",
-    status: "success",
+    order_status: "delivered",
+    is_urgent: false,
+    last_updated_at: "2024-01-16T09:00:00",
     business: {
       id: 2,
       business_name: "바다횟집",
@@ -104,22 +157,32 @@ const mockOrders: Order[] = [
       {
         id: 3,
         fish_type_id: 3,
+        item_name_snapshot: "오징어",
         quantity: 25,
         unit_price: 48000,
         unit: "박스",
       },
     ],
+    payment: {
+      id: 2,
+      payment_status: "paid",
+      amount: 1200000,
+      method: "card",
+      paid_at: "2024-01-15T14:30:00",
+    },
   },
   {
     id: 3,
     business_id: 3,
     total_price: 1800000,
     order_datetime: "2024-01-14T09:00:00",
+    delivery_datetime: "2024-01-18T09:00:00",
     memo: "신규 거래처",
     source_type: "voice",
     transcribed_text: "명태 40박스, 고등어 20박스 주문",
-    delivery_date: "2024-01-18",
-    status: "pending",
+    order_status: "placed",
+    is_urgent: false,
+    last_updated_at: "2024-01-14T09:00:00",
     business: {
       id: 3,
       business_name: "신선마켓",
@@ -129,6 +192,7 @@ const mockOrders: Order[] = [
       {
         id: 4,
         fish_type_id: 4,
+        item_name_snapshot: "명태",
         quantity: 40,
         unit_price: 45000,
         unit: "박스",
@@ -136,22 +200,31 @@ const mockOrders: Order[] = [
       {
         id: 5,
         fish_type_id: 1,
+        item_name_snapshot: "고등어",
         quantity: 20,
         unit_price: 48000,
         unit: "박스",
       },
     ],
+    payment: {
+      id: 3,
+      payment_status: "pending",
+      amount: 1800000,
+      method: "cash",
+    },
   },
   {
     id: 4,
     business_id: 4,
     total_price: 1500000,
     order_datetime: "2024-01-14T11:00:00",
+    delivery_datetime: "2024-01-16T09:00:00",
     memo: "신선도 중요",
     source_type: "manual",
     transcribed_text: "연어 3kg, 새우 2kg 주문",
-    delivery_date: "2024-01-16",
-    status: "success",
+    order_status: "delivered",
+    is_urgent: false,
+    last_updated_at: "2024-01-16T09:00:00",
     business: {
       id: 4,
       business_name: "오션푸드",
@@ -161,6 +234,7 @@ const mockOrders: Order[] = [
       {
         id: 6,
         fish_type_id: 5,
+        item_name_snapshot: "연어",
         quantity: 3,
         unit_price: 500000,
         unit: "kg",
@@ -168,22 +242,32 @@ const mockOrders: Order[] = [
       {
         id: 7,
         fish_type_id: 6,
+        item_name_snapshot: "새우",
         quantity: 2,
         unit_price: 75000,
         unit: "kg",
       },
     ],
+    payment: {
+      id: 4,
+      payment_status: "paid",
+      amount: 1500000,
+      method: "bank_transfer",
+      paid_at: "2024-01-14T12:00:00",
+    },
   },
   {
     id: 5,
     business_id: 5,
     total_price: 800000,
     order_datetime: "2024-01-13T16:00:00",
+    delivery_datetime: "2024-01-15T09:00:00",
     memo: "소량 주문",
     source_type: "voice",
     transcribed_text: "문어 1kg, 오징어 3kg 주문",
-    delivery_date: "2024-01-15",
-    status: "success",
+    order_status: "cancelled",
+    is_urgent: false,
+    last_updated_at: "2024-01-14T10:00:00",
     business: {
       id: 5,
       business_name: "프레시마트",
@@ -193,6 +277,7 @@ const mockOrders: Order[] = [
       {
         id: 8,
         fish_type_id: 7,
+        item_name_snapshot: "문어",
         quantity: 1,
         unit_price: 300000,
         unit: "kg",
@@ -200,56 +285,155 @@ const mockOrders: Order[] = [
       {
         id: 9,
         fish_type_id: 8,
+        item_name_snapshot: "오징어",
         quantity: 3,
         unit_price: 166667,
         unit: "kg",
       },
     ],
+    payment: {
+      id: 5,
+      payment_status: "refunded",
+      amount: 800000,
+      method: "card",
+      paid_at: "2024-01-13T16:30:00",
+    },
   },
 ]
 
-// 상태별 글씨색 스타일
-const getStatusText = (status: string) => {
-  switch (status) {
-    case "success":
-      return <span className="text-green-600 font-medium">완료</span>
-    case "pending":
-      return <span className="text-yellow-600 font-medium">출고 준비</span>
-    case "failed":
-      return <span className="text-red-600 font-medium">실패</span>
-    default:
-      return <span className="text-gray-600 font-medium">등록</span>
+// 상태별 배지 컴포넌트
+const OrderStatusBadge: React.FC<{ status: string }> = ({ status }) => {
+  const getStatusConfig = (status: string) => {
+    switch (status) {
+      case "placed":
+        return { text: "등록", color: "bg-gray-100 text-gray-800" }
+      case "ready":
+        return { text: "출고 준비", color: "bg-yellow-100 text-yellow-800" }
+      case "delivered":
+        return { text: "완료", color: "bg-green-100 text-green-800" }
+      case "cancelled":
+        return { text: "취소", color: "bg-red-100 text-red-800" }
+      default:
+        return { text: "등록", color: "bg-gray-100 text-gray-800" }
+    }
   }
+
+  const config = getStatusConfig(status)
+  return (
+    <Badge className={`${config.color} font-medium`}>
+      {config.text}
+    </Badge>
+  )
 }
 
-const getPaymentStatusText = (status: string) => {
-  switch (status) {
-    case "success":
-      return <span className="text-blue-600 font-medium">결제 완료</span>
-    case "pending":
-      return <span className="text-red-600 font-medium">미결제</span>
-    default:
-      return <span className="text-red-600 font-medium">미결제</span>
+const PaymentStatusBadge: React.FC<{ status: string }> = ({ status }) => {
+  const getStatusConfig = (status: string) => {
+    switch (status) {
+      case "paid":
+        return { text: "결제 완료", color: "bg-blue-100 text-blue-800" }
+      case "pending":
+        return { text: "미결제", color: "bg-red-100 text-red-800" }
+      case "refunded":
+        return { text: "환불됨", color: "bg-orange-100 text-orange-800" }
+      default:
+        return { text: "미결제", color: "bg-red-100 text-red-800" }
+    }
   }
+
+  const config = getStatusConfig(status)
+  return (
+    <Badge className={`${config.color} font-medium`}>
+      {config.text}
+    </Badge>
+  )
 }
 
 // 주문 아이템을 문자열로 변환
-const getItemsSummary = (items?: Array<{ fish_type_id: number; quantity: number; unit?: string }>) => {
+const getItemsSummary = (items?: Array<{ item_name_snapshot: string; quantity: number; unit?: string }>) => {
   if (!items || items.length === 0) return "품목 없음"
   
   return items.map(item => {
-    const fishNames = ["고등어", "갈치", "오징어", "명태", "연어", "새우", "문어", "방어"]
-    const fishName = fishNames[item.fish_type_id - 1] || "기타"
-    return `${fishName} ${item.quantity}${item.unit || "개"}`
+    return `${item.item_name_snapshot} ${item.quantity}${item.unit || "개"}`
   }).join(", ")
+}
+
+// 금액 포맷팅
+const formatPrice = (price: number) => {
+  return new Intl.NumberFormat('ko-KR').format(price)
 }
 
 const OrderList: React.FC = () => {
   const [showOrderForm, setShowOrderForm] = useState(false)
-  const [orders, setOrders] = useState(mockOrders)
-  const [date, setDate] = React.useState<Date>()
-  const [statusFilter, setStatusFilter] = React.useState<string>("all")
-  const [searchQuery, setSearchQuery] = React.useState<string>("")
+  const [orders, setOrders] = useState<Order[]>([])
+  const [filteredOrders, setFilteredOrders] = useState<Order[]>([])
+  const [date, setDate] = useState<Date>()
+  const [statusFilter, setStatusFilter] = useState<string>("all")
+  const [paymentStatusFilter, setPaymentStatusFilter] = useState<string>("all")
+  const [searchQuery, setSearchQuery] = useState<string>("")
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage] = useState(10)
+  const [loading, setLoading] = useState(true)
+
+  // 주문 목록 가져오기 (직접 API 호출)
+  useEffect(() => {
+    const fetchOrders = async () => {
+      try {
+        setLoading(true)
+        const response = await api.get('/order/')
+        console.log('주문 목록 응답:', response.data)
+        setOrders(response.data || [])
+      } catch (error) {
+        console.error('주문 목록 가져오기 실패:', error)
+        setOrders([])
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchOrders()
+  }, [])
+
+  // 필터링 및 검색 로직
+  useEffect(() => {
+    let filtered = orders
+
+    // 상태별 필터
+    if (statusFilter !== "all") {
+      filtered = filtered.filter(order => order.order_status === statusFilter)
+    }
+
+    // 결제 상태별 필터
+    if (paymentStatusFilter !== "all") {
+      filtered = filtered.filter(order => order.payment?.payment_status === paymentStatusFilter)
+    }
+
+    // 날짜별 필터
+    if (date) {
+      const selectedDate = format(date, "yyyy-MM-dd")
+      filtered = filtered.filter(order => 
+        format(new Date(order.order_datetime), "yyyy-MM-dd") === selectedDate
+      )
+    }
+
+    // 검색 필터
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase()
+      filtered = filtered.filter(order => 
+        order.business?.business_name.toLowerCase().includes(query) ||
+        order.id.toString().includes(query) ||
+        order.memo?.toLowerCase().includes(query)
+      )
+    }
+
+    setFilteredOrders(filtered)
+    setCurrentPage(1) // 필터 변경 시 첫 페이지로 이동
+  }, [orders, statusFilter, paymentStatusFilter, date, searchQuery])
+
+  // 페이지네이션 계산
+  const totalPages = Math.ceil(filteredOrders.length / itemsPerPage)
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const endIndex = startIndex + itemsPerPage
+  const currentOrders = filteredOrders.slice(startIndex, endIndex)
 
   // 새 주문 처리
   const handleNewOrder = (orderData: any) => {
@@ -260,11 +444,13 @@ const OrderList: React.FC = () => {
       business_id: orderData.business_id,
       total_price: orderData.total_price || 0,
       order_datetime: orderData.order_datetime || new Date().toISOString(),
+      delivery_datetime: orderData.delivery_datetime || '',
       memo: orderData.memo || '',
       source_type: orderData.source_type || 'manual',
       transcribed_text: orderData.transcribed_text || '',
-      delivery_date: orderData.delivery_date || '',
-      status: orderData.status || 'pending',
+      order_status: 'placed',
+      is_urgent: orderData.is_urgent || false,
+      last_updated_at: new Date().toISOString(),
       business: {
         id: orderData.business_id,
         business_name: orderData.business_name || '거래처명 없음',
@@ -273,20 +459,50 @@ const OrderList: React.FC = () => {
       items: orderData.order_items?.map((item: any, index: number) => ({
         id: index + 1,
         fish_type_id: item.fish_type_id,
+        item_name_snapshot: item.item_name_snapshot || '품목명 없음',
         quantity: item.quantity,
         unit_price: item.unit_price,
         unit: item.unit
-      })) || []
+      })) || [],
+      payment: {
+        id: Math.max(...orders.map(o => o.payment?.id || 0)) + 1,
+        payment_status: 'pending',
+        amount: orderData.total_price || 0,
+        method: 'cash',
+      }
     }
     
     setOrders(prev => [newOrder, ...prev])
     setShowOrderForm(false)
   }
 
+  // 결제 처리
+  const handlePayment = (orderId: number) => {
+    setOrders(prev => prev.map(order => {
+      if (order.id === orderId && order.payment) {
+        return {
+          ...order,
+          payment: {
+            ...order.payment,
+            payment_status: 'paid' as const,
+            paid_at: new Date().toISOString()
+          }
+        }
+      }
+      return order
+    }))
+  }
+
+  // 상세보기 처리
+  const handleViewDetail = (orderId: number) => {
+    console.log('상세보기:', orderId)
+    // TODO: 상세보기 페이지로 이동 또는 모달 열기
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* 헤더 */}
-      <header className="px-6 py-4">
+      <header className="px-6 py-4 bg-white border-b border-gray-200">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">주문 목록</h1>
@@ -304,33 +520,60 @@ const OrderList: React.FC = () => {
 
       <div className="p-6">
         {/* 필터 바 */}
-        <div className="flex flex-col gap-4 rounded-lg border border-gray-200 bg-white p-4 shadow-sm mb-6">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div className="flex flex-col gap-4 md:flex-row md:items-center">
-              <div className="flex items-center gap-2">
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Filter className="h-5 w-5" />
+              필터 및 검색
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {/* 주문 상태 필터 */}
+              <div className="space-y-2">
                 <Label htmlFor="status-filter" className="text-sm font-medium text-gray-700">
                   주문 상태
                 </Label>
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="w-[140px]">
+                  <SelectTrigger>
                     <SelectValue placeholder="전체" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">전체</SelectItem>
-                    <SelectItem value="등록">등록</SelectItem>
-                    <SelectItem value="결제 완료">결제 완료</SelectItem>
-                    <SelectItem value="출고 준비">출고 준비</SelectItem>
-                    <SelectItem value="완료">완료</SelectItem>
+                    <SelectItem value="placed">등록</SelectItem>
+                    <SelectItem value="ready">출고 준비</SelectItem>
+                    <SelectItem value="delivered">완료</SelectItem>
+                    <SelectItem value="cancelled">취소</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-              <div className="flex items-center gap-2">
+
+              {/* 결제 상태 필터 */}
+              <div className="space-y-2">
+                <Label htmlFor="payment-status-filter" className="text-sm font-medium text-gray-700">
+                  결제 상태
+                </Label>
+                <Select value={paymentStatusFilter} onValueChange={setPaymentStatusFilter}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="전체" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">전체</SelectItem>
+                    <SelectItem value="pending">미결제</SelectItem>
+                    <SelectItem value="paid">결제 완료</SelectItem>
+                    <SelectItem value="refunded">환불됨</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* 날짜 필터 */}
+              <div className="space-y-2">
                 <Label className="text-sm font-medium text-gray-700">주문일자</Label>
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button
                       variant="outline"
-                      className="w-[140px] justify-start text-left font-normal bg-transparent"
+                      className="w-full justify-start text-left font-normal"
                     >
                       <CalendarDays className="mr-2 h-4 w-4" />
                       {date ? format(date, "yyyy-MM-dd", { locale: ko }) : "날짜 선택"}
@@ -341,96 +584,173 @@ const OrderList: React.FC = () => {
                   </PopoverContent>
                 </Popover>
               </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                <Input
-                  placeholder="거래처명 또는 주문번호 검색"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 w-[280px]"
-                />
+
+              {/* 검색 */}
+              <div className="space-y-2">
+                <Label htmlFor="search" className="text-sm font-medium text-gray-700">
+                  검색
+                </Label>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                  <Input
+                    id="search"
+                    placeholder="거래처명, 주문번호, 메모"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
               </div>
             </div>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
 
         {/* 주문 테이블 */}
-        <div className="rounded-lg border border-gray-200 bg-white shadow-sm">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-gray-50">
-                <TableHead className="font-semibold text-gray-900">번호</TableHead>
-                <TableHead className="font-semibold text-gray-900">거래처명</TableHead>
-                <TableHead className="font-semibold text-gray-900">주문일자</TableHead>
-                <TableHead className="font-semibold text-gray-900">납기일</TableHead>
-                <TableHead className="font-semibold text-gray-900">품목 요약</TableHead>
-                <TableHead className="font-semibold text-gray-900">결제 상태</TableHead>
-                <TableHead className="font-semibold text-gray-900">주문 상태</TableHead>
-                <TableHead className="font-semibold text-gray-900 text-center">상세</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {orders.map((order, index) => (
-                <TableRow key={order.id} className="hover:bg-gray-50">
-                  <TableCell className="font-medium text-gray-900">
-                    {index + 1}
-                  </TableCell>
-                  <TableCell className="font-medium">{order.business?.business_name}</TableCell>
-                  <TableCell className="text-gray-600">
-                    {format(new Date(order.order_datetime), "yyyy-MM-dd")}
-                  </TableCell>
-                  <TableCell className="text-gray-600">
-                    {order.delivery_date ? format(new Date(order.delivery_date), "yyyy-MM-dd") : "-"}
-                  </TableCell>
-                  <TableCell className="text-gray-600 max-w-[200px] truncate">
-                    {getItemsSummary(order.items)}
-                  </TableCell>
-                  <TableCell>{getPaymentStatusText(order.status)}</TableCell>
-                  <TableCell>{getStatusText(order.status)}</TableCell>
-                  <TableCell className="text-center">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="border-blue-600 text-blue-600 hover:bg-blue-50 bg-transparent"
-                    >
-                      상세보기
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center justify-between">
+              <span>주문 목록 ({filteredOrders.length}건)</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-gray-50">
+                    <TableHead className="font-semibold text-gray-900">번호</TableHead>
+                    <TableHead className="font-semibold text-gray-900">거래처명</TableHead>
+                    <TableHead className="font-semibold text-gray-900">주문일자</TableHead>
+                    <TableHead className="font-semibold text-gray-900">납기일</TableHead>
+                    <TableHead className="font-semibold text-gray-900">품목 요약</TableHead>
+                    <TableHead className="font-semibold text-gray-900">총금액</TableHead>
+                    <TableHead className="font-semibold text-gray-900">결제 상태</TableHead>
+                    <TableHead className="font-semibold text-gray-900">주문 상태</TableHead>
+                    <TableHead className="font-semibold text-gray-900 text-center">작업</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {loading ? (
+                    <TableRow>
+                      <TableCell colSpan={9} className="text-center py-8">
+                        <div className="flex items-center justify-center gap-2">
+                          <svg className="animate-spin h-6 w-6 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          <span>주문 목록을 불러오는 중입니다...</span>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ) : filteredOrders.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={9} className="text-center py-8 text-gray-500">
+                        조회된 주문이 없습니다.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    currentOrders.map((order, index) => (
+                      <TableRow key={order.id} className="hover:bg-gray-50 transition-colors">
+                        <TableCell className="font-medium text-gray-900">
+                          {startIndex + index + 1}
+                        </TableCell>
+                        <TableCell className="font-medium">
+                          <div>
+                            <div className="font-semibold">{order.business?.business_name}</div>
+                            <div className="text-sm text-gray-500">{order.business?.phone_number}</div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-gray-600">
+                          {format(new Date(order.order_datetime), "yyyy-MM-dd")}
+                        </TableCell>
+                        <TableCell className="text-gray-600">
+                          {order.delivery_datetime ? format(new Date(order.delivery_datetime), "yyyy-MM-dd") : "-"}
+                        </TableCell>
+                        <TableCell className="text-gray-600 max-w-[200px] truncate">
+                          {getItemsSummary(order.items)}
+                        </TableCell>
+                        <TableCell className="font-semibold text-gray-900">
+                          {formatPrice(order.total_price)}원
+                        </TableCell>
+                        <TableCell>
+                          <PaymentStatusBadge status={order.payment?.payment_status || 'pending'} />
+                        </TableCell>
+                        <TableCell>
+                          <OrderStatusBadge status={order.order_status} />
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <div className="flex items-center justify-center gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleViewDetail(order.id)}
+                              className="border-blue-600 text-blue-600 hover:bg-blue-50"
+                            >
+                              <Eye className="h-4 w-4 mr-1" />
+                              상세보기
+                            </Button>
+                            {(order.payment?.payment_status === 'pending' || order.order_status === 'placed') && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handlePayment(order.id)}
+                                className="border-green-600 text-green-600 hover:bg-green-50"
+                              >
+                                <CreditCard className="h-4 w-4 mr-1" />
+                                결제
+                              </Button>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
 
-        {/* 페이지네이션 */}
-        <div className="flex justify-center mt-6">
-          <Pagination>
-            <PaginationContent>
-              <PaginationItem>
-                <PaginationPrevious href="#" />
-              </PaginationItem>
-              <PaginationItem>
-                <PaginationLink href="#" isActive>
-                  1
-                </PaginationLink>
-              </PaginationItem>
-              <PaginationItem>
-                <PaginationLink href="#">2</PaginationLink>
-              </PaginationItem>
-              <PaginationItem>
-                <PaginationLink href="#">3</PaginationLink>
-              </PaginationItem>
-              <PaginationItem>
-                <PaginationEllipsis />
-              </PaginationItem>
-              <PaginationItem>
-                <PaginationNext href="#" />
-              </PaginationItem>
-            </PaginationContent>
-          </Pagination>
-        </div>
+            {/* 페이지네이션 */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between mt-6">
+                <div className="text-sm text-gray-700">
+                  {startIndex + 1} - {Math.min(endIndex, filteredOrders.length)} / {filteredOrders.length}건
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                    disabled={currentPage === 1}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                    이전
+                  </Button>
+                  
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                    <Button
+                      key={page}
+                      variant={currentPage === page ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setCurrentPage(page)}
+                      className="w-8 h-8 p-0"
+                    >
+                      {page}
+                    </Button>
+                  ))}
+                  
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                    disabled={currentPage === totalPages}
+                  >
+                    다음
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
       {/* 주문 폼 모달 */}

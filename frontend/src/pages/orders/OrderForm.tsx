@@ -4,6 +4,7 @@
  */
 import React, { useState, useEffect } from "react"
 import type { ChangeEvent, FormEvent } from "react"
+import axios from "axios"
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card"
 import { Button } from "../../components/ui/button"
 import { Input } from "../../components/ui/input"
@@ -31,11 +32,35 @@ import ManualInputTab from "./components/ManualInputTab"
 import ImageUploadTab from "./components/ImageUploadTab"
 import OrderItemList from "./components/OrderItemList"
 
-// API 라이브러리 import
-import { businessApi, orderApi, fishTypeApi } from "../../lib/api"
-
 // 타입 정의 - types/index.ts에서 가져온 타입 사용
 import type { Business, FishType, OrderItem as ApiOrderItem } from "../../types"
+
+// API 설정
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1'
+
+// axios 인스턴스 생성
+const api = axios.create({
+  baseURL: API_BASE_URL,
+  timeout: 10000,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+})
+
+// Request interceptor (Firebase 토큰 사용)
+api.interceptors.request.use(
+  (config) => {
+    const firebaseToken = localStorage.getItem('firebase_token')
+    if (firebaseToken) {
+      config.headers.Authorization = `Bearer ${firebaseToken}`
+    }
+    return config
+  },
+  (error) => {
+    console.error('API 요청 오류:', error)
+    return Promise.reject(error)
+  }
+)
 
 interface OrderFormProps {
   onClose: () => void;
@@ -96,13 +121,27 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
   const [selectedBusinessId, setSelectedBusinessId] = useState<number | null>(null)
   const [isLoadingBusinesses, setIsLoadingBusinesses] = useState<boolean>(false)
 
-  // 어종 목록 가져오기 (API 사용)
+  // 어종 목록 가져오기 (직접 API 호출)
   useEffect(() => {
     const fetchFishTypes = async () => {
       try {
         setIsLoadingFishTypes(true)
-        const response = await fishTypeApi.getAll()
-        setFishTypes(response.data || [])
+        const response = await api.get('/fish-registry/fish-types/')
+        console.log('어종 목록 응답:', response.data)
+        
+        // API 응답 구조에 따라 데이터 추출
+        let fishTypeData: FishType[] = []
+        
+        if (response.data && Array.isArray(response.data)) {
+          fishTypeData = response.data
+        } else if (response.data && response.data.results && Array.isArray(response.data.results)) {
+          fishTypeData = response.data.results
+        } else if (response.data && typeof response.data === 'object') {
+          // 단일 객체인 경우 배열로 변환
+          fishTypeData = [response.data]
+        }
+        
+        setFishTypes(fishTypeData)
       } catch (error) {
         console.error('어종 목록 가져오기 실패:', error)
         setFishTypes([])
@@ -114,26 +153,21 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
     fetchFishTypes()
   }, [])
 
-  // 거래처 목록 가져오기 (API 사용)
+  // 거래처 목록 가져오기 (직접 API 호출)
   useEffect(() => {
     const fetchBusinesses = async () => {
       try {
         setIsLoadingBusinesses(true)
-        const response = await businessApi.getAll()
+        const response = await api.get('/business/customers/')
+        console.log('거래처 목록 응답:', response.data)
         
         // API 응답 구조에 따라 데이터 추출
         let businessData: Business[] = []
         
-        // 타입 가드를 사용하여 안전하게 처리
-        if (response && typeof response === 'object' && 'data' in response) {
-          const responseData = response.data as any
-          if (Array.isArray(responseData)) {
-            businessData = responseData
-          } else if (responseData && typeof responseData === 'object' && 'results' in responseData && Array.isArray(responseData.results)) {
-            businessData = responseData.results
-          }
-        } else if (Array.isArray(response)) {
-          businessData = response
+        if (response.data && Array.isArray(response.data)) {
+          businessData = response.data
+        } else if (response.data && response.data.results && Array.isArray(response.data.results)) {
+          businessData = response.data.results
         }
         
         setBusinesses(businessData)
@@ -277,7 +311,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
           items: validatedData.items.map((item: any) => ({
             id: Date.now().toString(),
             fish_type_id: item.fish_type_id,
-            fish_name: fishTypes.find((f: FishType) => f.id === item.fish_type_id)?.fish_name || '',
+            fish_name: fishTypes.find((f: FishType) => f.id === item.fish_type_id)?.name || '',
             quantity: item.quantity,
             unit_price: item.unit_price || 0,
             unit: item.unit,
@@ -308,7 +342,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
           items: validatedData.items.map((item: any) => ({
             id: Date.now().toString(),
             fish_type_id: item.fish_type_id,
-            fish_name: fishTypes.find((f: FishType) => f.id === item.fish_type_id)?.fish_name || '',
+            fish_name: fishTypes.find((f: FishType) => f.id === item.fish_type_id)?.name || '',
             quantity: item.quantity,
             unit_price: item.unit_price || 0,
             unit: item.unit,
@@ -332,7 +366,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
       const item: OrderItem = {
         id: Date.now().toString(),
         fish_type_id: newItem.fish_type_id || 1,
-        fish_name: fishType?.fish_name || '',
+        fish_name: fishType?.name || '',
         quantity: newItem.quantity || 0,
         unit_price: newItem.unit_price || 0,
         unit: newItem.unit || "박스",
@@ -374,31 +408,39 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
     
     const total_price = formData.items.reduce((sum: number, item: OrderItem) => sum + (item.quantity * item.unit_price), 0)
     
-    // delivery_date가 비어있으면 오늘 날짜로 설정
-    const deliveryDate = formData.delivery_date || new Date().toISOString().split('T')[0]
+    // delivery_date가 비어있으면 null로 설정
+    let delivery_datetime = null
+    if (formData.delivery_date) {
+      try {
+        delivery_datetime = new Date(formData.delivery_date).toISOString()
+      } catch (error) {
+        console.error('날짜 변환 오류:', error)
+      }
+    }
     
     // Order 타입에 맞게 데이터 변환
     const orderData = {
       business_id: selectedBusinessId,
       total_price: parseInt(total_price.toString()),
-      order_datetime: new Date().toISOString(),
-      memo: formData.memo,
-      source_type: formData.source_type === 'manual' || formData.source_type === 'image' ? 'text' : formData.source_type as 'voice' | 'text',
-      raw_input_path: formData.raw_input_path,
-      transcribed_text: formData.transcribed_text,
-      delivery_date: deliveryDate,
-      status: "pending" as 'success' | 'failed' | 'pending',
+      memo: formData.memo || '',
+      source_type: formData.source_type === 'manual' || formData.source_type === 'image' ? 'manual' : formData.source_type as 'voice' | 'text',
+      raw_input_path: formData.raw_input_path || '',
+      transcribed_text: formData.transcribed_text || '',
+      delivery_datetime: delivery_datetime,
+      order_status: "placed",
       order_items: formData.items.map((item: OrderItem) => ({
         fish_type_id: item.fish_type_id,
         quantity: item.quantity,
         unit_price: parseFloat(item.unit_price.toString()),
-        unit: item.unit
+        unit: item.unit || '',
+        remarks: item.remarks || ""
       }))
     }
     
     try {
+      console.log('전송할 주문 데이터:', orderData)
       // API를 사용하여 주문 저장
-      const response = await orderApi.create(orderData)
+      const response = await api.post('/order/upload/', orderData)
       
       if (response.data) {
         alert('주문이 성공적으로 저장되었습니다!')
@@ -408,7 +450,12 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
       }
     } catch (error) {
       console.error('주문 저장 오류:', error)
-      alert(`주문 저장 오류: ${error instanceof Error ? error.message : '알 수 없는 오류'}`)
+      if (error.response && error.response.data) {
+        console.error('서버 응답 오류:', error.response.data)
+        alert(`주문 저장 오류: ${JSON.stringify(error.response.data)}`)
+      } else {
+        alert(`주문 저장 오류: ${error instanceof Error ? error.message : '알 수 없는 오류'}`)
+      }
     }
   }
 

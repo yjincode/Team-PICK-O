@@ -109,7 +109,7 @@ class OrderUploadView(APIView):
                         'order_id': order.id,
                         'transcription_id': str(transcription.id),
                         'transcribed_text': order.transcribed_text,
-                        'status': order.status,
+                        'status': order.order_status,
                         'order_items': [
                             {
                                 'fish_type_id': item.fish_type.id,
@@ -150,7 +150,7 @@ class OrderUploadView(APIView):
                     'message': '텍스트 주문이 성공적으로 등록되었습니다.',
                     'order_id': order.id,
                     'transcribed_text': order.transcribed_text,
-                    'status': order.status,
+                    'status': order.order_status,
                     'order_items': [
                         {
                             'fish_type_id': item.fish_type.id,
@@ -179,7 +179,7 @@ class OrderUploadView(APIView):
                 'order_id': order.id,
                 'business_name': order.business.business_name,
                 'total_price': order.total_price,
-                'status': order.status
+                'status': order.order_status
             }, status=status.HTTP_201_CREATED)
         else:
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -226,7 +226,7 @@ class OrderUploadView(APIView):
                         'business_id': order.business.id,
                         'business_name': order.business.business_name,
                         'total_price': order.total_price,
-                        'status': order.status,
+                        'status': order.order_status,
                         'source_type': 'image',
                         'transcribed_text': extracted_text,
                         'created_at': order.order_datetime.isoformat(),
@@ -400,7 +400,7 @@ class OCRImageUploadView(APIView):
                         'business_id': order.business.id,
                         'business_name': order.business.business_name,
                         'total_price': order.total_price,
-                        'status': order.status,
+                        'status': order.order_status,
                         'source_type': 'image',
                         'transcribed_text': extracted_text,
                         'created_at': order.order_datetime.isoformat(),
@@ -442,7 +442,7 @@ class OrderListView(APIView):
         # 상태별 필터링 (선택사항)
         status_filter = request.query_params.get('status')
         if status_filter:
-            orders = orders.filter(status=status_filter)
+            orders = orders.filter(order_status=status_filter)
             
         # 최신순 정렬
         orders = orders.order_by('-order_datetime')
@@ -473,7 +473,7 @@ class OrderStatusUpdateView(APIView):
             serializer.save()
             return Response({
                 'message': '주문 상태가 변경되었습니다.',
-                'status': serializer.data['status']
+                'order_status': serializer.data['order_status']
             })
         return Response(serializer.errors, status=400)
 
@@ -485,13 +485,13 @@ class OrderCancelView(APIView):
         """주문 취소"""
         order = get_object_or_404(Order, id=order_id)
         
-        if order.status == 'cancelled':
+        if order.order_status == 'cancelled':
             return Response({'error': '이미 취소된 주문입니다.'}, status=400)
             
-        order.status = 'cancelled'
+        order.order_status = 'cancelled'
         order.save()
         
         return Response({
             'message': '주문이 취소되었습니다.',
-            'status': 'cancelled'
+            'order_status': 'cancelled'
         })
