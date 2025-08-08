@@ -14,6 +14,7 @@ import { useAuth } from "../../contexts/AuthContext"
 import toast, { Toaster } from 'react-hot-toast';
 import { useKakaoPostcode } from "../../hooks/useKakaoPostcode";
 import { KakaoAddress } from "../../types/kakao";
+import { formatPhoneNumber } from "../../utils/phoneFormatter";
 import {
   Pagination,
   PaginationContent,
@@ -339,7 +340,7 @@ const BusinessList: React.FC = () => {
                         <h3 className="text-lg sm:text-xl font-semibold text-gray-900">{business.business_name}</h3>
                         <p className="text-sm text-gray-600 mt-1">
                           <Phone className="inline h-3 w-3 mr-1" />
-                          {business.phone_number}
+                          {formatPhoneNumber(business.phone_number)}
                         </p>
                         {business.address && (
                           <p className="text-sm text-gray-600">{business.address}</p>

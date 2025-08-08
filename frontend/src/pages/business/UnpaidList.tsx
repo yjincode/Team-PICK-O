@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/ca
 import { Button } from "../../components/ui/button"
 import { Badge } from "../../components/ui/badge"
 import { AlertTriangle, DollarSign, Calendar } from "lucide-react"
+import { formatPhoneNumber } from "../../utils/phoneFormatter"
 
 // 미수금 거래처 데이터 타입 정의
 interface UnpaidBusiness {
@@ -101,7 +102,7 @@ const UnpaidList: React.FC = () => {
               
               {/* 연락처 정보 */}
               <div className="text-sm">
-                <p>연락처: {business.phone_number}</p>
+                <p>연락처: {formatPhoneNumber(business.phone_number)}</p>
                 {business.address && <p>주소: {business.address}</p>}
                 {business.contact && <p>담당자: {business.contact}</p>}
               </div>

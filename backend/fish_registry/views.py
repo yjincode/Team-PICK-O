@@ -1,6 +1,5 @@
 from django.shortcuts import render
 from rest_framework import viewsets, filters
-from django_filters.rest_framework import DjangoFilterBackend
 from .models import FishType
 from .serializers import FishTypeSerializer
 
@@ -10,7 +9,8 @@ class FishTypeViewSet(viewsets.ModelViewSet):
     """
     queryset = FishType.objects.all()
     serializer_class = FishTypeSerializer
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['name', 'aliases', 'scientific_name']
     ordering_fields = ['name', 'created_at']
     ordering = ['name']
+    permission_classes = []  # 인증 제거 - 어종 데이터는 공개

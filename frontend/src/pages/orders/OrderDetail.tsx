@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/ca
 import { Badge } from "../../components/ui/badge"
 import { X } from "lucide-react"
 import { format } from "date-fns"
+import { formatPhoneNumber } from "../../utils/phoneFormatter"
 
 interface OrderDetailProps {
   order: any
@@ -73,7 +74,7 @@ const OrderDetail: React.FC<OrderDetailProps> = ({ order, onClose }) => {
                   </div>
                   <div>
                     <span className="font-medium">연락처:</span>
-                    <span className="ml-2">{order.business?.phone_number || "정보 없음"}</span>
+                    <span className="ml-2">{order.business?.phone_number ? formatPhoneNumber(order.business.phone_number) : "정보 없음"}</span>
                   </div>
                   <div>
                     <span className="font-medium">주소:</span>
