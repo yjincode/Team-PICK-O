@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { X, Plus, Save, Search, Mic, Upload, Play, Square, Image } from "lucide-react"
 import BusinessSearch from "../../components/BusinessSearch"
 import { parseVoiceOrder, validateAndCompleteOrder } from "../../utils/orderParser"
+import { formatPhoneNumber } from "../../utils/phoneFormatter"
 import { 
   convertAudioToText, 
   isSupportedAudioFormat, 
@@ -446,8 +447,12 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
                  <Label htmlFor="phone_number">연락처 *</Label>
                  <Input
                    id="phone_number"
-                   value={formData.phone_number}
-                   onChange={(e) => handleInputChange("phone_number", e.target.value)}
+                   value={formatPhoneNumber(formData.phone_number)}
+                   onChange={(e) => {
+                     // 숫자만 추출하여 저장
+                     const numbers = e.target.value.replace(/\D/g, '')
+                     handleInputChange("phone_number", numbers)
+                   }}
                    placeholder="010-1234-5678"
                    required
                  />

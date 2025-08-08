@@ -151,38 +151,45 @@ export const fishTypeApi = {
 // 재고 관리 API
 export const inventoryApi = {
   // 모든 재고 조회
-  getAll: async (): Promise<ApiResponse<Inventory[]>> => {
-    const response = await api.get('/inventories')
+  getAll: async (params?: { search?: string; status?: string }): Promise<ApiResponse<Inventory[]>> => {
+    const response = await api.get('/inventory/', { params })
+    return response.data
+  },
+  
+  // 어종 목록 조회 (재고 추가시 선택용)
+  getFishTypes: async (): Promise<ApiResponse<FishType[]>> => {
+    const response = await api.get('/inventory/fish-types/')
     return response.data
   },
 
   // ID로 재고 조회
   getById: async (id: number): Promise<ApiResponse<Inventory>> => {
-    const response = await api.get(`/inventories/${id}`)
+    const response = await api.get(`/inventory/${id}/`)
     return response.data
   },
 
   // 새 재고 생성
-  create: async (inventory: Omit<Inventory, 'id'>): Promise<ApiResponse<Inventory>> => {
-    const response = await api.post('/inventories', inventory)
+  create: async (inventory: { fish_type_id: number; stock_quantity: number; unit: string; status: string; aquarium_photo_path?: string }): Promise<ApiResponse<Inventory>> => {
+    const response = await api.post('/inventory/', inventory)
     return response.data
   },
 
   // 재고 정보 수정
   update: async (id: number, inventory: Partial<Inventory>): Promise<ApiResponse<Inventory>> => {
-    const response = await api.put(`/inventories/${id}`, inventory)
+    const response = await api.put(`/inventory/${id}/`, inventory)
     return response.data
   },
 
   // 재고 삭제
   delete: async (id: number): Promise<ApiResponse<void>> => {
-    const response = await api.delete(`/inventories/${id}`)
+    const response = await api.delete(`/inventory/${id}/`)
     return response.data
   },
 
-  // 재고 수량 업데이트
-  updateStock: async (id: number, quantity: number): Promise<ApiResponse<Inventory>> => {
-    const response = await api.patch(`/inventories/${id}/stock`, { quantity })
+  // 재고 로그 조회
+  getLogs: async (inventoryId?: number): Promise<ApiResponse<any[]>> => {
+    const url = inventoryId ? `/inventory/${inventoryId}/logs/` : '/inventory/logs/'
+    const response = await api.get(url)
     return response.data
   },
 }
