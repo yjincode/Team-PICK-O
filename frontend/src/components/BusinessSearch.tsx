@@ -8,7 +8,7 @@ import { Button } from "./ui/button"
 import { Card, CardContent } from "./ui/card"
 import { Search, User, Phone, Check } from "lucide-react"
 import type { Business } from "../types"
-
+        
 interface BusinessSearchProps {
   onSelect: (business: Business) => void;
   onClose: () => void;
@@ -128,7 +128,7 @@ const BusinessSearch: React.FC<BusinessSearchProps> = ({ onSelect, onClose }) =>
                     </div>
                     <div className="flex items-center space-x-2 text-sm text-gray-600">
                       <Phone className="h-3 w-3" />
-                      <span>{business.phone_number}</span>
+                      <span>{formatPhoneNumber(business.phone_number)}</span>
                     </div>
                     {business.address && (
                       <div className="text-sm text-gray-500 mt-1">
@@ -152,7 +152,7 @@ const BusinessSearch: React.FC<BusinessSearchProps> = ({ onSelect, onClose }) =>
               <h3 className="font-medium text-blue-900 mb-2">선택된 거래처</h3>
               <div className="text-sm text-blue-800">
                 <div><strong>거래처명:</strong> {selectedBusiness.business_name}</div>
-                <div><strong>연락처:</strong> {selectedBusiness.phone_number}</div>
+                <div><strong>연락처:</strong> {formatPhoneNumber(selectedBusiness.phone_number)}</div>
                 {selectedBusiness.address && (
                   <div><strong>주소:</strong> {selectedBusiness.address}</div>
                 )}

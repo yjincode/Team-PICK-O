@@ -14,6 +14,7 @@ import { useAuth } from "../../contexts/AuthContext"
 import toast, { Toaster } from 'react-hot-toast';
 import { useKakaoPostcode } from "../../hooks/useKakaoPostcode";
 import { KakaoAddress } from "../../types/kakao";
+import { formatPhoneNumber } from "../../utils/phoneFormatter";
 import {
   Pagination,
   PaginationContent,
@@ -130,6 +131,9 @@ const BusinessList: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState<string>("")
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false)
   const [isRegistering, setIsRegistering] = useState<boolean>(false)
+  const [isEditModalOpen, setIsEditModalOpen] = useState<boolean>(false)
+  const [editingBusiness, setEditingBusiness] = useState<Business | null>(null)
+  const [isUpdating, setIsUpdating] = useState<boolean>(false)
 
   const [newName, setNewName] = useState("")
   const [newPhone, setNewPhone] = useState("")
@@ -141,6 +145,75 @@ const BusinessList: React.FC = () => {
     }
   });
 
+  // 수정 모달용 주소검색 훅
+  const { openPostcode: openEditPostcode } = useKakaoPostcode({
+    onComplete: (data: KakaoAddress) => {
+      const fullAddress = data.roadAddress || data.jibunAddress;
+      setEditingBusiness(prev => prev ? { ...prev, address: fullAddress } : null);
+    }
+  });
+
+  // 수정 모달 열기
+  const handleEditClick = (business: Business) => {
+    setEditingBusiness(business);
+    setIsEditModalOpen(true);
+  };
+
+  // 수정 처리
+  const handleUpdate = async () => {
+    if (!editingBusiness) return;
+
+    // 입력 검증
+    if (!editingBusiness.business_name.trim() || !editingBusiness.phone_number.trim()) {
+      toast.error('거래처명과 전화번호는 필수 항목입니다.');
+      return;
+    }
+
+    try {
+      setIsUpdating(true);
+      
+      // 비동기 수정 처리
+      const response = await businessApi.update(editingBusiness.id, {
+        business_name: editingBusiness.business_name,
+        phone_number: editingBusiness.phone_number,
+        address: editingBusiness.address,
+      });
+      
+      console.log("수정 성공:", response.data);
+      
+      // 성공 토스트
+      toast.success(`'${editingBusiness.business_name}' 거래처가 성공적으로 수정되었습니다!`, {
+        duration: 3000,
+      });
+      
+      // 모달 닫기
+      setIsEditModalOpen(false);
+      setEditingBusiness(null);
+      
+      // 목록 새로고침 (백그라운드에서)
+      fetchBusinesses(page);
+      
+    } catch (error) {
+      const err = error as any;
+      console.error("수정 실패:", err.response?.data || error);
+
+      const data = err.response?.data;
+
+      let errorMessage = '거래처 수정에 실패했습니다.';
+
+      if (data?.phone_number && Array.isArray(data.phone_number) && data.phone_number.length > 0){
+        errorMessage = data.phone_number[0];
+      } else if (data?.message){
+        errorMessage = data.message;
+      }
+      
+      toast.error(errorMessage, {
+        duration: 4000,
+      });
+    } finally {
+      setIsUpdating(false);
+    }
+  };
   
   const handleRegister = async () => {
     // 입력 검증
@@ -287,6 +360,82 @@ const BusinessList: React.FC = () => {
         </div>
       </div>
     )}
+
+    {/* 수정 모달 */}
+    {isEditModalOpen && editingBusiness && (
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-lg p-6 w-full max-w-md shadow-lg relative">
+          {/* 로딩 오버레이 */}
+          {isUpdating && (
+            <div className="absolute inset-0 bg-white/80 flex items-center justify-center rounded-lg z-10">
+              <div className="flex flex-col items-center space-y-3">
+                <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+                <p className="text-sm text-gray-600 font-medium">거래처를 수정하는 중...</p>
+              </div>
+            </div>
+          )}
+          
+          <h2 className="text-xl font-bold mb-4">거래처 수정</h2>
+          <div className="space-y-3">
+            <div>
+              <Input 
+                placeholder="거래처명 *" 
+                value={editingBusiness.business_name} 
+                onChange={(e) => setEditingBusiness(prev => prev ? { ...prev, business_name: e.target.value } : null)}
+                className={!editingBusiness.business_name.trim() && editingBusiness.business_name !== "" ? "border-red-300" : ""}
+                disabled={isUpdating}
+              />
+            </div>
+            <div>
+              <Input 
+                placeholder="전화번호 *" 
+                value={editingBusiness.phone_number} 
+                onChange={(e) => setEditingBusiness(prev => prev ? { ...prev, phone_number: e.target.value } : null)}
+                className={!editingBusiness.phone_number.trim() && editingBusiness.phone_number !== "" ? "border-red-300" : ""}
+                disabled={isUpdating}
+              />
+            </div>
+            <div>
+              <Input 
+                placeholder="주소 (선택사항)" 
+                value={editingBusiness.address} 
+                readOnly
+                disabled={isUpdating}
+                className="flex-1"
+              />
+              <Button
+               type="button"
+               onClick={openEditPostcode}
+               disabled={isUpdating}
+               className="h-12 px-4 bg-accent-blue hover:bg-accent-blue/90 text-white whitespace-nowrap"
+    >
+      주소검색
+    </Button>
+            </div>
+            {editingBusiness.address && (
+    <p className="text-xs text-gray-500 mt-1">선택된 주소: {editingBusiness.address}</p>
+  )}
+          
+          </div>
+          <div className="mt-4 flex justify-end space-x-2">
+            <Button 
+              variant="outline" 
+              onClick={() => setIsEditModalOpen(false)}
+              disabled={isUpdating}
+            >
+              취소
+            </Button>
+            <Button 
+              className="bg-blue-500 hover:bg-blue-600" 
+              onClick={handleUpdate}
+              disabled={isUpdating}
+            >
+              수정
+            </Button>
+          </div>
+        </div>
+      </div>
+    )}
       {/* 페이지 헤더 */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
@@ -339,7 +488,7 @@ const BusinessList: React.FC = () => {
                         <h3 className="text-lg sm:text-xl font-semibold text-gray-900">{business.business_name}</h3>
                         <p className="text-sm text-gray-600 mt-1">
                           <Phone className="inline h-3 w-3 mr-1" />
-                          {business.phone_number}
+                          {formatPhoneNumber(business.phone_number)}
                         </p>
                         {business.address && (
                           <p className="text-sm text-gray-600">{business.address}</p>
@@ -353,10 +502,7 @@ const BusinessList: React.FC = () => {
                           </p>
                         </div>
                         <div className="flex space-x-2">
-                          <Button variant="outline" size="sm">
-                            <Eye className="h-4 w-4 mr-2" />상세
-                          </Button>
-                          <Button variant="outline" size="sm">
+                          <Button variant="outline" size="sm" onClick={() => handleEditClick(business)}>
                             <Edit className="h-4 w-4 mr-2" />수정
                           </Button>
                         </div>

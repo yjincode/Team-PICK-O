@@ -14,6 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../components/ui/ta
 import { X, Plus, Save } from "lucide-react"
 import BusinessSearch from "../../components/BusinessSearch"
 import { parseVoiceOrder, validateAndCompleteOrder } from "../../utils/orderParser"
+import { formatPhoneNumber } from "../../utils/phoneFormatter"
 import { 
   convertAudioToText, 
   isSupportedAudioFormat, 
@@ -425,6 +426,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
         
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
+
             {/* 거래처 선택 */}
             <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
               <h3 className="text-lg font-semibold mb-3 text-blue-900">거래처 선택</h3>
@@ -452,6 +454,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
                 </div>
               )}
             </div>
+
 
             {/* 주문 정보 */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
