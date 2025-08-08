@@ -7,7 +7,10 @@ class OrderItemSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = OrderItem
-        fields = ['fish_type_id', 'quantity', 'unit_price', 'unit']
+        fields = [
+            'fish_type_id', 'item_name_snapshot', 
+            'quantity', 'unit_price', 'unit_price_snapshot', 'unit', 'remarks'
+        ]
 
 
 class OrderSerializer(serializers.ModelSerializer):
@@ -21,12 +24,16 @@ class OrderSerializer(serializers.ModelSerializer):
             'business_id',
             'total_price',
             'order_datetime',
-            'delivery_date',
+            'delivery_datetime',
+            'ship_out_datetime',
             'source_type',
             'raw_input_path',
             'transcribed_text',
             'memo',
-            'status',
+            'order_status',
+            'cancel_reason',
+            'is_urgent',
+            'last_updated_at',
             'order_items'
         ]
 
@@ -37,6 +44,7 @@ class OrderSerializer(serializers.ModelSerializer):
 
         for item_data in order_items_data:
             fish_type_id = item_data.pop('fish_type_id')
+            # inventory_id 제거됨
             OrderItem.objects.create(order=order, fish_type_id=fish_type_id, **item_data)
 
         return order
@@ -51,7 +59,7 @@ class OrderListSerializer(serializers.ModelSerializer):
         model = Order
         fields = [
             'id', 'business_name', 'business_phone', 'total_price', 
-            'order_datetime', 'delivery_date', 'status', 'items_summary'
+            'order_datetime', 'delivery_datetime', 'order_status', 'is_urgent', 'items_summary'
         ]
     
     def get_items_summary(self, obj):
@@ -68,7 +76,10 @@ class OrderDetailItemSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = OrderItem
-        fields = ['fish_type_name', 'quantity', 'unit_price', 'unit']
+        fields = [
+            'fish_type_name', 'item_name_snapshot', 'quantity', 
+            'unit_price', 'unit_price_snapshot', 'unit', 'remarks'
+        ]
 
 
 class OrderDetailSerializer(serializers.ModelSerializer):
@@ -81,12 +92,13 @@ class OrderDetailSerializer(serializers.ModelSerializer):
         model = Order
         fields = [
             'id', 'business_name', 'business_phone', 'business_address',
-            'total_price', 'order_datetime', 'delivery_date', 'status',
-            'source_type', 'transcribed_text', 'memo', 'items'
+            'total_price', 'order_datetime', 'delivery_datetime', 'ship_out_datetime',
+            'order_status', 'cancel_reason', 'is_urgent', 'source_type', 
+            'transcribed_text', 'memo', 'items'
         ]
 
 
 class OrderStatusUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Order
-        fields = ['status']
+        fields = ['order_status']
