@@ -39,8 +39,9 @@ export default function MinimalCalendar({
     }
   }, [value?.getTime()]) // value의 시간값이 변경될 때만 실행
 
-  // 한국 시간으로 오늘 날짜 계산 (브라우저 로컬 시간 사용)
+  // 한국 시간으로 오늘 날짜 계산
   const today = new Date()
+  const koreanToday = new Date(today.getTime() + (9 * 60 * 60 * 1000)) // UTC+9
   const year = currentDate.getFullYear()
   const month = currentDate.getMonth()
 
@@ -70,9 +71,9 @@ export default function MinimalCalendar({
   // 오늘 날짜로 이동 - 한국 시간 기준
   const goToToday = () => {
     if (disabled) return
-    setCurrentDate(today)
-    setSelectedDate(today)
-    onChange?.(today)
+    setCurrentDate(koreanToday)
+    setSelectedDate(koreanToday)
+    onChange?.(koreanToday)
   }
   
   // 날짜 선택
@@ -91,14 +92,14 @@ export default function MinimalCalendar({
   
   // 오늘 날짜인지 확인 (현재 보고 있는 월에서만) - 한국 시간 기준
   const isToday = (day: number) => {
-    return today.getFullYear() === year && 
-           today.getMonth() === month && 
-           today.getDate() === day
+    return koreanToday.getFullYear() === year && 
+           koreanToday.getMonth() === month && 
+           koreanToday.getDate() === day
   }
   
   // 현재 보고 있는 달이 오늘 날짜의 달인지 확인 - 한국 시간 기준
   const isCurrentMonth = () => {
-    return today.getFullYear() === year && today.getMonth() === month
+    return koreanToday.getFullYear() === year && koreanToday.getMonth() === month
   }
   
   // 선택된 날짜인지 확인
