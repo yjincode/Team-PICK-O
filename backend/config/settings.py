@@ -94,15 +94,15 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'config.wsgi.application'
 
-# Database - PostgreSQL 사용 (하드코딩으로 임시 해결)
+# Database - PostgreSQL 사용 (환경변수로 설정)
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'teamPicko',
-        'USER': 'teamPicko', 
-        'PASSWORD': '12341234',
-        'HOST': 'localhost',
-        'PORT': '5432',
+        'NAME': os.getenv('POSTGRES_DB', 'teamPicko'),
+        'USER': os.getenv('POSTGRES_USER', 'teamPicko'),
+        'PASSWORD': os.getenv('POSTGRES_PASSWORD', '12341234'),
+        'HOST': os.getenv('DB_HOST', 'localhost'),
+        'PORT': os.getenv('DB_PORT', '5432'),
     }
 }
 
