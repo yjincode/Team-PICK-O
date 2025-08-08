@@ -68,4 +68,17 @@ class Migration(migrations.Migration):
                 'db_table': 'businesses',
             },
         ),
+        # Set DEFAULT CURRENT_TIMESTAMP for datetime fields
+        migrations.RunSQL(
+            "ALTER TABLE users ALTER COLUMN created_at SET DEFAULT CURRENT_TIMESTAMP;",
+            reverse_sql="ALTER TABLE users ALTER COLUMN created_at DROP DEFAULT;"
+        ),
+        migrations.RunSQL(
+            "ALTER TABLE users ALTER COLUMN updated_at SET DEFAULT CURRENT_TIMESTAMP;",
+            reverse_sql="ALTER TABLE users ALTER COLUMN updated_at DROP DEFAULT;"
+        ),
+        migrations.RunSQL(
+            "ALTER TABLE businesses ALTER COLUMN created_at SET DEFAULT CURRENT_TIMESTAMP;",
+            reverse_sql="ALTER TABLE businesses ALTER COLUMN created_at DROP DEFAULT;"
+        ),
     ]
