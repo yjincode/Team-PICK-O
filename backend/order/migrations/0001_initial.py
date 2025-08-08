@@ -58,4 +58,13 @@ class Migration(migrations.Migration):
                 'db_table': 'order_items',
             },
         ),
+        # Set DEFAULT CURRENT_TIMESTAMP for datetime fields
+        migrations.RunSQL(
+            "ALTER TABLE orders ALTER COLUMN order_datetime SET DEFAULT CURRENT_TIMESTAMP;",
+            reverse_sql="ALTER TABLE orders ALTER COLUMN order_datetime DROP DEFAULT;"
+        ),
+        migrations.RunSQL(
+            "ALTER TABLE orders ALTER COLUMN last_updated_at SET DEFAULT CURRENT_TIMESTAMP;",
+            reverse_sql="ALTER TABLE orders ALTER COLUMN last_updated_at DROP DEFAULT;"
+        ),
     ]
