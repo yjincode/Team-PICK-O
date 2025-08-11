@@ -15,7 +15,6 @@ import toast, { Toaster } from 'react-hot-toast';
 import { useKakaoPostcode } from "../../hooks/useKakaoPostcode";
 import { KakaoAddress } from "../../types/kakao";
 import { formatPhoneNumber } from "../../utils/phoneFormatter";
-import { OrderListItem, Payment } from "../../types";
 import {
   Pagination,
   PaginationContent,
@@ -98,53 +97,32 @@ const BusinessList: React.FC = () => {
   // 주문 및 결제 불러와서 미수금 계산
   const fetchUnpaidStats = async () => {
     try {
-      // 주문 목록 (여러 응답 형태 대응)
+      // 주문 목록 (기존 order API 사용)
       const ordersRes = await orderApi.getAll();
-      const anyOrdersRes: any = ordersRes as any;
-      let orders: OrderListItem[] = [];
-      if (Array.isArray(anyOrdersRes)) {
-        orders = anyOrdersRes as OrderListItem[];
-      } else if (Array.isArray(anyOrdersRes?.data)) {
-        orders = anyOrdersRes.data as OrderListItem[];
-      } else if (Array.isArray(anyOrdersRes?.results)) {
-        orders = anyOrdersRes.results as OrderListItem[];
-      } else if (Array.isArray(anyOrdersRes?.data?.results)) {
-        orders = anyOrdersRes.data.results as OrderListItem[];
-      }
-
-      // 결제 목록 (엔드포인트 없으면 빈 배열 처리, 여러 응답 형태 대응)
-      let payments: Payment[] = [];
+      const orders = Array.isArray(ordersRes) ? ordersRes : ordersRes.data || [];
+      // 결제 목록 (엔드포인트 없으면 빈 배열 처리)
+      let payments: any[] = [];
       try {
         const paymentsRes = await paymentsApi.getAll();
-        const anyPaymentsRes: any = paymentsRes as any;
-        if (Array.isArray(anyPaymentsRes)) {
-          payments = anyPaymentsRes as Payment[];
-        } else if (Array.isArray(anyPaymentsRes?.data?.results)) {
-          payments = anyPaymentsRes.data.results as Payment[];
-        } else if (Array.isArray(anyPaymentsRes?.results)) {
-          payments = anyPaymentsRes.results as Payment[];
-        } else if (Array.isArray(anyPaymentsRes?.data)) {
-          payments = anyPaymentsRes.data as Payment[];
-        }
+        payments = paymentsRes.results || paymentsRes.data?.results || paymentsRes.data || paymentsRes || [];
       } catch (e) {
-        console.warn('결제 API 호출 실패:', e);
         payments = [];
       }
 
       const sumByBusiness: Record<number, { orders: number; payments: number }> = {};
 
       for (const o of orders) {
-        const businessId = (o as any).business_id as number;
+        const businessId = o.business_id;
         if (!businessId) continue;
         if (!sumByBusiness[businessId]) sumByBusiness[businessId] = { orders: 0, payments: 0 };
-        sumByBusiness[businessId].orders += Number((o as any).total_price || 0);
+        sumByBusiness[businessId].orders += Number(o.total_price || 0);
       }
 
       for (const p of payments) {
-        const businessId = (p as any).business_id as number;
+        const businessId = p.business_id;
         if (!businessId) continue;
         if (!sumByBusiness[businessId]) sumByBusiness[businessId] = { orders: 0, payments: 0 };
-        sumByBusiness[businessId].payments += Number((p as any).amount || 0);
+        sumByBusiness[businessId].payments += Number(p.amount || 0);
       }
 
       const unpaid: Record<number, number> = {};
@@ -211,6 +189,17 @@ const BusinessList: React.FC = () => {
       setNewAddress(fullAddress);
     }
   });
+
+  const formatPhoneNumber = (phone: string) => {
+    if (!phone) return "";
+    const onlyNumbers = phone.replace(/\D/g, ""); // 숫자만
+    if (onlyNumbers.length < 4) return onlyNumbers;
+    if (onlyNumbers.length < 7) return `${onlyNumbers.slice(0, 3)}-${onlyNumbers.slice(3)}`;
+    if (onlyNumbers.length < 11) return `${onlyNumbers.slice(0, 3)}-${onlyNumbers.slice(3, 6)}-${onlyNumbers.slice(6)}`;
+    return `${onlyNumbers.slice(0, 3)}-${onlyNumbers.slice(3, 7)}-${onlyNumbers.slice(7)}`;
+  };
+
+
 
   // 수정 모달용 주소검색 훅
   const { openPostcode: openEditPostcode } = useKakaoPostcode({
@@ -379,16 +368,20 @@ const BusinessList: React.FC = () => {
             </div>
             <div>
               <Input 
-                placeholder="전화번호 *" 
-                value={newPhone} 
-                onChange={(e) => setNewPhone(e.target.value)}
+                placeholder="전화번호 (숫자만 입력하세요)*" 
+                value={formatPhoneNumber(newPhone)} // 보여줄 때만 포맷 적용
+                onChange={(e) => {
+                  const onlyNumbers = e.target.value.replace(/\D/g, ""); // 하이픈 포함 모든 문자 제거 후 숫자만 저장
+                  setNewPhone(onlyNumbers);
+                }}
                 className={!newPhone.trim() && newPhone !== "" ? "border-red-300" : ""}
                 disabled={isRegistering}
               />
+
             </div>
             <div>
               <Input 
-                placeholder="주소 (선택사항)" 
+                placeholder="주소" 
                 value={newAddress} 
                 readOnly
                 disabled={isRegistering}
@@ -446,7 +439,7 @@ const BusinessList: React.FC = () => {
           <div className="space-y-3">
             <div>
               <Input 
-                placeholder="거래처명 *" 
+                placeholder="거래처명" 
                 value={editingBusiness.business_name} 
                 onChange={(e) => setEditingBusiness(prev => prev ? { ...prev, business_name: e.target.value } : null)}
                 className={!editingBusiness.business_name.trim() && editingBusiness.business_name !== "" ? "border-red-300" : ""}
@@ -454,17 +447,25 @@ const BusinessList: React.FC = () => {
               />
             </div>
             <div>
-              <Input 
-                placeholder="전화번호 *" 
-                value={editingBusiness.phone_number} 
-                onChange={(e) => setEditingBusiness(prev => prev ? { ...prev, phone_number: e.target.value } : null)}
-                className={!editingBusiness.phone_number.trim() && editingBusiness.phone_number !== "" ? "border-red-300" : ""}
+                <Input 
+                placeholder="전화번호 (숫자만 입력하세요)*" 
+                value={formatPhoneNumber(editingBusiness.phone_number)} // 보여줄 때만 포맷 적용
+                onChange={(e) =>
+                  setEditingBusiness(prev =>
+                    prev ? { ...prev, phone_number: e.target.value.replace(/\D/g, "") } : null // 숫자만 저장
+                  )
+                }
+                className={
+                  !editingBusiness.phone_number.trim() && editingBusiness.phone_number !== "" 
+                    ? "border-red-300" 
+                    : ""
+                }
                 disabled={isUpdating}
               />
             </div>
             <div>
               <Input 
-                placeholder="주소 (선택사항)" 
+                placeholder="주소" 
                 value={editingBusiness.address} 
                 readOnly
                 disabled={isUpdating}
