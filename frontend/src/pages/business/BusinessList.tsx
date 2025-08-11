@@ -9,12 +9,13 @@ import { Card, CardContent } from "../../components/ui/card"
 import { Button } from "../../components/ui/button"
 import { Input } from "../../components/ui/input"
 import { Search, Plus, Phone, Eye, Edit, Loader2 } from "lucide-react"
-import { businessApi } from "../../lib/api"
+import { businessApi, orderApi, paymentsApi } from "../../lib/api"
 import { useAuth } from "../../contexts/AuthContext"
 import toast, { Toaster } from 'react-hot-toast';
 import { useKakaoPostcode } from "../../hooks/useKakaoPostcode";
 import { KakaoAddress } from "../../types/kakao";
 import { formatPhoneNumber } from "../../utils/phoneFormatter";
+import { OrderListItem, Payment } from "../../types";
 import {
   Pagination,
   PaginationContent,
@@ -45,6 +46,7 @@ const BusinessList: React.FC = () => {
   const [page, setPage] = useState(1);
   const [pageSize] = useState(10); // 고정값, 필요시 변경 가능
   const [count, setCount] = useState(0); // 전체 개수
+  const [unpaidByBusinessId, setUnpaidByBusinessId] = useState<Record<number, number>>({});
 
   const { userData, user, isAuthenticated, loading } = useAuth();
 
@@ -93,6 +95,70 @@ const BusinessList: React.FC = () => {
     }
   };
 
+  // 주문 및 결제 불러와서 미수금 계산
+  const fetchUnpaidStats = async () => {
+    try {
+      // 주문 목록 (여러 응답 형태 대응)
+      const ordersRes = await orderApi.getAll();
+      const anyOrdersRes: any = ordersRes as any;
+      let orders: OrderListItem[] = [];
+      if (Array.isArray(anyOrdersRes)) {
+        orders = anyOrdersRes as OrderListItem[];
+      } else if (Array.isArray(anyOrdersRes?.data)) {
+        orders = anyOrdersRes.data as OrderListItem[];
+      } else if (Array.isArray(anyOrdersRes?.results)) {
+        orders = anyOrdersRes.results as OrderListItem[];
+      } else if (Array.isArray(anyOrdersRes?.data?.results)) {
+        orders = anyOrdersRes.data.results as OrderListItem[];
+      }
+
+      // 결제 목록 (엔드포인트 없으면 빈 배열 처리, 여러 응답 형태 대응)
+      let payments: Payment[] = [];
+      try {
+        const paymentsRes = await paymentsApi.getAll();
+        const anyPaymentsRes: any = paymentsRes as any;
+        if (Array.isArray(anyPaymentsRes)) {
+          payments = anyPaymentsRes as Payment[];
+        } else if (Array.isArray(anyPaymentsRes?.data?.results)) {
+          payments = anyPaymentsRes.data.results as Payment[];
+        } else if (Array.isArray(anyPaymentsRes?.results)) {
+          payments = anyPaymentsRes.results as Payment[];
+        } else if (Array.isArray(anyPaymentsRes?.data)) {
+          payments = anyPaymentsRes.data as Payment[];
+        }
+      } catch (e) {
+        console.warn('결제 API 호출 실패:', e);
+        payments = [];
+      }
+
+      const sumByBusiness: Record<number, { orders: number; payments: number }> = {};
+
+      for (const o of orders) {
+        const businessId = (o as any).business_id as number;
+        if (!businessId) continue;
+        if (!sumByBusiness[businessId]) sumByBusiness[businessId] = { orders: 0, payments: 0 };
+        sumByBusiness[businessId].orders += Number((o as any).total_price || 0);
+      }
+
+      for (const p of payments) {
+        const businessId = (p as any).business_id as number;
+        if (!businessId) continue;
+        if (!sumByBusiness[businessId]) sumByBusiness[businessId] = { orders: 0, payments: 0 };
+        sumByBusiness[businessId].payments += Number((p as any).amount || 0);
+      }
+
+      const unpaid: Record<number, number> = {};
+      Object.entries(sumByBusiness).forEach(([bizId, sums]) => {
+        unpaid[Number(bizId)] = Math.max(0, (sums.orders || 0) - (sums.payments || 0));
+      });
+
+      setUnpaidByBusinessId(unpaid);
+    } catch (e) {
+      console.warn('미수금 계산 실패 (주문/결제 로드 실패):', e);
+      setUnpaidByBusinessId({});
+    }
+  };
+
   // AuthContext 로딩이 완료되면 API 호출 (인증 여부와 관계없이)
   useEffect(() => {
     console.log('🔍 useEffect 실행됨:', {
@@ -118,6 +184,7 @@ const BusinessList: React.FC = () => {
     console.log('🚀 거래처 목록 로드 (인증 상태와 관계없이)');
     setHasInitialized(true);
     fetchBusinesses(1); // 첫 페이지 로드
+    fetchUnpaidStats(); // 초기 로드 시 미수금 계산
   }, [loading, hasInitialized]);
 
   // 페이지 변경 시 목록 새로고침
@@ -498,7 +565,7 @@ const BusinessList: React.FC = () => {
                         <div className="text-right">
                           <p className="text-sm text-gray-500">미수금</p>
                           <p className="text-lg font-bold text-red-600">
-                            {formatCurrency(business.unpaid_amount || 0)}
+                            {formatCurrency(unpaidByBusinessId[business.id] ?? 0)}
                           </p>
                         </div>
                         <div className="flex space-x-2">

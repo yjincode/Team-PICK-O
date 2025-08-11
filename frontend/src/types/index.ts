@@ -95,6 +95,20 @@ export interface PaginatedResponse<T> {
   results: T[];
 }
 
+// OrderListItem interface for list views (matches OrderListSerializer)
+export interface OrderListItem {
+  id: number;
+  business_id: number;
+  business_name: string;
+  business_phone: string;
+  total_price: number;
+  order_datetime: string;
+  delivery_datetime?: string;
+  order_status: 'placed' | 'ready' | 'delivered' | 'cancelled';
+  is_urgent: boolean;
+  items_summary: string;
+}
+
 // ==================== 폼 데이터 관련 타입 ====================
 
 export interface BusinessFormData {

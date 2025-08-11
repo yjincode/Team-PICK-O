@@ -10,7 +10,8 @@ import {
   FishType,
   Payment,
   ApiResponse,
-  PaginatedResponse
+  PaginatedResponse,
+  OrderListItem
 } from '../types'
 
 
@@ -260,38 +261,38 @@ export const inventoryApi = {
 // 주문 관리 API
 export const orderApi = {
   // 모든 주문 조회
-  getAll: async (): Promise<ApiResponse<Order[]>> => {
-    const response = await api.get('/orders')
+  getAll: async (params?: { page?: number; page_size?: number }): Promise<ApiResponse<OrderListItem[]>> => {
+    const response = await api.get('/order/', { params })
     return response.data
   },
 
   // ID로 주문 조회
   getById: async (id: number): Promise<ApiResponse<Order>> => {
-    const response = await api.get(`/orders/${id}`)
+    const response = await api.get(`/order/${id}/`)
     return response.data
   },
 
   // 새 주문 생성
   create: async (order: Omit<Order, 'id'>): Promise<ApiResponse<Order>> => {
-    const response = await api.post('/orders', order)
+    const response = await api.post('/order/upload/', order)
     return response.data
   },
 
   // 주문 정보 수정
   update: async (id: number, order: Partial<Order>): Promise<ApiResponse<Order>> => {
-    const response = await api.put(`/orders/${id}`, order)
+    const response = await api.put(`/order/${id}/`, order)
     return response.data
   },
 
   // 주문 삭제
   delete: async (id: number): Promise<ApiResponse<void>> => {
-    const response = await api.delete(`/orders/${id}`)
+    const response = await api.delete(`/order/${id}/`)
     return response.data
   },
 
   // 주문 상태 업데이트
   updateStatus: async (id: number, status: Order['status']): Promise<ApiResponse<Order>> => {
-    const response = await api.patch(`/orders/${id}/status`, { status })
+    const response = await api.patch(`/order/${id}/status/`, { order_status: status })
     return response.data
   },
 }
@@ -326,6 +327,13 @@ export const paymentApi = {
   // 결제 삭제
   delete: async (id: number): Promise<ApiResponse<void>> => {
     const response = await api.delete(`/payments/${id}`)
+    return response.data
+  },
+}
+
+export const paymentsApi = {
+  getAll: async (params?: { page?: number; page_size?: number }) => {
+    const response = await api.get('/payments/', { params })
     return response.data
   },
 }
@@ -366,8 +374,8 @@ export const authApi = {
 
 // Sales API
 export const salesApi = {
-  getAll: async (): Promise<any> => {
-    const response = await api.get('/sales')
+  getAll: async (params?: { page?: number; page_size?: number }): Promise<ApiResponse<OrderListItem[]>> => {
+    const response = await api.get('/order/', { params })
     return response.data
   },
 
