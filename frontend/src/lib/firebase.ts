@@ -134,9 +134,11 @@ export const setupRecaptcha = (containerId: string): RecaptchaVerifier => {
 
 // 테스트 전화번호 확인 함수
 const isTestPhoneNumber = (phoneNumber: string): boolean => {
-  // Firebase Console에서 설정한 테스트 전화번호: 01012341234
+  // Firebase Console에서 설정한 테스트 전화번호들
   const testNumbers = [
     '+8201012341234',  // Firebase에서 설정한 테스트 번호
+    '+8201089358654',  // 실제 사용자 전화번호 (테스트용)
+    '+821089358654',   // 82로 시작하는 형식
   ];
   
   return testNumbers.includes(phoneNumber);
@@ -186,6 +188,10 @@ export const sendPhoneVerification = async (phoneNumber: string): Promise<AuthRe
     window.confirmationResult = confirmationResult;
     
     console.log('✅ 인증 코드 전송 성공');
+    console.log('💾 confirmationResult 저장 완료:', {
+      hasConfirmationResult: !!window.confirmationResult,
+      confirmationResultType: typeof window.confirmationResult
+    });
     
     return {
       success: true,
@@ -229,25 +235,41 @@ const normalizePhoneNumber = (phoneNumber: string): string | null => {
 };
 
 // 인증 코드 확인
-export const verifyPhoneCode = async (code: string): Promise<AuthResult> => {
+export const verifyPhoneCode = async (confirmationResult: ConfirmationResult, code: string): Promise<AuthResult> => {
   try {
     console.log('🔐 인증 코드 확인 시작');
+    console.log('📱 입력된 코드:', code);
+    console.log('🔍 confirmationResult 상태:', !!confirmationResult);
     
-    if (!window.confirmationResult) {
+    if (!confirmationResult) {
+      console.error('❌ confirmationResult가 없습니다. 인증 세션이 만료되었습니다.');
       return {
         success: false,
         error: '인증 세션이 만료되었습니다. 다시 시도해주세요.'
       };
     }
     
+    console.log('🔄 Firebase 인증 코드 확인 시도...');
+    
     // 인증 코드 확인
-    const result: UserCredential = await window.confirmationResult.confirm(code);
+    const result: UserCredential = await confirmationResult.confirm(code);
+    
+    console.log('✅ Firebase 인증 성공:', {
+      user: !!result.user,
+      uid: result.user?.uid,
+      phoneNumber: result.user?.phoneNumber
+    });
     
     if (result.user) {
+      console.log('🔄 ID 토큰 가져오는 중...');
+      
       // ID 토큰 가져오기
       const idToken = await result.user.getIdToken();
       
-      console.log('✅ 인증 성공:', result.user.uid);
+      console.log('✅ ID 토큰 획득 완료:', {
+        tokenLength: idToken?.length || 0,
+        tokenPreview: idToken ? `${idToken.substring(0, 20)}...` : '없음'
+      });
       
       return {
         success: true,
@@ -258,6 +280,7 @@ export const verifyPhoneCode = async (code: string): Promise<AuthResult> => {
         phoneNumber: result.user.phoneNumber || ''
       };
     } else {
+      console.error('❌ Firebase 인증은 성공했지만 user 객체가 없습니다.');
       return {
         success: false,
         error: '인증에 실패했습니다.'
@@ -266,6 +289,8 @@ export const verifyPhoneCode = async (code: string): Promise<AuthResult> => {
     
   } catch (error: any) {
     console.error('❌ 인증 코드 확인 오류:', error);
+    console.error('❌ 에러 코드:', error.code);
+    console.error('❌ 에러 메시지:', error.message);
     
     const errorMessage = getErrorMessage(error.code);
     
