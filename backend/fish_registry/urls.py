@@ -1,13 +1,12 @@
-from django.urls import path, include
-from rest_framework.routers import DefaultRouter
-from .views import FishTypeViewSet
+from django.urls import path
+from .views import FishTypeView
 
 app_name = 'fish_registry'
 
-# DRF Router 설정
-router = DefaultRouter()
-router.register(r'fish-types', FishTypeViewSet, basename='fish-type')
-
 urlpatterns = [
-    path('', include(router.urls)),
+    # 어종 목록 조회 및 생성
+    path('fish-types/', FishTypeView.as_view(), name='fish-type-list'),
+    
+    # 단일 어종 조회, 수정, 삭제
+    path('fish-types/<int:fish_type_id>/', FishTypeView.as_view(), name='fish-type-detail'),
 ] 

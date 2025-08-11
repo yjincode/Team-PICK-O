@@ -260,6 +260,10 @@ def firebase_to_jwt_exchange(request):
     Firebase 토큰을 자체 JWT 토큰으로 교환하는 API
     전화번호 인증 완료 후 한 번만 호출하여 빠른 JWT 토큰 획득
     """
+    print(f"🔍 Firebase-to-JWT 교환 요청 시작")
+    print(f"📱 요청 데이터: {request.data}")
+    print(f"🔑 Firebase 토큰 길이: {len(request.data.get('firebase_token', '')) if request.data.get('firebase_token') else 'None'}")
+    
     try:
         firebase_token = request.data.get('firebase_token')
         
@@ -269,14 +273,22 @@ def firebase_to_jwt_exchange(request):
             }, status=status.HTTP_400_BAD_REQUEST)
         
         try:
+            # Firebase Admin SDK 상태 확인
+            import firebase_admin
+            print(f"🔥 Firebase Admin SDK 상태: {bool(firebase_admin._apps)}")
+            print(f"🔥 Firebase Admin Apps: {firebase_admin._apps}")
+            
             # Firebase 토큰 검증을 비동기로 처리하고 타임아웃 설정
             import asyncio
             import concurrent.futures
             
             def verify_firebase_token(token):
+                print(f"🔐 Firebase 토큰 검증 시작: {token[:20]}...")
                 try:
                     # 기본 검증 시도
+                    print("🔐 Firebase Admin SDK로 토큰 검증 시도...")
                     result = auth.verify_id_token(token, check_revoked=False)
+                    print(f"✅ Firebase 토큰 검증 성공: {result}")
                     return result
                 except Exception as e:
                     # 시간 오류인 경우 수동 토큰 파싱으로 대체
@@ -313,6 +325,8 @@ def firebase_to_jwt_exchange(request):
                         'error': 'Firebase 토큰 검증 시간 초과. 다시 시도해주세요.'
                     }, status=status.HTTP_408_REQUEST_TIMEOUT)
                 except Exception as e:
+                    print(f"❌ Firebase 토큰 검증 실패: {str(e)}")
+                    print(f"❌ 에러 타입: {type(e).__name__}")
                     return Response({
                         'error': f'Firebase 토큰 검증 실패: {str(e)}'
                     }, status=status.HTTP_401_UNAUTHORIZED)
