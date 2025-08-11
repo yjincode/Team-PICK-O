@@ -9,6 +9,7 @@ from django.conf import settings
 from django.shortcuts import get_object_or_404
 from django.db import transaction
 from django.core.files.storage import default_storage
+from core.middleware import get_user_queryset_filter
 
 from .serializers import OrderSerializer, OrderListSerializer, OrderDetailSerializer, OrderStatusUpdateSerializer
 from .models import Order
@@ -172,7 +173,7 @@ class OrderUploadView(APIView):
         """수동 입력을 통한 주문 등록"""
         serializer = OrderSerializer(data=request.data)
         if serializer.is_valid():
-            order = serializer.save()
+            order = serializer.save(user_id=request.user_id)
             
             return Response({
                 'message': '수동 주문이 성공적으로 등록되었습니다.',
@@ -437,7 +438,8 @@ class OrderListView(APIView):
     
     def get(self, request):
         """주문 목록 조회"""
-        orders = Order.objects.select_related('business').prefetch_related('items__fish_type').all()
+        # 미들웨어에서 설정된 user_id 사용
+        orders = Order.objects.select_related('business').prefetch_related('items__fish_type').filter(**get_user_queryset_filter(request))
         
         # 상태별 필터링 (선택사항)
         status_filter = request.query_params.get('status')
@@ -456,7 +458,8 @@ class OrderDetailView(APIView):
     
     def get(self, request, order_id):
         """주문 상세 조회"""
-        order = get_object_or_404(Order, id=order_id)
+        # 미들웨어에서 설정된 user_id 사용
+        order = get_object_or_404(Order, id=order_id, **get_user_queryset_filter(request))
         serializer = OrderDetailSerializer(order)
         return Response(serializer.data)
 
@@ -466,7 +469,8 @@ class OrderStatusUpdateView(APIView):
     
     def patch(self, request, order_id):
         """주문 상태 변경"""
-        order = get_object_or_404(Order, id=order_id)
+        # 미들웨어에서 설정된 user_id 사용
+        order = get_object_or_404(Order, id=order_id, **get_user_queryset_filter(request))
         serializer = OrderStatusUpdateSerializer(order, data=request.data, partial=True)
         
         if serializer.is_valid():
@@ -483,7 +487,8 @@ class OrderCancelView(APIView):
     
     def patch(self, request, order_id):
         """주문 취소"""
-        order = get_object_or_404(Order, id=order_id)
+        # 미들웨어에서 설정된 user_id 사용
+        order = get_object_or_404(Order, id=order_id, **get_user_queryset_filter(request))
         
         if order.order_status == 'cancelled':
             return Response({'error': '이미 취소된 주문입니다.'}, status=400)

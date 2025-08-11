@@ -22,7 +22,6 @@ import LoginPage from './pages/login/LoginPage';
 
 const App: React.FC = () => {
   return (
-
     <AuthProvider>
       <Router>
         <Routes>
@@ -156,8 +155,8 @@ const App: React.FC = () => {
         
         {/* 404 페이지 - 대시보드로 리다이렉트 */}
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
-      </Routes>
-    </Router>
+        </Routes>
+      </Router>
     </AuthProvider>
   );
 };

@@ -17,6 +17,9 @@ from .serializers import BusinessSerializer
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.generics import ListAPIView
+from core.middleware import get_user_queryset_filter
+import firebase_admin
+from firebase_admin import auth
 
 @api_view(['POST'])
 @authentication_classes([])  # 인증 완전 비활성화
@@ -156,30 +159,117 @@ def send_discord_notification(user):
         print(f"❌ Discord 알림 전송 오류: {e}")
 
 
+@api_view(['POST'])
+@authentication_classes([])
+@permission_classes([AllowAny])
+def get_user_id_from_token(request):
+    """Firebase 토큰으로 user_id 반환하는 API"""
+    try:
+        auth_header = request.headers.get('Authorization')
+        
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return Response({
+                'error': 'Authorization 헤더가 필요합니다.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+            
+        token = auth_header.split(' ')[1]
+        
+        try:
+            # Firebase 토큰 검증
+            decoded_token = auth.verify_id_token(token)
+            firebase_uid = decoded_token.get('uid')
+            
+            if not firebase_uid:
+                return Response({
+                    'error': '유효하지 않은 토큰입니다.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+                
+            # User 모델에서 firebase_uid로 사용자 찾기
+            try:
+                user = User.objects.get(firebase_uid=firebase_uid, status='approved')
+                return Response({
+                    'user_id': user.id,
+                    'business_name': user.business_name,
+                    'owner_name': user.owner_name
+                })
+            except User.DoesNotExist:
+                return Response({
+                    'error': '승인된 사용자를 찾을 수 없습니다.'
+                }, status=status.HTTP_404_NOT_FOUND)
+                
+        except Exception as e:
+            return Response({
+                'error': '토큰 검증에 실패했습니다.'
+            }, status=status.HTTP_401_UNAUTHORIZED)
+            
+    except Exception as e:
+        print(f"❌ user_id 조회 오류: {e}")
+        return Response({
+            'error': 'user_id 조회 중 오류가 발생했습니다.'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 class BusinessCreateAPIView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]
     
     def post(self, request):
-        # 인증된 사용자만 접근 가능
-        data = request.data.copy()
+        print(f"🏢 Business 생성 요청 받음")
+        print(f"📝 요청 데이터: {request.data}")
+        print(f"🆔 request.user_id: {getattr(request, 'user_id', 'NOT SET')}")
         
-        # 보안: 인증된 사용자의 ID를 강제로 설정
-        data['user'] = request.user.id
+        data = request.data.copy()
         
         serializer = BusinessSerializer(data=data)
         if serializer.is_valid():
-            business = serializer.save(user=request.user)  # 인증된 사용자로 저장
+            print(f"✅ Serializer 검증 통과")
+            business = serializer.save(user_id=request.user_id)  # 미들웨어의 사용자 ID로 저장
+            print(f"✅ Business 생성 성공: {business.id}")
             return Response(serializer.data, status=status.HTTP_201_CREATED)
+        
+        print(f"❌ Serializer 검증 실패: {serializer.errors}")
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
     def get(self, request):
-        businesses = Business.objects.all()
+        # GET 요청은 미들웨어에서 제외되므로 직접 토큰에서 user_id 추출
+        user_id = self._get_user_id_from_token(request)
+        if not user_id:
+            return Response({'error': '인증이 필요합니다.'}, status=status.HTTP_401_UNAUTHORIZED)
+            
+        businesses = Business.objects.filter(user_id=user_id)
         serializer = BusinessSerializer(businesses, many=True)
         return Response(serializer.data)
     
+    def _get_user_id_from_token(self, request):
+        """토큰에서 user_id 추출"""
+        auth_header = request.headers.get('Authorization')
+        
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return None
+            
+        token = auth_header.split(' ')[1]
+        
+        try:
+            # Firebase 토큰 검증
+            decoded_token = auth.verify_id_token(token)
+            firebase_uid = decoded_token.get('uid')
+            
+            if not firebase_uid:
+                return None
+                
+            # User 모델에서 firebase_uid로 사용자 찾기
+            try:
+                user = User.objects.get(firebase_uid=firebase_uid, status='approved')
+                return user.id
+            except User.DoesNotExist:
+                return None
+                
+        except Exception as e:
+            return None
+    
     def put(self, request, pk):
         try:
-            business = Business.objects.get(id=pk)
+            # 미들웨어에서 설정된 user_id 사용
+            business = Business.objects.get(id=pk, **get_user_queryset_filter(request))
             serializer = BusinessSerializer(business, data=request.data, partial=True)
             if serializer.is_valid():
                 serializer.save()
@@ -194,7 +284,41 @@ class BusinessPagination(PageNumberPagination):
     max_page_size = 50
 
 class BusinessListAPIView(ListAPIView):
-    queryset = Business.objects.all().order_by('-id')
     serializer_class = BusinessSerializer
     pagination_class = BusinessPagination
     permission_classes = [AllowAny]
+    
+    def get_queryset(self):
+        # GET 요청은 미들웨어에서 제외되므로 직접 토큰에서 user_id 추출
+        user_id = self._get_user_id_from_token(self.request)
+        if not user_id:
+            return Business.objects.none()  # 빈 QuerySet 반환
+            
+        return Business.objects.filter(user_id=user_id).order_by('-id')
+    
+    def _get_user_id_from_token(self, request):
+        """토큰에서 user_id 추출"""
+        auth_header = request.headers.get('Authorization')
+        
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return None
+            
+        token = auth_header.split(' ')[1]
+        
+        try:
+            # Firebase 토큰 검증
+            decoded_token = auth.verify_id_token(token)
+            firebase_uid = decoded_token.get('uid')
+            
+            if not firebase_uid:
+                return None
+                
+            # User 모델에서 firebase_uid로 사용자 찾기
+            try:
+                user = User.objects.get(firebase_uid=firebase_uid, status='approved')
+                return user.id
+            except User.DoesNotExist:
+                return None
+                
+        except Exception as e:
+            return None

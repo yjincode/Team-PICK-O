@@ -31,7 +31,7 @@ interface StepInfo {
 
 export default function LoginPage(): JSX.Element {
   const navigate = useNavigate()
-  const { login } = useAuth()
+  const { login, setUserData } = useAuth()
   const [step, setStep] = useState<LoginStep>('phone')
   const [phoneNumber, setPhoneNumber] = useState<string>('')
   const [verificationCode, setVerificationCode] = useState<string>('')
@@ -90,8 +90,10 @@ export default function LoginPage(): JSX.Element {
       if (response.exists && response.user) {
         const userData: UserData = response.user;
         
-        // AuthContext 상태 업데이트
+        // AuthContext 상태 업데이트 (user 정보도 포함)
         await login(user, userData);
+        
+        // setUserData는 login에서 자동 처리되므로 별도 호출 불필요
         
         if (userData.status === 'approved') {
           navigate('/dashboard', { replace: true });

@@ -1,8 +1,10 @@
 from django.db import models
+from django.conf import settings
 
 class FishType(models.Model):
     """어종 모델"""
     id = models.AutoField(primary_key=True)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, verbose_name="사용자")
     name = models.CharField(max_length=100, verbose_name="어종명")
     aliases = models.TextField(blank=True, null=True, verbose_name="별칭")
     scientific_name = models.TextField(blank=True, null=True, verbose_name="학명")
