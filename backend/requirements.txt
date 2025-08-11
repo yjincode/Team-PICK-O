@@ -18,6 +18,7 @@ Pillow==10.1.0
 numpy==1.24.3
 torch==2.1.1
 torchvision==0.16.1
+torchaudio==2.1.1
 
 # YOLOv8 (Ultralytics)
 ultralytics==8.0.206

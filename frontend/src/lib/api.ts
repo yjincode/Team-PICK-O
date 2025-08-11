@@ -456,6 +456,33 @@ export const aiApi = {
   },
 }
 
+// STT (Speech-to-Text) API
+export const sttApi = {
+  // 음성 파일을 텍스트로 변환
+  transcribe: async (audioFile: File, language: string = 'ko'): Promise<{ 
+    message: string;
+    transcription: string;
+    language: string;
+  }> => {
+    const formData = new FormData()
+    formData.append('audio', audioFile)
+    formData.append('language', language)
+    
+    // STT API는 인증이 필요 없으므로 직접 fetch 사용
+    const response = await fetch('/api/v1/transcription/transcribe/', {
+      method: 'POST',
+      body: formData,
+    })
+    
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.error || 'STT 변환 실패')
+    }
+    
+    return await response.json()
+  },
+}
+
 // 기존 호환성을 위한 별칭 (점진적 마이그레이션)
 export const customerApi = businessApi
 

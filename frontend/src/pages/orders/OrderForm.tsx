@@ -4,7 +4,7 @@
  */
 import React, { useState, useEffect } from "react"
 import type { ChangeEvent, FormEvent } from "react"
-import axios from "axios"
+import { businessApi, fishTypeApi, orderApi } from "../../lib/api"
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card"
 import { Button } from "../../components/ui/button"
 import { Input } from "../../components/ui/input"
@@ -17,6 +17,8 @@ import { X, Plus, Save, CalendarDays } from "lucide-react"
 import BusinessSearch from "../../components/BusinessSearch"
 import { parseVoiceOrder, validateAndCompleteOrder } from "../../utils/orderParser"
 import { formatPhoneNumber } from "../../utils/phoneFormatter"
+import toast, { Toaster } from 'react-hot-toast'
+import { TokenManager } from "../../lib/tokenManager"
 import { 
   convertAudioToText, 
   isSupportedAudioFormat, 
@@ -39,32 +41,7 @@ import OrderItemList from "./components/OrderItemList"
 // 타입 정의 - types/index.ts에서 가져온 타입 사용
 import type { Business, FishType, OrderItem as ApiOrderItem } from "../../types"
 
-// API 설정
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1'
-
-// axios 인스턴스 생성
-const api = axios.create({
-  baseURL: API_BASE_URL,
-  timeout: 10000,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-})
-
-// Request interceptor (Firebase 토큰 사용)
-api.interceptors.request.use(
-  (config) => {
-    const firebaseToken = localStorage.getItem('firebase_token')
-    if (firebaseToken) {
-      config.headers.Authorization = `Bearer ${firebaseToken}`
-    }
-    return config
-  },
-  (error) => {
-    console.error('API 요청 오류:', error)
-    return Promise.reject(error)
-  }
-)
+// JWT 토큰 기반 API 사용 (../../lib/api.ts에서 import)
 
 // 한국 시간대로 날짜를 처리하는 함수들
 const toKoreanDate = (date: Date): string => {
@@ -126,6 +103,170 @@ interface FormData {
   items: OrderItem[];
 }
 
+// JWT 인증이 포함된 fetch 함수
+const fetchWithAuth = async (url: string, options: RequestInit = {}): Promise<Response> => {
+  let token = TokenManager.getAccessToken()
+  
+  if (!token || !TokenManager.isAccessTokenValid()) {
+    // 토큰 갱신 시도
+    const refreshToken = TokenManager.getRefreshToken()
+    if (!refreshToken) {
+      throw new Error('인증이 필요합니다. 다시 로그인해주세요.')
+    }
+    
+    const refreshResponse = await fetch('/api/v1/business/auth/refresh/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        refresh_token: refreshToken
+      })
+    })
+    
+    if (refreshResponse.ok) {
+      const refreshData = await refreshResponse.json()
+      TokenManager.setAccessToken(refreshData.access_token)
+      token = refreshData.access_token
+    } else {
+      TokenManager.removeTokens()
+      window.location.href = '/login'
+      throw new Error('토큰 갱신에 실패했습니다.')
+    }
+  }
+  
+  // Authorization 헤더 추가
+  const headers = {
+    ...options.headers,
+    'Authorization': `Bearer ${token}`
+  }
+  
+  const response = await fetch(url, {
+    ...options,
+    headers
+  })
+  
+  // 401 에러 시 한 번 더 토큰 갱신 시도
+  if (response.status === 401) {
+    const refreshToken = TokenManager.getRefreshToken()
+    if (!refreshToken) {
+      TokenManager.removeTokens()
+      window.location.href = '/login'
+      throw new Error('인증이 만료되었습니다.')
+    }
+    
+    const refreshResponse = await fetch('/api/v1/business/auth/refresh/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        refresh_token: refreshToken
+      })
+    })
+    
+    if (refreshResponse.ok) {
+      const refreshData = await refreshResponse.json()
+      TokenManager.setAccessToken(refreshData.access_token)
+      
+      // 새 토큰으로 원래 요청 재시도
+      const newHeaders = {
+        ...options.headers,
+        'Authorization': `Bearer ${refreshData.access_token}`
+      }
+      
+      return await fetch(url, {
+        ...options,
+        headers: newHeaders
+      })
+    } else {
+      TokenManager.removeTokens()
+      window.location.href = '/login'
+      throw new Error('인증이 만료되었습니다.')
+    }
+  }
+  
+  return response
+}
+
+// STT 상태를 폴링하는 함수 (중복 요청 방지)
+const pollTranscriptionStatus = async (transcriptionId: string, businessId: number): Promise<void> => {
+  const maxAttempts = 20 // 최대 20번 시도 (10분)
+  let attempts = 0
+  let isPolling = true
+  
+  const poll = async () => {
+    if (!isPolling) return // 폴링 중단된 경우
+    
+    try {
+      attempts++
+      console.log(`폴링 시도 ${attempts}/${maxAttempts}: transcriptionId=${transcriptionId}`)
+      
+      const response = await fetchWithAuth(`/api/v1/order/transcription/${transcriptionId}/status/`)
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+      
+      const data = await response.json()
+      console.log(`STT 상태: ${data.status}`)
+      
+      if (data.status === 'completed') {
+        isPolling = false // 폴링 중단
+        
+        // STT 완료 - 텍스트 표시 후 주문 생성
+        if (data.transcribed_text) {
+          setFormData(prev => ({ ...prev, transcribed_text: data.transcribed_text }))
+          toast.success(`음성 인식 완료: "${data.transcribed_text.substring(0, 50)}..."`)
+          
+          // 주문 생성
+          try {
+            const orderResponse = await fetchWithAuth(`/api/v1/order/transcription/${transcriptionId}/create-order/`, {
+              method: 'POST'
+            })
+            const orderResult = await orderResponse.json()
+            
+            if (orderResponse.ok && orderResult.data) {
+              toast.success('주문이 성공적으로 생성되었습니다!')
+              onSubmit(orderResult.data)
+            } else {
+              toast.error(orderResult.error || '주문 생성에 실패했습니다.')
+            }
+          } catch (orderError) {
+            console.error('주문 생성 오류:', orderError)
+            toast.error('주문 생성 중 오류가 발생했습니다.')
+          }
+        } else {
+          toast.error('음성 인식 텍스트가 비어있습니다.')
+        }
+      } else if (data.status === 'failed') {
+        isPolling = false // 폴링 중단
+        toast.error('음성 인식에 실패했습니다. 다시 시도해주세요.')
+      } else if (data.status === 'processing' && attempts < maxAttempts) {
+        // 계속 폴링 - 5초 간격으로 증가
+        const delay = Math.min(5000, 3000 + (attempts * 500)) // 3초에서 시작해서 점진적 증가
+        setTimeout(poll, delay)
+      } else if (attempts >= maxAttempts) {
+        isPolling = false // 폴링 중단
+        toast.error('음성 인식 처리 시간이 초과되었습니다. 다시 시도해주세요.')
+      }
+    } catch (error) {
+      console.error(`폴링 오류 (시도 ${attempts}):`, error)
+      
+      if (attempts < maxAttempts && isPolling) {
+        // 오류 시 더 긴 간격으로 재시도
+        setTimeout(poll, 5000)
+      } else {
+        isPolling = false
+        toast.error('음성 인식 상태 확인 중 오류가 발생했습니다.')
+      }
+    }
+  }
+  
+  // 첫 번째 폴링은 2초 후 시작 (STT 처리 시작 시간 고려)
+  setTimeout(poll, 2000)
+}
+
 const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderData }) => {
   const [showBusinessSearch, setShowBusinessSearch] = useState<boolean>(false)
   const [audioFile, setAudioFile] = useState<AudioFileInfo | null>(null)
@@ -142,27 +283,15 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
   const [selectedBusinessId, setSelectedBusinessId] = useState<number | null>(null)
   const [isLoadingBusinesses, setIsLoadingBusinesses] = useState<boolean>(false)
 
-  // 어종 목록 가져오기 (직접 API 호출)
+  // 어종 목록 가져오기 (JWT 토큰 기반 API 사용)
   useEffect(() => {
     const fetchFishTypes = async () => {
       try {
         setIsLoadingFishTypes(true)
-        const response = await api.get('/fish-registry/fish-types/')
+        const response = await fishTypeApi.getAll()
         console.log('어종 목록 응답:', response.data)
         
-        // API 응답 구조에 따라 데이터 추출
-        let fishTypeData: FishType[] = []
-        
-        if (response.data && Array.isArray(response.data)) {
-          fishTypeData = response.data
-        } else if (response.data && response.data.results && Array.isArray(response.data.results)) {
-          fishTypeData = response.data.results
-        } else if (response.data && typeof response.data === 'object') {
-          // 단일 객체인 경우 배열로 변환
-          fishTypeData = [response.data]
-        }
-        
-        setFishTypes(fishTypeData)
+        setFishTypes(response.data || [])
       } catch (error) {
         console.error('어종 목록 가져오기 실패:', error)
         setFishTypes([])
@@ -174,21 +303,23 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
     fetchFishTypes()
   }, [])
 
-  // 거래처 목록 가져오기 (직접 API 호출)
+  // 거래처 목록 가져오기 (JWT 토큰 기반 API 사용)
   useEffect(() => {
     const fetchBusinesses = async () => {
       try {
         setIsLoadingBusinesses(true)
-        const response = await api.get('/business/customers/')
-        console.log('거래처 목록 응답:', response.data)
+        const response = await businessApi.getAll()
+        console.log('거래처 목록 응답:', response)
         
         // API 응답 구조에 따라 데이터 추출
         let businessData: Business[] = []
         
-        if (response.data && Array.isArray(response.data)) {
+        if (response && Array.isArray(response)) {
+          businessData = response
+        } else if (response && response.results && Array.isArray(response.results)) {
+          businessData = response.results
+        } else if (response && response.data && Array.isArray(response.data)) {
           businessData = response.data
-        } else if (response.data && response.data.results && Array.isArray(response.data.results)) {
-          businessData = response.data.results
         }
         
         setBusinesses(businessData)
@@ -246,13 +377,13 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
     setShowBusinessSearch(false)
   }
 
-  // 음성 파일 업로드 처리
+  // 음성 파일 업로드 처리 (백엔드 STT 사용)
   const handleVoiceFileUpload = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (!file) return
 
     if (!isSupportedAudioFormat(file)) {
-      alert('지원하지 않는 오디오 파일 형식입니다. WAV, MP3, OGG, WEBM, M4A, AAC 파일을 사용해주세요.')
+      toast.error('지원하지 않는 오디오 파일 형식입니다. WAV, MP3, OGG, WEBM, M4A, AAC, FLAC 파일을 사용해주세요.')
       return
     }
 
@@ -267,17 +398,15 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
       }
       
       setAudioFile(audioInfo)
-      setFormData((prev: FormData) => ({ ...prev, source_type: 'voice' }))
+      setFormData((prev: FormData) => ({ 
+        ...prev, 
+        source_type: 'voice',
+        raw_input_path: file.name // 파일명 저장
+      }))
       
-      setIsProcessingAudio(true)
-      const transcribedText = await convertAudioToText(file)
-      setFormData((prev: FormData) => ({ ...prev, transcribed_text: transcribedText }))
-      setIsProcessingAudio(false)
-      
-      alert('음성 파일이 성공적으로 업로드되고 텍스트로 변환되었습니다!')
+      toast.success('음성 파일이 업로드되었습니다. 주문 생성 시 음성 인식이 처리됩니다.')
     } catch (error) {
-      setIsProcessingAudio(false)
-      alert(`음성 파일 처리 오류: ${error instanceof Error ? error.message : '알 수 없는 오류'}`)
+      toast.error(`음성 파일 처리 오류: ${error instanceof Error ? error.message : '알 수 없는 오류'}`)
     }
   }
 
@@ -287,7 +416,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
     if (!file) return
 
     if (!file.type.startsWith('image/')) {
-      alert('이미지 파일만 업로드 가능합니다. JPG, PNG, GIF 파일을 사용해주세요.')
+      toast.error('이미지 파일만 업로드 가능합니다. JPG, PNG, GIF 파일을 사용해주세요.')
       return
     }
 
@@ -301,10 +430,10 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
       setFormData((prev: FormData) => ({ ...prev, transcribed_text: extractedText }))
       setIsProcessingImage(false)
       
-      alert('이미지에서 텍스트가 성공적으로 추출되었습니다!')
+      toast.success('이미지에서 텍스트가 성공적으로 추출되었습니다!')
     } catch (error) {
       setIsProcessingImage(false)
-      alert(`이미지 처리 오류: ${error instanceof Error ? error.message : '알 수 없는 오류'}`)
+      toast.error(`이미지 처리 오류: ${error instanceof Error ? error.message : '알 수 없는 오류'}`)
     }
   }
 
@@ -340,12 +469,12 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
           }))
         }))
         
-        alert('음성 파싱이 완료되었습니다!')
+        toast.success('음성 파싱이 완료되었습니다!')
       } catch (error) {
-        alert(`파싱 오류: ${error instanceof Error ? error.message : '알 수 없는 오류'}`)
+        toast.error(`파싱 오류: ${error instanceof Error ? error.message : '알 수 없는 오류'}`)
       }
     } else {
-      alert('음성 원문을 먼저 입력해주세요.')
+      toast.error('음성 원문을 먼저 입력해주세요.')
     }
   }
 
@@ -371,12 +500,12 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
           }))
         }))
         
-        alert('텍스트 파싱이 완료되었습니다!')
+        toast.success('텍스트 파싱이 완료되었습니다!')
       } catch (error) {
-        alert(`파싱 오류: ${error instanceof Error ? error.message : '알 수 없는 오류'}`)
+        toast.error(`파싱 오류: ${error instanceof Error ? error.message : '알 수 없는 오류'}`)
       }
     } else {
-      alert('텍스트를 먼저 입력해주세요.')
+      toast.error('텍스트를 먼저 입력해주세요.')
     }
   }
 
@@ -423,7 +552,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
     e.preventDefault()
     
     if (!selectedBusinessId) {
-      alert('거래처를 선택해주세요.')
+      toast.error('거래처를 선택해주세요.')
       return
     }
     
@@ -462,28 +591,103 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
     
     try {
       console.log('전송할 주문 데이터:', orderData)
-      // API를 사용하여 주문 저장
-      const response = await api.post('/order/upload/', orderData)
       
-      if (response.data) {
-        alert('주문이 성공적으로 저장되었습니다!')
-        onSubmit(response.data)
+      // 음성 파일이 있는 경우 FormData로 전송
+      if (formData.source_type === 'voice' && audioFile?.file) {
+        const formDataToSend = new FormData()
+        
+        // 음성 파일 추가
+        formDataToSend.append('audio_file', audioFile.file)
+        
+        // 주문 데이터를 JSON으로 추가
+        Object.keys(orderData).forEach(key => {
+          if (key === 'order_items') {
+            formDataToSend.append(key, JSON.stringify(orderData[key]))
+          } else {
+            formDataToSend.append(key, orderData[key] as string)
+          }
+        })
+        
+        // JWT 토큰으로 multipart/form-data 전송
+        const response = await fetchWithAuth('/api/v1/order/upload/', {
+          method: 'POST',
+          body: formDataToSend
+        })
+        
+        const result = await response.json()
+        
+        if (response.status === 202 && result.data) {
+          // STT 처리 중 - 폴링 시작
+          toast.success('음성 파일 업로드 완료! 음성 인식 처리 중입니다...')
+          
+          const transcriptionId = result.data.transcription_id
+          const businessId = result.data.business_id
+          
+          // STT 상태를 폴링하여 확인
+          pollTranscriptionStatus(transcriptionId, businessId)
+        } else if (response.ok && result.data) {
+          toast.success('주문이 성공적으로 저장되었습니다!')
+          onSubmit(result.data)
+        } else {
+          throw new Error(result.error || '주문 저장에 실패했습니다.')
+        }
       } else {
-        throw new Error('주문 저장에 실패했습니다.')
+        // 일반 JSON 요청 (수동, 텍스트, 이미지)
+        const response = await orderApi.create(orderData)
+        
+        if (response.data) {
+          toast.success('주문이 성공적으로 저장되었습니다!')
+          onSubmit(response.data)
+        } else {
+          throw new Error('주문 저장에 실패했습니다.')
+        }
       }
     } catch (error: any) {
       console.error('주문 저장 오류:', error)
-      if (error.response && error.response.data) {
-        console.error('서버 응답 오류:', error.response.data)
-        alert(`주문 저장 오류: ${JSON.stringify(error.response.data)}`)
-      } else {
-        alert(`주문 저장 오류: ${error instanceof Error ? error.message : '알 수 없는 오류'}`)
+      
+      // 에러 메시지를 간단하게 처리
+      let errorMessage = '주문 저장 중 오류가 발생했습니다.'
+      
+      if (error.response?.data?.error) {
+        // 백엔드에서 보낸 에러 메시지가 있는 경우
+        if (typeof error.response.data.error === 'object') {
+          // Serializer 에러인 경우 첫 번째 에러만 표시
+          const firstError = Object.values(error.response.data.error)[0]
+          errorMessage = Array.isArray(firstError) ? firstError[0] : firstError
+        } else {
+          errorMessage = error.response.data.error
+        }
+      } else if (error.message) {
+        errorMessage = error.message
       }
+      
+      toast.error(errorMessage)
     }
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+    <>
+      <Toaster 
+        position="top-right"
+        toastOptions={{
+          duration: 3000,
+          style: {
+            background: '#363636',
+            color: '#fff',
+          },
+          success: {
+            style: {
+              background: '#22c55e',
+            },
+          },
+          error: {
+            style: {
+              background: '#ef4444',
+            },
+          },
+        }}
+      />
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
       <Card className="w-full max-w-4xl max-h-[90vh] overflow-y-auto">
         <CardHeader>
           <div className="flex items-center justify-between">
@@ -569,13 +773,12 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
                 
                 <TabsContent value="voice">
                   <VoiceUploadTab
-                    onFileUpload={handleVoiceFileUpload}
-                    isProcessing={isProcessingAudio}
-                    transcribedText={formData.transcribed_text}
-                    uploadedFile={audioFile?.file || null}
-                    onRemoveFile={() => {
-                      setAudioFile(null)
-                      setFormData((prev: FormData) => ({ ...prev, transcribed_text: '' }))
+                    onTranscriptionComplete={(text: string) => {
+                      setFormData((prev: FormData) => ({ ...prev, transcribed_text: text }))
+                      toast.success('음성 변환이 완료되었습니다!')
+                    }}
+                    onError={(error: string) => {
+                      toast.error(`음성 변환 실패: ${error}`)
                     }}
                   />
                 </TabsContent>
@@ -654,7 +857,8 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
           />
         )}
       </Card>
-    </div>
+      </div>
+    </>
   )
 }
 

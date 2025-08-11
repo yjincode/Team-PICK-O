@@ -1,10 +1,11 @@
 import os
 import uuid
+import json
 from datetime import datetime
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework import status
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from django.views import View
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
 from django.conf import settings
 from django.shortcuts import get_object_or_404
 from django.db import transaction
@@ -17,9 +18,13 @@ from .ocr_utils import extract_text_from_image
 from transcription.services.order_service import OrderCreationService
 from transcription.models import AudioTranscription
 from fish_registry.models import FishType
+from fish_registry.serializers import FishTypeSerializer
+from business.models import Business
+from business.serializers import BusinessSerializer
 
-class OrderUploadView(APIView):
-    permission_classes = [IsAuthenticated]
+@method_decorator(csrf_exempt, name='dispatch')
+class OrderUploadView(View):
+    """Django View 기반 주문 업로드 - JWT 미들웨어 인증"""
     
     def post(self, request):
         """
@@ -30,124 +35,362 @@ class OrderUploadView(APIView):
         3. 수동 입력 (source_type: 'manual') - 수동으로 주문 정보 입력
         4. 이미지 업로드 (source_type: 'image') - 이미지를 업로드하여 OCR로 텍스트 추출
         """
-        source_type = request.data.get('source_type', 'manual')
+        print(f"📦 주문 생성 요청 받음")
+        print(f"🆔 request.user_id: {getattr(request, 'user_id', 'NOT SET')}")
+        
+        # 미들웨어에서 설정된 사용자 정보 확인
+        if not hasattr(request, 'user_id') or not request.user_id:
+            print(f"❌ 사용자 인증 정보 없음")
+            return JsonResponse({'error': '사용자 인증이 필요합니다.'}, status=401)
+        
+        print(f"✅ 사용자 인증 확인: user_id={request.user_id}")
+        
+        # Django View에서 데이터 파싱
+        try:
+            if request.content_type and 'application/json' in request.content_type:
+                data = json.loads(request.body)
+                source_type = data.get('source_type', 'manual')
+            else:
+                data = request.POST
+                source_type = data.get('source_type', 'manual')
+            print(f"📝 파싱된 데이터: {data}")
+        except json.JSONDecodeError as e:
+            print(f"❌ JSON 파싱 오류: {e}")
+            return JsonResponse({'error': '잘못된 JSON 형식입니다.'}, status=400)
+        
+        source_type = data.get('source_type', 'manual')
         
         if source_type == 'voice':
-            return self._handle_voice_order(request)
+            return self._handle_voice_order(request, data)
         elif source_type == 'text':
-            return self._handle_text_order(request)
+            return self._handle_text_order(request, data)
         elif source_type == 'manual':
-            return self._handle_manual_order(request)
+            return self._handle_manual_order(request, data)
         elif source_type == 'image':
-            return self._handle_image_order(request)
+            return self._handle_image_order(request, data)
         else:
-            return Response(
+            return JsonResponse(
                 {'error': '지원하지 않는 source_type입니다. (voice, text, manual, image)'}, 
-                status=status.HTTP_400_BAD_REQUEST
+                status=400
             )
     
-    def _handle_voice_order(self, request):
-        """음성 파일 업로드를 통한 주문 등록"""
+    def _handle_voice_order(self, request, data):
+        """음성 파일 업로드를 통한 주문 등록 (실제 STT 사용)"""
         # 음성 파일이 업로드되었는지 확인
         if 'audio_file' not in request.FILES:
-            return Response(
+            return JsonResponse(
                 {'error': '음성 파일이 필요합니다.'}, 
-                status=status.HTTP_400_BAD_REQUEST
+                status=400
             )
         
         audio_file = request.FILES['audio_file']
-        business_id = request.data.get('business_id')
+        business_id = data.get('business_id')
         
         if not business_id:
-            return Response(
+            return JsonResponse(
                 {'error': 'business_id가 필요합니다.'}, 
-                status=status.HTTP_400_BAD_REQUEST
+                status=400
+            )
+        
+        # 음성 파일 확장자 검증
+        valid_extensions = ['.wav', '.mp3', '.flac', '.m4a', '.ogg', '.webm', '.aac']
+        if not any(audio_file.name.lower().endswith(ext) for ext in valid_extensions):
+            return JsonResponse(
+                {'error': f'지원하지 않는 오디오 형식입니다. 지원 형식: {", ".join(valid_extensions)}'}, 
+                status=400
             )
         
         try:
             with transaction.atomic():
-                # 1. AudioTranscription 모델에 음성 파일 정보 저장
+                # 1. 실제 STT 처리를 위한 AudioTranscription 생성
+                from business.models import User
+                from transcription.models import AudioTranscription
+                user = User.objects.get(id=request.user_id)
+                
                 transcription = AudioTranscription.objects.create(
-                    user=request.user,
-                    audio_file=audio_file,  # 업로드된 음성 파일
-                    language='ko',
+                    user=user,
+                    audio_file=audio_file,
+                    language='ko',  # 한국어 설정
                     status='processing',
                     create_order=True,
                     business_id=business_id
                 )
                 
-                # 2. 음성 파싱 처리 (transcription 모듈 활용)
-                order_service = OrderCreationService(request.user)
+                print(f"🎤 음성 파일 저장 완료: {transcription.id}")
                 
-                # 3. 실제 음성 파일 파싱 (Whisper 모델 사용)
-                parsed_data = self._parse_audio_file_with_transcription(audio_file)
+                # 2. STT 처리를 백그라운드 스레드로 시작
+                print(f"🎤 음성 파일 업로드 완료, STT 처리 시작: {transcription.id}")
                 
-                # 4. 파싱된 데이터로 주문 생성
-                order_data = {
-                    'business_id': business_id,
-                    'total_price': parsed_data.get('total_price', 0),
-                    'order_datetime': datetime.now(),
-                    'delivery_date': parsed_data.get('delivery_date', datetime.now().date()),
-                    'source_type': 'voice',
-                    'raw_input_path': str(transcription.audio_file),  # 업로드된 파일 경로
-                    'transcribed_text': parsed_data.get('transcribed_text', ''),
-                    'memo': parsed_data.get('memo', '음성 인식으로 생성된 주문'),
-                    'status': 'pending',
-                    'order_items': parsed_data.get('order_items', [])
-                }
+                import threading
+                thread = threading.Thread(
+                    target=self._process_audio_background,
+                    args=(transcription,)
+                )
+                thread.daemon = True
+                thread.start()
                 
-                serializer = OrderSerializer(data=order_data)
-                if serializer.is_valid():
-                    order = serializer.save()
-                    
-                    # 5. transcription과 order 연결
-                    transcription.order = order
-                    transcription.status = 'completed'
-                    transcription.save()
-                    
-                    return Response({
-                        'message': '음성 주문이 성공적으로 등록되었습니다.',
-                        'order_id': order.id,
+                # 즉시 transcription ID를 반환
+                return JsonResponse({
+                    'message': '음성 파일이 업로드되었습니다. STT 처리 중입니다.',
+                    'data': {
                         'transcription_id': str(transcription.id),
-                        'transcribed_text': order.transcribed_text,
-                        'status': order.order_status,
-                        'order_items': [
-                            {
-                                'fish_type_id': item.fish_type.id,
-                                'fish_name': item.fish_type.name,
-                                'quantity': item.quantity,
-                                'unit_price': float(item.unit_price),
-                                'unit': item.unit
-                            } for item in order.items.all()  # related_name이 'items'임
-                        ]
-                    }, status=status.HTTP_201_CREATED)
-                else:
-                    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-                    
+                        'status': 'processing',
+                        'business_id': business_id
+                    }
+                }, status=202)  # 202 Accepted - 처리 중
+                
         except Exception as e:
-            return Response(
+            print(f"❌ 음성 주문 처리 오류: {e}")
+            import traceback
+            traceback.print_exc()
+            return JsonResponse(
                 {'error': f'음성 주문 처리 중 오류가 발생했습니다: {str(e)}'}, 
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                status=500
             )
     
-    def _handle_text_order(self, request):
+    def _process_audio_sync(self, transcription):
+        """동기식 STT 처리 - 더 가벼운 모델 사용"""
+        try:
+            import tempfile
+            import os
+            import torch
+            import torchaudio
+            from transformers import AutoProcessor, AutoModelForSpeechSeq2Seq
+            
+            print(f"🔄 STT 처리 시작: {transcription.id}")
+            
+            # 더 가벼운 Whisper 모델 사용 (base 모델: ~290MB)
+            model_name = "openai/whisper-base"
+            
+            if not hasattr(self, '_stt_processor'):
+                print(f"🔧 Whisper 모델 로딩중... ({model_name})")
+                self._stt_processor = AutoProcessor.from_pretrained(model_name)
+                self._stt_model = AutoModelForSpeechSeq2Seq.from_pretrained(model_name)
+                self._stt_model.eval()
+                
+                # GPU 사용 가능 시 GPU로 이동
+                self._device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+                self._stt_model.to(self._device)
+                print(f"✅ Whisper 모델 로딩 완료 (device: {self._device})")
+            
+            # 업로드된 파일의 원본 확장자 유지하여 임시 파일 생성
+            transcription.audio_file.seek(0)
+            audio_bytes = transcription.audio_file.read()
+            
+            # 원본 파일명에서 확장자 추출
+            original_filename = transcription.audio_file.name
+            file_extension = os.path.splitext(original_filename)[1].lower()
+            if not file_extension:
+                file_extension = '.mp3'  # 기본값
+            
+            print(f"🎵 원본 파일: {original_filename}, 확장자: {file_extension}")
+            
+            with tempfile.NamedTemporaryFile(delete=False, suffix=file_extension) as temp_audio:
+                temp_audio.write(audio_bytes)
+                temp_audio_path = temp_audio.name
+            
+            print(f"📁 임시 파일 생성: {temp_audio_path}")
+            
+            try:
+                # 파일이 제대로 생성되었는지 확인
+                if not os.path.exists(temp_audio_path):
+                    raise FileNotFoundError(f"임시 파일이 생성되지 않았습니다: {temp_audio_path}")
+                
+                file_size = os.path.getsize(temp_audio_path)
+                print(f"📊 임시 파일 크기: {file_size} bytes")
+                
+                if file_size == 0:
+                    raise ValueError("임시 파일이 비어있습니다")
+                
+                # torchaudio로 임시 파일 로드
+                print(f"🔄 오디오 파일 로드 시도: {temp_audio_path}")
+                audio_tensor, sample_rate = torchaudio.load(temp_audio_path)
+                print(f"🎵 오디오 파일 정보: sample_rate={sample_rate}, shape={audio_tensor.shape}")
+                
+                # 스테레오인 경우 모노로 변환
+                if audio_tensor.shape[0] > 1:
+                    audio_tensor = torch.mean(audio_tensor, dim=0, keepdim=True)
+                    print("🔧 스테레오 → 모노 변환 완료")
+                
+                # 16kHz로 리샘플링 (필요시)
+                if sample_rate != 16000:
+                    resampler = torchaudio.transforms.Resample(orig_freq=sample_rate, new_freq=16000)
+                    audio_tensor = resampler(audio_tensor)
+                    print("🔧 16kHz로 리샘플링 완료")
+                
+                # 전처리
+                inputs = self._stt_processor(
+                    audio_tensor.squeeze().numpy(),
+                    sampling_rate=16000,
+                    return_tensors="pt"
+                )
+                inputs = {k: v.to(self._device) for k, v in inputs.items()}
+                
+                # STT 추론
+                print("🎯 STT 추론 시작...")
+                with torch.no_grad():
+                    generated_ids = self._stt_model.generate(
+                        inputs["input_features"],
+                        forced_decoder_ids=self._stt_processor.get_decoder_prompt_ids(
+                            language="ko",  # 한국어
+                            task="transcribe"
+                        )
+                    )
+                
+                # 결과 디코딩
+                transcription_text = self._stt_processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
+                
+                # transcription 모델 업데이트
+                transcription.transcription = transcription_text
+                transcription.status = 'completed'
+                transcription.save(update_fields=['transcription', 'status'])
+                
+                print(f"✅ STT 처리 완료: {transcription_text}")
+                return transcription_text
+                
+            finally:
+                # 임시 파일 정리
+                try:
+                    if os.path.exists(temp_audio_path):
+                        os.unlink(temp_audio_path)
+                        print(f"🗑️ 임시 파일 삭제: {temp_audio_path}")
+                except Exception as cleanup_error:
+                    print(f"⚠️ 임시 파일 삭제 실패: {cleanup_error}")
+            
+        except Exception as e:
+            print(f"❌ STT 처리 오류: {e}")
+            transcription.status = 'failed'
+            transcription.save(update_fields=['status'])
+            import traceback
+            traceback.print_exc()
+            return None
+    
+    def _process_audio_background(self, transcription):
+        """백그라운드에서 STT 처리 (스레드용)"""
+        print(f"🔄 백그라운드 STT 처리 시작: {transcription.id}")
+        result = self._process_audio_sync(transcription)
+        if result:
+            print(f"✅ 백그라운드 STT 처리 완료: {transcription.id}")
+        else:
+            print(f"❌ 백그라운드 STT 처리 실패: {transcription.id}")
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class TranscriptionStatusView(View):
+    """음성 인식 상태 확인 API"""
+    
+    def get(self, request, transcription_id):
+        """transcription 상태 조회"""
+        try:
+            # 미들웨어에서 설정된 사용자 정보 확인
+            if not hasattr(request, 'user_id') or not request.user_id:
+                return JsonResponse({'error': '사용자 인증이 필요합니다.'}, status=401)
+            
+            from transcription.models import AudioTranscription
+            transcription = AudioTranscription.objects.get(
+                id=transcription_id, 
+                user_id=request.user_id
+            )
+            
+            return JsonResponse({
+                'transcription_id': str(transcription.id),
+                'status': transcription.status,
+                'transcribed_text': transcription.transcription,
+                'created_at': transcription.created_at.isoformat(),
+                'updated_at': transcription.updated_at.isoformat(),
+            })
+            
+        except AudioTranscription.DoesNotExist:
+            return JsonResponse({'error': 'Transcription을 찾을 수 없습니다.'}, status=404)
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=500)
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class TranscriptionToOrderView(View):
+    """STT 완료 후 주문 생성 API"""
+    
+    def post(self, request, transcription_id):
+        """transcription으로 주문 생성"""
+        try:
+            # 미들웨어에서 설정된 사용자 정보 확인
+            if not hasattr(request, 'user_id') or not request.user_id:
+                return JsonResponse({'error': '사용자 인증이 필요합니다.'}, status=401)
+            
+            from transcription.models import AudioTranscription
+            from business.models import User
+            
+            transcription = AudioTranscription.objects.get(
+                id=transcription_id, 
+                user_id=request.user_id
+            )
+            
+            if transcription.status != 'completed':
+                return JsonResponse({'error': 'STT가 완료되지 않았습니다.'}, status=400)
+            
+            if not transcription.transcription:
+                return JsonResponse({'error': '변환된 텍스트가 없습니다.'}, status=400)
+            
+            # 주문 생성
+            user = User.objects.get(id=request.user_id)
+            order_service = OrderCreationService(user)
+            order, order_items = order_service.create_order(
+                text=transcription.transcription,
+                business_id=transcription.business_id
+            )
+            
+            # transcription과 order 연결
+            transcription.order = order
+            transcription.save()
+            
+            return JsonResponse({
+                'message': '음성 주문이 성공적으로 생성되었습니다.',
+                'data': {
+                    'id': order.id,
+                    'transcription_id': str(transcription.id),
+                    'transcribed_text': transcription.transcription,
+                    'business_name': order.business.business_name,
+                    'total_price': order.total_price,
+                    'order_status': order.order_status,
+                    'delivery_datetime': order.delivery_datetime.isoformat() if order.delivery_datetime else None,
+                    'order_items': [
+                        {
+                            'fish_type_id': item.fish_type_id,
+                            'fish_name': item.fish_type.name,
+                            'quantity': item.quantity,
+                            'unit_price': float(item.unit_price),
+                            'unit': item.unit,
+                            'remarks': item.remarks
+                        } for item in order_items
+                    ]
+                }
+            }, status=201)
+            
+        except AudioTranscription.DoesNotExist:
+            return JsonResponse({'error': 'Transcription을 찾을 수 없습니다.'}, status=404)
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=500)
+    
+    def _handle_text_order(self, request, data):
         """텍스트 파싱을 통한 주문 등록"""
-        text = request.data.get('text')
-        business_id = request.data.get('business_id')
+        text = data.get('text')
+        business_id = data.get('business_id')
         
         if not text or not business_id:
-            return Response(
+            return JsonResponse(
                 {'error': 'text와 business_id가 필요합니다.'}, 
-                status=status.HTTP_400_BAD_REQUEST
+                status=400
             )
         
         try:
             with transaction.atomic():
                 # transcription 모듈의 OrderCreationService 활용하여 텍스트 파싱
-                order_service = OrderCreationService(request.user)
+                from business.models import User
+                user = User.objects.get(id=request.user_id)
+                order_service = OrderCreationService(user)
                 order, order_items = order_service.create_order(text, business_id)
                 
-                return Response({
+                return JsonResponse({
                     'message': '텍스트 주문이 성공적으로 등록되었습니다.',
                     'order_id': order.id,
                     'transcribed_text': order.transcribed_text,
@@ -161,41 +404,74 @@ class OrderUploadView(APIView):
                             'unit': item.unit
                         } for item in order_items
                     ]
-                }, status=status.HTTP_201_CREATED)
+                }, status=201)
                 
         except Exception as e:
-            return Response(
+            return JsonResponse(
                 {'error': f'텍스트 주문 처리 중 오류가 발생했습니다: {str(e)}'}, 
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                status=500
             )
     
-    def _handle_manual_order(self, request):
+    def _handle_manual_order(self, request, data):
         """수동 입력을 통한 주문 등록"""
-        serializer = OrderSerializer(data=request.data)
-        if serializer.is_valid():
-            order = serializer.save(user_id=request.user_id)
+        print(f"📝 수동 주문 처리 시작")
+        print(f"📋 수동 주문 데이터: {data}")
+        
+        try:
+            # 사용자 정보 설정
+            validated_data = dict(data)  # 데이터 복사
+            validated_data['user_id'] = request.user_id
             
-            return Response({
-                'message': '수동 주문이 성공적으로 등록되었습니다.',
-                'order_id': order.id,
-                'business_name': order.business.business_name,
-                'total_price': order.total_price,
-                'status': order.order_status
-            }, status=status.HTTP_201_CREATED)
-        else:
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            print(f"✅ 검증할 데이터: {validated_data}")
+            
+            serializer = OrderSerializer(data=validated_data)
+            if serializer.is_valid():
+                print(f"✅ Serializer 검증 성공")
+                order = serializer.save()
+                
+                print(f"✅ 주문 생성 성공: order_id={order.id}")
+                
+                return JsonResponse({
+                    'message': '수동 주문이 성공적으로 등록되었습니다.',
+                    'data': {
+                        'id': order.id,
+                        'business_name': order.business.business_name,
+                        'total_price': order.total_price,
+                        'order_status': order.order_status,
+                        'delivery_datetime': order.delivery_datetime.isoformat() if order.delivery_datetime else None,
+                        'order_items': [
+                            {
+                                'fish_type_id': item.fish_type_id,
+                                'fish_name': item.fish_type.name,
+                                'quantity': item.quantity,
+                                'unit_price': float(item.unit_price),
+                                'unit': item.unit,
+                                'remarks': item.remarks
+                            } for item in order.items.all()
+                        ]
+                    }
+                }, status=201)
+            else:
+                print(f"❌ Serializer 검증 실패: {serializer.errors}")
+                return JsonResponse({'error': serializer.errors}, status=400)
+                
+        except Exception as e:
+            print(f"❌ 수동 주문 처리 오류: {e}")
+            import traceback
+            traceback.print_exc()
+            return JsonResponse({'error': f'수동 주문 처리 중 오류가 발생했습니다: {str(e)}'}, status=500)
     
-    def _handle_image_order(self, request):
+    def _handle_image_order(self, request, data):
         """이미지 업로드를 통한 주문 등록 (OCR 사용)"""
         # 이미지 파일이 업로드되었는지 확인
         if 'image' not in request.FILES:
-            return Response(
+            return JsonResponse(
                 {'error': '이미지 파일이 제공되지 않았습니다'}, 
-                status=status.HTTP_400_BAD_REQUEST
+                status=400
             )
         
         image_file = request.FILES['image']
-        business_id = request.data.get('business_id')
+        business_id = data.get('business_id')
         
         try:
             # 업로드된 이미지를 임시로 저장
@@ -208,7 +484,9 @@ class OrderUploadView(APIView):
                 extracted_text = extract_text_from_image(image_file)
                 
                 # 추출된 텍스트에서 주문 생성
-                order_service = OrderCreationService(request.user)
+                from business.models import User
+                user = User.objects.get(id=request.user_id)
+                order_service = OrderCreationService(user)
                 
                 # 주문 파싱 및 생성
                 with transaction.atomic():
@@ -244,7 +522,7 @@ class OrderUploadView(APIView):
                     }
                 }
                 
-                return Response(response_data, status=status.HTTP_201_CREATED)
+                return JsonResponse(response_data, status=201)
                 
             except Exception as e:
                 # 오류가 발생한 경우 저장된 파일 정리
@@ -253,9 +531,9 @@ class OrderUploadView(APIView):
                 raise
                 
         except Exception as e:
-            return Response(
+            return JsonResponse(
                 {'error': f'이미지 처리 중 오류가 발생했습니다: {str(e)}'}, 
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                status=500
             )
     
     def _parse_audio_file_with_transcription(self, audio_file):
@@ -353,96 +631,30 @@ class OrderUploadView(APIView):
             }
 
 
-class OCRImageUploadView(APIView):
-    """
-    한국어 주문 정보가 포함된 이미지를 업로드하기 위한 API 엔드포인트.
-    OCR을 사용하여 텍스트를 추출하고 추출된 텍스트에서 주문을 생성합니다.
-    """
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request):
-        # 이미지 파일이 업로드되었는지 확인
-        if 'image' not in request.FILES:
-            return Response(
-                {'error': '이미지 파일이 제공되지 않았습니다'}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        image_file = request.FILES['image']
-        business_id = request.data.get('business_id')
-        
-        try:
-            # 업로드된 이미지를 임시로 저장
-            file_ext = os.path.splitext(image_file.name)[1]
-            filename = f"ocr_uploads/{uuid.uuid4()}{file_ext}"
-            filepath = default_storage.save(filename, image_file)
-            
-            try:
-                # OCR을 사용하여 텍스트 추출
-                extracted_text = extract_text_from_image(image_file)
-                
-                # 추출된 텍스트에서 주문 생성
-                order_service = OrderCreationService(request.user)
-                
-                # 주문 파싱 및 생성
-                with transaction.atomic():
-                    order, order_items = order_service.create_order(
-                        text=extracted_text,
-                        business_id=business_id
-                    )
-                
-                # 응답 데이터 준비
-                response_data = {
-                    'message': '이미지에서 주문이 성공적으로 생성되었습니다',
-                    'order_id': order.id,
-                    'extracted_text': extracted_text,
-                    'order': {
-                        'id': order.id,
-                        'business_id': order.business.id,
-                        'business_name': order.business.business_name,
-                        'total_price': order.total_price,
-                        'status': order.order_status,
-                        'source_type': 'image',
-                        'transcribed_text': extracted_text,
-                        'created_at': order.order_datetime.isoformat(),
-                        'delivery_date': order.delivery_date.isoformat() if order.delivery_date else None,
-                        'items': [
-                            {
-                                'fish_type': item.fish_type.fish_name,
-                                'quantity': item.quantity,
-                                'unit': item.unit,
-                                'unit_price': str(item.unit_price)
-                            }
-                            for item in order.items.all()
-                        ]
-                    }
-                }
-                
-                return Response(response_data, status=status.HTTP_201_CREATED)
-                
-            except Exception as e:
-                # 오류가 발생한 경우 저장된 파일 정리
-                if 'filepath' in locals():
-                    default_storage.delete(filepath)
-                raise
-                
-        except Exception as e:
-            return Response(
-                {'error': f'이미지 처리 중 오류가 발생했습니다: {str(e)}'}, 
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+# 중복된 OCRImageUploadView 제거됨 - _handle_image_order에서 처리
 
 
-class OrderListView(APIView):
-    permission_classes = [AllowAny]
+@method_decorator(csrf_exempt, name='dispatch')
+class OrderListView(View):
+    """Django View 기반 주문 목록 - JWT 미들웨어 인증"""
     
     def get(self, request):
         """주문 목록 조회"""
+        print(f"📝 주문 목록 조회 요청")
+        print(f"🆔 request.user_id: {getattr(request, 'user_id', 'NOT SET')}")
+        
+        # 미들웨어에서 설정된 사용자 정보 확인
+        if not hasattr(request, 'user_id') or not request.user_id:
+            print(f"❌ 사용자 인증 정보 없음")
+            return JsonResponse({'error': '사용자 인증이 필요합니다.'}, status=401)
+        
+        print(f"✅ 사용자 인증 확인: user_id={request.user_id}")
+        
         # 미들웨어에서 설정된 user_id 사용
         orders = Order.objects.select_related('business').prefetch_related('items__fish_type').filter(**get_user_queryset_filter(request))
         
         # 상태별 필터링 (선택사항)
-        status_filter = request.query_params.get('status')
+        status_filter = request.GET.get('status')
         if status_filter:
             orders = orders.filter(order_status=status_filter)
             
@@ -450,53 +662,104 @@ class OrderListView(APIView):
         orders = orders.order_by('-order_datetime')
         
         serializer = OrderListSerializer(orders, many=True)
-        return Response(serializer.data)
+        return JsonResponse(serializer.data, safe=False)
 
 
-class OrderDetailView(APIView):
-    permission_classes = [AllowAny]
+@method_decorator(csrf_exempt, name='dispatch')
+class OrderDetailView(View):
+    """Django View 기반 주문 상세 - JWT 미들웨어 인증"""
     
     def get(self, request, order_id):
         """주문 상세 조회"""
-        # 미들웨어에서 설정된 user_id 사용
-        order = get_object_or_404(Order, id=order_id, **get_user_queryset_filter(request))
-        serializer = OrderDetailSerializer(order)
-        return Response(serializer.data)
+        print(f"🗓️ 주문 상세 조회 요청: order_id={order_id}")
+        print(f"🆔 request.user_id: {getattr(request, 'user_id', 'NOT SET')}")
+        
+        # 미들웨어에서 설정된 사용자 정보 확인
+        if not hasattr(request, 'user_id') or not request.user_id:
+            print(f"❌ 사용자 인증 정보 없음")
+            return JsonResponse({'error': '사용자 인증이 필요합니다.'}, status=401)
+        
+        print(f"✅ 사용자 인증 확인: user_id={request.user_id}")
+        
+        try:
+            # 미들웨어에서 설정된 user_id 사용
+            order = Order.objects.get(id=order_id, **get_user_queryset_filter(request))
+            serializer = OrderDetailSerializer(order)
+            return JsonResponse(serializer.data)
+        except Order.DoesNotExist:
+            return JsonResponse({'error': '주문을 찾을 수 없습니다.'}, status=404)
 
 
-class OrderStatusUpdateView(APIView):
-    permission_classes = [AllowAny]
+@method_decorator(csrf_exempt, name='dispatch')
+class OrderStatusUpdateView(View):
+    """Django View 기반 주문 상태 업데이트 - JWT 미들웨어 인증"""
     
     def patch(self, request, order_id):
         """주문 상태 변경"""
-        # 미들웨어에서 설정된 user_id 사용
-        order = get_object_or_404(Order, id=order_id, **get_user_queryset_filter(request))
-        serializer = OrderStatusUpdateSerializer(order, data=request.data, partial=True)
+        print(f"🔄 주문 상태 변경 요청: order_id={order_id}")
+        print(f"🆔 request.user_id: {getattr(request, 'user_id', 'NOT SET')}")
         
-        if serializer.is_valid():
-            serializer.save()
-            return Response({
-                'message': '주문 상태가 변경되었습니다.',
-                'order_status': serializer.data['order_status']
-            })
-        return Response(serializer.errors, status=400)
+        # 미들웨어에서 설정된 사용자 정보 확인
+        if not hasattr(request, 'user_id') or not request.user_id:
+            print(f"❌ 사용자 인증 정보 없음")
+            return JsonResponse({'error': '사용자 인증이 필요합니다.'}, status=401)
+        
+        print(f"✅ 사용자 인증 확인: user_id={request.user_id}")
+        
+        # Django View에서 JSON 데이터 파싱
+        try:
+            if request.content_type and 'application/json' in request.content_type:
+                data = json.loads(request.body)
+            else:
+                data = request.POST.dict()
+        except json.JSONDecodeError as e:
+            return JsonResponse({'error': '잘못된 JSON 형식입니다.'}, status=400)
+        
+        try:
+            # 미들웨어에서 설정된 user_id 사용
+            order = Order.objects.get(id=order_id, **get_user_queryset_filter(request))
+            serializer = OrderStatusUpdateSerializer(order, data=data, partial=True)
+            
+            if serializer.is_valid():
+                serializer.save()
+                return JsonResponse({
+                    'message': '주문 상태가 변경되었습니다.',
+                    'order_status': serializer.data['order_status']
+                })
+            return JsonResponse(serializer.errors, status=400)
+        except Order.DoesNotExist:
+            return JsonResponse({'error': '주문을 찾을 수 없습니다.'}, status=404)
 
 
-class OrderCancelView(APIView):
-    permission_classes = [AllowAny]
+@method_decorator(csrf_exempt, name='dispatch')
+class OrderCancelView(View):
+    """Django View 기반 주문 취소 - JWT 미들웨어 인증"""
     
     def patch(self, request, order_id):
         """주문 취소"""
-        # 미들웨어에서 설정된 user_id 사용
-        order = get_object_or_404(Order, id=order_id, **get_user_queryset_filter(request))
+        print(f"❌ 주문 취소 요청: order_id={order_id}")
+        print(f"🆔 request.user_id: {getattr(request, 'user_id', 'NOT SET')}")
         
-        if order.order_status == 'cancelled':
-            return Response({'error': '이미 취소된 주문입니다.'}, status=400)
+        # 미들웨어에서 설정된 사용자 정보 확인
+        if not hasattr(request, 'user_id') or not request.user_id:
+            print(f"❌ 사용자 인증 정보 없음")
+            return JsonResponse({'error': '사용자 인증이 필요합니다.'}, status=401)
+        
+        print(f"✅ 사용자 인증 확인: user_id={request.user_id}")
+        
+        try:
+            # 미들웨어에서 설정된 user_id 사용
+            order = Order.objects.get(id=order_id, **get_user_queryset_filter(request))
             
-        order.order_status = 'cancelled'
-        order.save()
-        
-        return Response({
-            'message': '주문이 취소되었습니다.',
-            'order_status': 'cancelled'
-        })
+            if order.order_status == 'cancelled':
+                return JsonResponse({'error': '이미 취소된 주문입니다.'}, status=400)
+                
+            order.order_status = 'cancelled'
+            order.save()
+            
+            return JsonResponse({
+                'message': '주문이 취소되었습니다.',
+                'order_status': 'cancelled'
+            })
+        except Order.DoesNotExist:
+            return JsonResponse({'error': '주문을 찾을 수 없습니다.'}, status=404)
