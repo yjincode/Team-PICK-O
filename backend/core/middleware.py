@@ -45,6 +45,16 @@ class JWTAuthMiddleware:
                 request.user_status = user_data['status']
                 request.business_name = user_data['business_name']
                 
+                # DRF IsAuthenticated 호환성을 위한 더미 user 객체 설정
+                from django.contrib.auth.models import AnonymousUser
+                class AuthenticatedUser:
+                    is_authenticated = True
+                    is_anonymous = False
+                    is_active = True  # ✅ REST Framework에서 필요한 속성 추가
+                    id = user_data['user_id']
+                
+                request.user = AuthenticatedUser()
+                
                 logger.debug(f"User {user_data['user_id']} ({user_data['status']}) 인증됨 for {request.path}")
                 
             except Exception as e:
@@ -75,32 +85,49 @@ class JWTAuthMiddleware:
         """JWT 토큰을 검증하고 사용자 정보를 반환"""
         # Authorization 헤더에서 Bearer 토큰 추출
         auth_header = request.headers.get('Authorization')
-        if not auth_header or not auth_header.startswith('Bearer '):
+        logger.debug(f"🔍 JWT 검증 시작: {request.path}")
+        logger.debug(f"📋 Authorization 헤더: {auth_header}")
+        
+        if not auth_header:
+            logger.debug("❌ Authorization 헤더 없음")
+            return None
+            
+        if not auth_header.startswith('Bearer '):
+            logger.debug(f"❌ Bearer 형식 아님: {auth_header[:20]}...")
             return None
         
         token = auth_header.split(' ')[1]
+        logger.debug(f"🔑 JWT 토큰 추출: {token[:20]}...")
         
         try:
             # JWT 토큰 검증 (전용 JWT 시크릿 키 사용)
+            logger.debug("🔐 JWT 토큰 검증 시작")
             from core.jwt_utils import verify_access_token
             payload = verify_access_token(token)
             
             if not payload:
+                logger.debug("❌ JWT 토큰 검증 실패")
                 return None
                 
             user_id = payload.get('user_id')
+            logger.debug(f"✅ JWT 토큰 검증 성공: user_id={user_id}")
+            
             if not user_id:
+                logger.debug("❌ JWT 페이로드에 user_id 없음")
                 return None
             
             # 데이터베이스에서 사용자 정보 조회 및 승인 상태 확인
+            logger.debug(f"👤 사용자 정보 DB 조회: user_id={user_id}")
             try:
                 user = User.objects.get(id=user_id)
+                logger.debug(f"✅ 사용자 정보 조회 성공: {user.business_name} (status: {user.status})")
                 
                 # 승인 상태 확인 (pending, rejected, suspended는 접근 제한)
                 if user.status not in ['approved']:
-                    logger.warning(f"User {user_id} status: {user.status} - 접근 거부")
+                    logger.warning(f"❌ User {user_id} status: {user.status} - 접근 거부")
                     return None
                 
+                logger.debug(f"✅ 사용자 승인 상태 확인 완료: {user.status}")
                 return {
                     'user_id': user.id,
                     'status': user.status,

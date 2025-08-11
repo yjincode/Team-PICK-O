@@ -18,6 +18,7 @@ import {
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1'
 
 
+
 // axios 인스턴스 생성
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -131,6 +132,8 @@ api.interceptors.request.use(
     if (accessToken) {
       config.headers.Authorization = `Bearer ${accessToken}`
     }
+    
+
     
     console.log('🚀 자동 토큰 갱신 API 요청:', {
       url: config.url,

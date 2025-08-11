@@ -37,10 +37,31 @@ def health_check(request):
     """헬스 체크 엔드포인트"""
     return JsonResponse({"status": "healthy"})
 
+def test_jwt(request):
+    """JWT 검증 테스트 엔드포인트"""
+    auth_header = request.headers.get('Authorization')
+    if auth_header and auth_header.startswith('Bearer '):
+        token = auth_header.split(' ')[1]
+        return JsonResponse({
+            "message": "JWT 토큰 수신됨",
+            "token_preview": token[:20] + "..." if len(token) > 20 else token,
+            "has_user_id": hasattr(request, 'user_id'),
+            "user_id": getattr(request, 'user_id', None),
+            "user_status": getattr(request, 'user_status', None)
+        })
+    else:
+        return JsonResponse({
+            "message": "JWT 토큰 없음",
+            "auth_header": auth_header
+        })
+
+
+
 urlpatterns = [
     # Root endpoints
     path('', api_root, name='api-root'),
     path('health/', health_check, name='health-check'),
+    path('test-jwt/', test_jwt, name='test-jwt'),
     
     # Admin panel
     path('admin/', admin.site.urls),
