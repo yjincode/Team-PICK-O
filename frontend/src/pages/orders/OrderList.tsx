@@ -19,16 +19,15 @@ import {
 
 import { Badge } from "../../components/ui/badge"
 import { Button } from "../../components/ui/button"
+import { Calendar } from "../../components/ui/calendar"
 import { Input } from "../../components/ui/input"
 import { Label } from "../../components/ui/label"
 import { Popover, PopoverContent, PopoverTrigger } from "../../components/ui/popover"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../components/ui/table"
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card"
-
 import { OrderListItem } from "../../types"
 import toast from 'react-hot-toast'
-import MinimalCalendar from "../../components/ui/MinimalCalendar"
 import OrderForm from "./OrderForm"
 
 // API 설정
@@ -58,78 +57,224 @@ api.interceptors.request.use(
   }
 )
 
-
 // 주문 데이터 타입 정의 (OrderListSerializer 반영)
 interface Order extends OrderListItem {
   // OrderListItem에서 확장하여 필요한 필드 추가
-
-// 한국 시간대로 날짜를 처리하는 함수들
-const toKoreanDate = (date: Date): string => {
-  const koreanDate = new Date(date.getTime() + (9 * 60 * 60 * 1000)) // UTC+9
-  return koreanDate.toISOString().split('T')[0]
-}
-
-const fromKoreanDate = (dateString: string): Date => {
-  const [year, month, day] = dateString.split('-').map(Number)
-  return new Date(year, month - 1, day, 9, 0, 0) // 한국 시간 9시로 설정
-}
-
-const formatKoreanDate = (dateString: string): string => {
-  if (!dateString) return "-"
-  try {
-    const date = new Date(dateString)
-    const koreanDate = new Date(date.getTime() + (9 * 60 * 60 * 1000)) // UTC+9
-    return format(koreanDate, "yyyy-MM-dd", { locale: ko })
-  } catch (error) {
-    return dateString
-  }
-}
-
-// 주문 데이터 타입 정의 (DB 구조 반영)
-interface Order {
-  id: number;
-  business_id: number;
-  total_price: number;
-  order_datetime: string;
-  delivery_datetime?: string;
-
   memo?: string;
   source_type?: 'manual' | 'voice' | 'text';
   transcribed_text?: string;
-
   last_updated_at?: string;
 }
 
-
-
-
-  order_status: 'placed' | 'ready' | 'delivered' | 'cancelled';
-  is_urgent: boolean;
-  last_updated_at: string;
-  business?: {
-    id: number;
-    business_name: string;
-    phone_number: string;
-  };
-  items_summary?: string;
-  items?: Array<{
-    id: number;
-    fish_type_id: number;
-    item_name_snapshot: string;
-    quantity: number;
-    unit_price?: number;
-    unit?: string;
-    remarks?: string;
-  }>;
-  payment?: {
-    id: number;
-    payment_status: 'pending' | 'paid' | 'refunded';
-    amount: number;
-    method: 'cash' | 'bank_transfer' | 'card';
-    paid_at?: string;
-  };
-}
-
+// 목업 데이터 (OrderListSerializer 구조 반영)
+// const mockOrders: Order[] = [
+//   {
+//     id: 1,
+//     business_id: 1,
+//     total_price: 2400000,
+//     order_datetime: "2024-01-15T10:30:00",
+//     delivery_datetime: "2024-01-17T09:00:00",
+//     memo: "급한 주문입니다",
+//     source_type: "voice",
+//     transcribed_text: "고등어 50박스, 갈치 30박스 주문해주세요",
+//     order_status: "ready",
+//     is_urgent: true,
+//     last_updated_at: "2024-01-15T10:30:00",
+//     business: {
+//       id: 1,
+//       business_name: "해양수산 마트",
+//       phone_number: "010-1234-5678",
+//     },
+//     items: [
+//       {
+//         id: 1,
+//         fish_type_id: 1,
+//         item_name_snapshot: "고등어",
+//         quantity: 50,
+//         unit_price: 48000,
+//         unit: "박스",
+//       },
+//       {
+//         id: 2,
+//         fish_type_id: 2,
+//         item_name_snapshot: "갈치",
+//         quantity: 30,
+//         unit_price: 65000,
+//         unit: "박스",
+//       },
+//     ],
+//     payment: {
+//       id: 1,
+//       payment_status: "paid",
+//       amount: 2400000,
+//       method: "bank_transfer",
+//       paid_at: "2024-01-15T11:00:00",
+//     },
+//   },
+//   {
+//     id: 2,
+//     business_id: 2,
+//     total_price: 1200000,
+//     order_datetime: "2024-01-15T14:15:00",
+//     delivery_datetime: "2024-01-16T09:00:00",
+//     memo: "정기 주문",
+//     source_type: "text",
+//     transcribed_text: "오징어 25박스 주문",
+//     order_status: "delivered",
+//     is_urgent: false,
+//     last_updated_at: "2024-01-16T09:00:00",
+//     business: {
+//       id: 2,
+//       business_name: "바다횟집",
+//       phone_number: "010-2345-6789",
+//     },
+//     items: [
+//       {
+//         id: 3,
+//         fish_type_id: 3,
+//         item_name_snapshot: "오징어",
+//         quantity: 25,
+//         unit_price: 48000,
+//         unit: "박스",
+//       },
+//     ],
+//     payment: {
+//       id: 2,
+//       payment_status: "paid",
+//       amount: 1200000,
+//       method: "card",
+//       paid_at: "2024-01-15T14:30:00",
+//     },
+//   },
+//   {
+//     id: 3,
+//     business_id: 3,
+//     total_price: 1800000,
+//     order_datetime: "2024-01-14T09:00:00",
+//     delivery_datetime: "2024-01-18T09:00:00",
+//     memo: "신규 거래처",
+//     source_type: "voice",
+//     transcribed_text: "명태 40박스, 고등어 20박스 주문",
+//     order_status: "placed",
+//     is_urgent: false,
+//     last_updated_at: "2024-01-14T09:00:00",
+//     business: {
+//       id: 3,
+//       business_name: "신선마켓",
+//       phone_number: "010-3456-7890",
+//     },
+//     items: [
+//       {
+//         id: 4,
+//         fish_type_id: 4,
+//         item_name_snapshot: "명태",
+//         quantity: 40,
+//         unit_price: 45000,
+//         unit: "박스",
+//       },
+//       {
+//         id: 5,
+//         fish_type_id: 1,
+//         item_name_snapshot: "고등어",
+//         quantity: 20,
+//         unit_price: 48000,
+//         unit: "박스",
+//       },
+//     ],
+//     payment: {
+//       id: 3,
+//       payment_status: "pending",
+//       amount: 1800000,
+//       method: "cash",
+//     },
+//   },
+//   {
+//     id: 4,
+//     business_id: 4,
+//     total_price: 1500000,
+//     order_datetime: "2024-01-14T11:00:00",
+//     delivery_datetime: "2024-01-16T09:00:00",
+//     memo: "신선도 중요",
+//     source_type: "manual",
+//     transcribed_text: "연어 3kg, 새우 2kg 주문",
+//     order_status: "delivered",
+//     is_urgent: false,
+//     last_updated_at: "2024-01-16T09:00:00",
+//     business: {
+//       id: 4,
+//       business_name: "오션푸드",
+//       phone_number: "010-4567-8901",
+//     },
+//     items: [
+//       {
+//         id: 6,
+//         fish_type_id: 5,
+//         item_name_snapshot: "연어",
+//         quantity: 3,
+//         unit_price: 500000,
+//         unit: "kg",
+//       },
+//       {
+//         id: 7,
+//         fish_type_id: 6,
+//         item_name_snapshot: "새우",
+//         quantity: 2,
+//         unit_price: 75000,
+//         unit: "kg",
+//       },
+//     ],
+//     payment: {
+//       id: 4,
+//       payment_status: "paid",
+//       amount: 1500000,
+//       method: "bank_transfer",
+//       paid_at: "2024-01-14T12:00:00",
+//     },
+//   },
+//   {
+//     id: 5,
+//     business_id: 5,
+//     total_price: 800000,
+//     order_datetime: "2024-01-13T16:00:00",
+//     delivery_datetime: "2024-01-15T09:00:00",
+//     memo: "소량 주문",
+//     source_type: "voice",
+//     transcribed_text: "문어 1kg, 오징어 3kg 주문",
+//     order_status: "cancelled",
+//     is_urgent: false,
+//     last_updated_at: "2024-01-14T10:00:00",
+//     business: {
+//       id: 5,
+//       business_name: "프레시마트",
+//       phone_number: "010-5678-9012",
+//     },
+//     items: [
+//       {
+//         id: 8,
+//         fish_type_id: 7,
+//         item_name_snapshot: "문어",
+//         quantity: 1,
+//         unit_price: 300000,
+//         unit: "kg",
+//       },
+//       {
+//         id: 9,
+//         fish_type_id: 8,
+//         item_name_snapshot: "오징어",
+//         quantity: 3,
+//         unit_price: 166667,
+//         unit: "kg",
+//       },
+//     ],
+//     payment: {
+//       id: 5,
+//       payment_status: "refunded",
+//       amount: 800000,
+//       method: "card",
+//       paid_at: "2024-01-13T16:30:00",
+//     },
+//   },
+// ]
 
 // 상태별 배지 컴포넌트
 const OrderStatusBadge: React.FC<{ status: string }> = ({ status }) => {
@@ -176,6 +321,15 @@ const PaymentStatusBadge: React.FC<{ status: string }> = ({ status }) => {
       {config.text}
     </Badge>
   )
+}
+
+// 주문 아이템을 문자열로 변환
+const getItemsSummary = (items?: Array<{ item_name_snapshot: string; quantity: number; unit?: string }>) => {
+  if (!items || items.length === 0) return "품목 없음"
+  
+  return items.map(item => {
+    return `${item.item_name_snapshot} ${item.quantity}${item.unit || "개"}`
+  }).join(", ")
 }
 
 // 금액 포맷팅
@@ -236,11 +390,11 @@ const OrderList: React.FC = () => {
       }
     }
 
-    // 날짜 필터링
+    // 날짜별 필터
     if (date) {
       const selectedDate = format(date, "yyyy-MM-dd")
       filtered = filtered.filter(order => 
-        formatKoreanDate(order.order_datetime) === selectedDate
+        format(new Date(order.order_datetime), "yyyy-MM-dd") === selectedDate
       )
     }
 
@@ -390,11 +544,7 @@ const OrderList: React.FC = () => {
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-auto p-0">
-                    <MinimalCalendar 
-                      value={date} 
-                      onChange={(date) => setDate(date || undefined)} 
-                      placeholder="날짜 선택"
-                    />
+                    <Calendar mode="single" selected={date} onSelect={setDate} initialFocus />
                   </PopoverContent>
                 </Popover>
               </div>
@@ -468,23 +618,19 @@ const OrderList: React.FC = () => {
                           {startIndex + index + 1}
                         </TableCell>
                         <TableCell className="font-medium">
-
                           <div>
                             <div className="font-semibold">{order.business_name}</div>
                             <div className="text-sm text-gray-500">{order.business_phone}</div>
                           </div>
-
                         </TableCell>
                         <TableCell className="text-gray-600">
-                          {formatKoreanDate(order.order_datetime)}
+                          {format(new Date(order.order_datetime), "yyyy-MM-dd")}
                         </TableCell>
                         <TableCell className="text-gray-600">
-                          {order.delivery_datetime ? formatKoreanDate(order.delivery_datetime) : "-"}
+                          {order.delivery_datetime ? format(new Date(order.delivery_datetime), "yyyy-MM-dd") : "-"}
                         </TableCell>
                         <TableCell className="text-gray-600 max-w-[200px] truncate">
-
-                          {order.items_summary || "품목 없음"}
-
+                          {order.items_summary}
                         </TableCell>
                         <TableCell className="font-semibold text-gray-900">
                           {formatPrice(order.total_price)}원
