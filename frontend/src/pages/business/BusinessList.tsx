@@ -47,7 +47,7 @@ const BusinessList: React.FC = () => {
   const [count, setCount] = useState(0); // 전체 개수
   const [unpaidByBusinessId, setUnpaidByBusinessId] = useState<Record<number, number>>({});
 
-  const { userData, user, isAuthenticated, loading } = useAuth();
+  const { user, isAuthenticated, loading } = useAuth();
 
   // 거래처 목록을 가져오는 함수 (재사용 가능)
   const fetchBusinesses = async (pageNum = page) => {
@@ -143,7 +143,6 @@ const BusinessList: React.FC = () => {
       loading,
       isAuthenticated,
       user: !!user,
-      userData: !!userData,
       hasInitialized
     });
 
@@ -279,7 +278,7 @@ const BusinessList: React.FC = () => {
     }
 
     // 거래처 등록은 인증이 필요한 기능
-    if (!isAuthenticated || !user || !userData) {
+    if (!isAuthenticated || !user ) {
       toast.error('로그인이 필요한 기능입니다.');
       return;
     }
@@ -513,10 +512,10 @@ const BusinessList: React.FC = () => {
         <Button 
           className="bg-accent-blue hover:bg-accent-blue/90 w-full sm:w-auto"
           onClick={() => setIsModalOpen(true)}
-          disabled={!isAuthenticated || !user || !userData}
+          disabled={!isAuthenticated || !user }
         >
           <Plus className="h-4 w-4 mr-2" />
-          {isAuthenticated && user && userData ? '새 거래처 등록' : '로그인 후 이용 가능'}
+          {isAuthenticated && user ? '새 거래처 등록' : '로그인 후 이용 가능'}
         </Button>
       </div>
 
