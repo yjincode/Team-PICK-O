@@ -5,9 +5,9 @@ import logging
 from django.conf import settings
 from django.db import transaction
 from rest_framework import status
-from rest_framework.views import APIView
+from rest_framework.decorators import api_view, permission_classes, authentication_classes
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny
 from transformers import AutoProcessor, AutoModelForSpeechSeq2Seq
 from .models import AudioTranscription
 from .serializers import AudioTranscriptionSerializer
@@ -24,68 +24,30 @@ model.eval()
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model.to(device)
 
-class TranscribeAudioView(APIView):
-    permission_classes = [IsAuthenticated]
+def process_audio_directly(audio_file, language='ko'):
+    """직접 오디오 파일을 처리하여 텍스트로 변환"""
+    import tempfile
+    import os
     
-    def post(self, request, format=None):
-        if 'audio' not in request.FILES:
-            return Response(
-                {"error": "No audio file provided"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-            
-        audio_file = request.FILES['audio']
-        language = request.data.get('language', 'en')
+    try:
+        logger.info(f"🔄 STT 처리 시작: {audio_file.name}")
         
-        # Validate file extension
-        valid_extensions = ['.wav', '.mp3', '.flac', '.m4a', '.ogg']
-        if not any(audio_file.name.lower().endswith(ext) for ext in valid_extensions):
-            return Response(
-                {"error": f"Invalid audio format. Supported formats: {', '.join(valid_extensions)}"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+        # 임시 파일로 저장
+        with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(audio_file.name)[1]) as temp_file:
+            for chunk in audio_file.chunks():
+                temp_file.write(chunk)
+            temp_file_path = temp_file.name
         
         try:
-            # Create transcription record
-            transcription = AudioTranscription.objects.create(
-                user=request.user,
-                audio_file=audio_file,
-                language=language,
-                status='processing'
-            )
-            
-            # Process audio in a separate thread to avoid blocking
-            self.process_audio.delay(transcription.id)
-            
-            return Response(
-                {
-                    "message": "Transcription started",
-                    "transcription_id": str(transcription.id)
-                },
-                status=status.HTTP_202_ACCEPTED
-            )
-            
-        except Exception as e:
-            return Response(
-                {"error": f"Failed to process request: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
-    
-    @staticmethod
-    def process_audio(transcription_id):
-        try:
-            transcription = AudioTranscription.objects.get(id=transcription_id)
-            transcription.status = 'processing'
-            transcription.save(update_fields=['status'])
-            
-            # Read audio file
-            audio_bytes = transcription.audio_file.read()
-            audio_tensor, sample_rate = torchaudio.load(io.BytesIO(audio_bytes))
+            # torchaudio로 파일 로드
+            audio_tensor, sample_rate = torchaudio.load(temp_file_path)
             
             # Convert to 16kHz if needed
             if sample_rate != 16000:
                 resampler = torchaudio.transforms.Resample(orig_freq=sample_rate, new_freq=16000)
                 audio_tensor = resampler(audio_tensor)
+            
+            logger.info(f"🔧 Whisper 모델 처리 시작... (샘플레이트: {sample_rate} -> 16000)")
             
             # Preprocess
             inputs = processor(
@@ -100,55 +62,63 @@ class TranscribeAudioView(APIView):
                 generated_ids = model.generate(
                     inputs["input_features"],
                     forced_decoder_ids=processor.get_decoder_prompt_ids(
-                        language=transcription.language,
+                        language=language,
                         task="transcribe"
                     )
                 )
             
-            # Decode and save result
+            # Decode and return result
             transcription_text = processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
+            logger.info(f"✅ STT 처리 완료: {transcription_text[:50]}...")
             
-            # Save the transcription
-            transcription.transcription = transcription_text
-            transcription.status = 'completed'
-            transcription.save(update_fields=['transcription', 'status'])
+            return transcription_text
             
-            # Create order from transcription if user is authenticated
-            if transcription.user and transcription.create_order:
-                try:
-                    order_service = OrderCreationService(transcription.user)
-                    order, _ = order_service.create_order(
-                        text=transcription_text,
-                        business_id=transcription.business_id
-                    )
-                    transcription.order = order
-                    transcription.save(update_fields=['order'])
-                    logger.info(f"Order {order.id} created from transcription {transcription.id}")
-                except Exception as e:
-                    logger.error(f"Failed to create order from transcription {transcription.id}: {str(e)}")
-                    transcription.status = 'completed_with_errors'
-                    transcription.save(update_fields=['status'])
-            
-        except Exception as e:
-            logger.error(f"Error processing transcription {transcription_id}: {str(e)}", exc_info=True)
-            transcription.status = 'failed'
-            transcription.save(update_fields=['status'])
-            raise  # Re-raise to allow Celery to handle retries
+        finally:
+            # 임시 파일 정리
+            if os.path.exists(temp_file_path):
+                os.unlink(temp_file_path)
+                
+    except Exception as e:
+        logger.error(f"❌ STT 처리 실패: {str(e)}", exc_info=True)
+        raise e
 
-class TranscriptionDetailView(APIView):
-    permission_classes = [IsAuthenticated]
+@api_view(['POST'])
+@authentication_classes([])  # 인증 완전 비활성화
+@permission_classes([AllowAny])
+def transcribe_audio(request):
+    if 'audio' not in request.FILES:
+        return Response(
+            {"error": "No audio file provided"},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+        
+    audio_file = request.FILES['audio']
+    language = request.data.get('language', 'ko')  # 기본값을 한국어로 변경
     
-    def get(self, request, transcription_id, format=None):
-        try:
-            transcription = AudioTranscription.objects.get(
-                id=transcription_id,
-                user=request.user
-            )
-            serializer = AudioTranscriptionSerializer(transcription)
-            return Response(serializer.data)
-            
-        except AudioTranscription.DoesNotExist:
-            return Response(
-                {"error": "Transcription not found"},
-                status=status.HTTP_404_NOT_FOUND
-            )
+    # Validate file extension
+    valid_extensions = ['.wav', '.mp3', '.flac', '.m4a', '.ogg']
+    if not any(audio_file.name.lower().endswith(ext) for ext in valid_extensions):
+        return Response(
+            {"error": f"Invalid audio format. Supported formats: {', '.join(valid_extensions)}"},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    try:
+        # 직접 음성을 텍스트로 변환 (실시간 처리)
+        transcription_text = process_audio_directly(audio_file, language)
+        
+        return Response(
+            {
+                "message": "Transcription completed",
+                "transcription": transcription_text,
+                "language": language
+            },
+            status=status.HTTP_200_OK
+        )
+        
+    except Exception as e:
+        logger.error(f"Transcription error: {str(e)}")
+        return Response(
+            {"error": f"Failed to process request: {str(e)}"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )

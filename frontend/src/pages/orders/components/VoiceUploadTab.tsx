@@ -4,26 +4,86 @@
  */
 import React, { useRef, useState } from "react"
 import { Button } from "../../../components/ui/button"
-import { Mic, Upload, Play, Pause, Trash2 } from "lucide-react"
+import { Mic, Upload, Play, Pause, Trash2, AlertCircle } from "lucide-react"
+import { sttApi } from "../../../lib/api"
 
 interface VoiceUploadTabProps {
-  onFileUpload: (event: React.ChangeEvent<HTMLInputElement>) => void
-  isProcessing: boolean
-  transcribedText?: string
-  uploadedFile?: File | null
-  onRemoveFile?: () => void
+  onTranscriptionComplete?: (text: string) => void
+  onError?: (error: string) => void
 }
 
 const VoiceUploadTab: React.FC<VoiceUploadTabProps> = ({
-  onFileUpload,
-  isProcessing,
-  transcribedText,
-  uploadedFile,
-  onRemoveFile
+  onTranscriptionComplete,
+  onError
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const audioRef = useRef<HTMLAudioElement>(null)
   const [isPlaying, setIsPlaying] = useState(false)
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null)
+  const [isProcessing, setIsProcessing] = useState(false)
+  const [transcribedText, setTranscribedText] = useState<string>('')
+  const [error, setError] = useState<string>('')
+
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    // 파일 검증
+    const validTypes = ['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/m4a']
+    if (!validTypes.includes(file.type) && !file.name.match(/\.(mp3|wav|m4a)$/i)) {
+      const errorMsg = '지원되지 않는 파일 형식입니다. MP3, WAV, M4A 파일만 업로드 가능합니다.'
+      setError(errorMsg)
+      onError?.(errorMsg)
+      return
+    }
+
+    // 파일 크기 검증 (10MB 제한)
+    if (file.size > 10 * 1024 * 1024) {
+      const errorMsg = '파일 크기가 너무 큽니다. 10MB 이하의 파일만 업로드 가능합니다.'
+      setError(errorMsg)
+      onError?.(errorMsg)
+      return
+    }
+
+    setUploadedFile(file)
+    setError('')
+    setTranscribedText('')
+    
+    // STT 처리 시작
+    await transcribeAudio(file)
+  }
+
+  const transcribeAudio = async (file: File) => {
+    setIsProcessing(true)
+    setError('')
+    
+    try {
+      console.log('🎤 STT 변환 시작:', file.name)
+      const result = await sttApi.transcribe(file, 'ko')
+      
+      console.log('✅ STT 변환 완료:', result.transcription)
+      setTranscribedText(result.transcription)
+      onTranscriptionComplete?.(result.transcription)
+      
+    } catch (err) {
+      console.error('❌ STT 변환 실패:', err)
+      const errorMsg = err instanceof Error ? err.message : 'STT 변환 중 오류가 발생했습니다.'
+      setError(errorMsg)
+      onError?.(errorMsg)
+    } finally {
+      setIsProcessing(false)
+    }
+  }
+
+  const handleRemoveFile = () => {
+    setUploadedFile(null)
+    setTranscribedText('')
+    setError('')
+    setIsPlaying(false)
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+  }
 
   const handlePlayPause = () => {
     if (audioRef.current) {
@@ -82,7 +142,7 @@ const VoiceUploadTab: React.FC<VoiceUploadTabProps> = ({
             ref={fileInputRef}
             type="file"
             accept=".mp3,.wav,.m4a"
-            onChange={onFileUpload}
+            onChange={handleFileUpload}
             className="hidden"
           />
         </div>
@@ -99,8 +159,9 @@ const VoiceUploadTab: React.FC<VoiceUploadTabProps> = ({
             <Button
               variant="ghost"
               size="sm"
-              onClick={onRemoveFile}
+              onClick={handleRemoveFile}
               className="text-red-500 hover:text-red-700"
+              disabled={isProcessing}
             >
               <Trash2 className="h-4 w-4" />
             </Button>
@@ -139,10 +200,47 @@ const VoiceUploadTab: React.FC<VoiceUploadTabProps> = ({
         </div>
       )}
       
-      {transcribedText && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <h4 className="font-medium text-blue-900 mb-2">추출된 텍스트:</h4>
-          <p className="text-blue-800">{transcribedText}</p>
+      {/* 로딩바 */}
+      {isProcessing && (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+          <div className="flex items-center space-x-3">
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-yellow-600"></div>
+            <div className="flex-1">
+              <h4 className="font-medium text-yellow-900 mb-1">음성을 텍스트로 변환 중...</h4>
+              <p className="text-sm text-yellow-700">잠시만 기다려 주세요. 처리 시간이 다소 소요될 수 있습니다.</p>
+            </div>
+          </div>
+          <div className="mt-3">
+            <div className="bg-yellow-200 rounded-full h-2">
+              <div className="bg-yellow-500 h-2 rounded-full animate-pulse" style={{ width: '60%' }}></div>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* 에러 메시지 */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <div className="flex items-center space-x-3">
+            <AlertCircle className="h-5 w-5 text-red-500" />
+            <div>
+              <h4 className="font-medium text-red-900">오류가 발생했습니다</h4>
+              <p className="text-sm text-red-700 mt-1">{error}</p>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* 변환된 텍스트 */}
+      {transcribedText && !error && (
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+          <h4 className="font-medium text-green-900 mb-2">🎤 추출된 텍스트:</h4>
+          <div className="bg-white rounded-md p-3 border">
+            <p className="text-gray-800 leading-relaxed">{transcribedText}</p>
+          </div>
+          <p className="text-xs text-green-600 mt-2">
+            ✅ 음성 변환이 완료되었습니다. 텍스트를 확인하고 필요시 수정해주세요.
+          </p>
         </div>
       )}
     </div>

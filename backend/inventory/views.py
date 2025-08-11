@@ -1,6 +1,8 @@
-from rest_framework import generics, status
-from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+import json
+from django.views import View
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
 from django.db.models import Q
 from core.middleware import get_user_queryset_filter
 from .models import Inventory, InventoryLog
@@ -11,21 +13,27 @@ from .serializers import (
 from fish_registry.models import FishType
 
 
-class InventoryListCreateView(generics.ListCreateAPIView):
-    """재고 목록 조회 및 생성"""
-    permission_classes = []  # 인증 제거
+@method_decorator(csrf_exempt, name='dispatch')
+class InventoryListCreateView(View):
+    """재고 목록 조회 및 생성 - Django View 기반 JWT 미들웨어 인증"""
     
-    def get_serializer_class(self):
-        if self.request.method == 'POST':
-            return InventoryCreateSerializer
-        return InventoryListSerializer
-    
-    def get_queryset(self):
+    def get(self, request):
+        """재고 목록 조회"""
+        print(f"📦 재고 목록 조회 요청")
+        print(f"🆔 request.user_id: {getattr(request, 'user_id', 'NOT SET')}")
+        
+        # 미들웨어에서 설정된 사용자 정보 확인
+        if not hasattr(request, 'user_id') or not request.user_id:
+            print(f"❌ 사용자 인증 정보 없음")
+            return JsonResponse({'error': '사용자 인증이 필요합니다.'}, status=401)
+        
+        print(f"✅ 사용자 인증 확인: user_id={request.user_id}")
+        
         # 미들웨어에서 설정된 user_id 사용
-        queryset = Inventory.objects.select_related('fish_type').filter(**get_user_queryset_filter(self.request))
+        queryset = Inventory.objects.select_related('fish_type').filter(**get_user_queryset_filter(request))
         
         # 검색 기능
-        search = self.request.query_params.get('search', None)
+        search = request.GET.get('search', None)
         if search:
             queryset = queryset.filter(
                 Q(fish_type__name__icontains=search) |
@@ -33,18 +41,46 @@ class InventoryListCreateView(generics.ListCreateAPIView):
             )
         
         # 상태 필터
-        status_filter = self.request.query_params.get('status', None)
+        status_filter = request.GET.get('status', None)
         if status_filter:
             queryset = queryset.filter(status=status_filter)
             
-        return queryset.order_by('-updated_at')
+        queryset = queryset.order_by('-updated_at')
+        
+        serializer = InventoryListSerializer(queryset, many=True)
+        return JsonResponse(serializer.data, safe=False)
     
-    def create(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
+    def post(self, request):
+        """재고 생성"""
+        print(f"📦 재고 생성 요청")
+        print(f"🆔 request.user_id: {getattr(request, 'user_id', 'NOT SET')}")
+        
+        # 미들웨어에서 설정된 사용자 정보 확인
+        if not hasattr(request, 'user_id') or not request.user_id:
+            print(f"❌ 사용자 인증 정보 없음")
+            return JsonResponse({'error': '사용자 인증이 필요합니다.'}, status=401)
+        
+        print(f"✅ 사용자 인증 확인: user_id={request.user_id}")
+        
+        # Django View에서 JSON 데이터 파싱
+        try:
+            if request.content_type and 'application/json' in request.content_type:
+                data = json.loads(request.body)
+            else:
+                data = request.POST.dict()
+            print(f"📝 파싱된 데이터: {data}")
+        except json.JSONDecodeError as e:
+            print(f"❌ JSON 파싱 오류: {e}")
+            return JsonResponse({'error': '잘못된 JSON 형식입니다.'}, status=400)
+        
+        serializer = InventoryCreateSerializer(data=data)
         if serializer.is_valid():
             inventory = serializer.save(user_id=request.user_id)
             
             # 재고 생성 로그 기록
+            from business.models import User
+            user = User.objects.get(id=request.user_id)
+            
             InventoryLog.objects.create(
                 inventory=inventory,
                 fish_type=inventory.fish_type,
@@ -55,78 +91,168 @@ class InventoryListCreateView(generics.ListCreateAPIView):
                 unit=inventory.unit,
                 source_type='manual',
                 memo='초기 재고 등록',
-                updated_by=request.user
+                updated_by=user
             )
             
-            return Response(
+            return JsonResponse(
                 InventoryListSerializer(inventory).data,
-                status=status.HTTP_201_CREATED
+                status=201
             )
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        return JsonResponse(serializer.errors, status=400)
 
 
-class InventoryDetailView(generics.RetrieveUpdateDestroyAPIView):
-    """재고 상세 조회, 수정, 삭제"""
-    serializer_class = InventorySerializer
-    permission_classes = []
+@method_decorator(csrf_exempt, name='dispatch')
+class InventoryDetailView(View):
+    """재고 상세 조회, 수정, 삭제 - Django View 기반 JWT 미들웨어 인증"""
     
-    def get_queryset(self):
-        # 미들웨어에서 설정된 user_id 사용
-        return Inventory.objects.select_related('fish_type').filter(**get_user_queryset_filter(self.request))
-    
-    def update(self, request, *args, **kwargs):
-        instance = self.get_object()
-        old_quantity = instance.stock_quantity
+    def get(self, request, pk):
+        """재고 상세 조회"""
+        print(f"🗓️ 재고 상세 조회 요청: pk={pk}")
+        print(f"🆔 request.user_id: {getattr(request, 'user_id', 'NOT SET')}")
         
-        serializer = self.get_serializer(instance, data=request.data, partial=True)
-        if serializer.is_valid():
-            inventory = serializer.save()
+        # 미들웨어에서 설정된 사용자 정보 확인
+        if not hasattr(request, 'user_id') or not request.user_id:
+            print(f"❌ 사용자 인증 정보 없음")
+            return JsonResponse({'error': '사용자 인증이 필요합니다.'}, status=401)
+        
+        print(f"✅ 사용자 인증 확인: user_id={request.user_id}")
+        
+        try:
+            inventory = Inventory.objects.select_related('fish_type').get(pk=pk, **get_user_queryset_filter(request))
+            serializer = InventorySerializer(inventory)
+            return JsonResponse(serializer.data)
+        except Inventory.DoesNotExist:
+            return JsonResponse({'error': '재고를 찾을 수 없습니다.'}, status=404)
+    
+    def put(self, request, pk):
+        """재고 수정"""
+        print(f"🔄 재고 수정 요청: pk={pk}")
+        print(f"🆔 request.user_id: {getattr(request, 'user_id', 'NOT SET')}")
+        
+        # 미들웨어에서 설정된 사용자 정보 확인
+        if not hasattr(request, 'user_id') or not request.user_id:
+            print(f"❌ 사용자 인증 정보 없음")
+            return JsonResponse({'error': '사용자 인증이 필요합니다.'}, status=401)
+        
+        print(f"✅ 사용자 인증 확인: user_id={request.user_id}")
+        
+        # Django View에서 JSON 데이터 파싱
+        try:
+            if request.content_type and 'application/json' in request.content_type:
+                data = json.loads(request.body)
+            else:
+                data = request.POST.dict()
+        except json.JSONDecodeError as e:
+            return JsonResponse({'error': '잘못된 JSON 형식입니다.'}, status=400)
+        
+        try:
+            inventory = Inventory.objects.select_related('fish_type').get(pk=pk, **get_user_queryset_filter(request))
+            old_quantity = inventory.stock_quantity
             
-            # 수량이 변경된 경우 로그 기록
-            new_quantity = inventory.stock_quantity
-            if old_quantity != new_quantity:
-                change = new_quantity - old_quantity
-                log_type = 'in' if change > 0 else 'out'
+            serializer = InventorySerializer(inventory, data=data, partial=True)
+            if serializer.is_valid():
+                inventory = serializer.save()
                 
-                InventoryLog.objects.create(
-                    inventory=inventory,
-                    fish_type=inventory.fish_type,
-                    type=log_type,
-                    change=abs(change),
-                    before_quantity=old_quantity,
-                    after_quantity=new_quantity,
-                    unit=inventory.unit,
-                    source_type='manual',
-                    memo='재고 수량 수정',
-                    updated_by=request.user
-                )
-            
-            return Response(serializer.data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-
-class InventoryLogListView(generics.ListAPIView):
-    """재고 로그 목록 조회"""
-    serializer_class = InventoryLogSerializer
-    permission_classes = [IsAuthenticated]
+                # 수량이 변경된 경우 로그 기록
+                new_quantity = inventory.stock_quantity
+                if old_quantity != new_quantity:
+                    change = new_quantity - old_quantity
+                    log_type = 'in' if change > 0 else 'out'
+                    
+                    from business.models import User
+                    user = User.objects.get(id=request.user_id)
+                    
+                    InventoryLog.objects.create(
+                        inventory=inventory,
+                        fish_type=inventory.fish_type,
+                        type=log_type,
+                        change=abs(change),
+                        before_quantity=old_quantity,
+                        after_quantity=new_quantity,
+                        unit=inventory.unit,
+                        source_type='manual',
+                        memo='재고 수량 수정',
+                        updated_by=user
+                    )
+                
+                return JsonResponse(serializer.data)
+            return JsonResponse(serializer.errors, status=400)
+        except Inventory.DoesNotExist:
+            return JsonResponse({'error': '재고를 찾을 수 없습니다.'}, status=404)
     
-    def get_queryset(self):
-        inventory_id = self.kwargs.get('inventory_id')
-        if inventory_id:
-            return InventoryLog.objects.filter(
-                inventory_id=inventory_id
-            ).select_related('fish_type').order_by('-created_at')
+    def delete(self, request, pk):
+        """재고 삭제"""
+        print(f"❌ 재고 삭제 요청: pk={pk}")
+        print(f"🆔 request.user_id: {getattr(request, 'user_id', 'NOT SET')}")
         
-        return InventoryLog.objects.select_related(
-            'fish_type', 'inventory'
-        ).order_by('-created_at')
+        # 미들웨어에서 설정된 사용자 정보 확인
+        if not hasattr(request, 'user_id') or not request.user_id:
+            print(f"❌ 사용자 인증 정보 없음")
+            return JsonResponse({'error': '사용자 인증이 필요합니다.'}, status=401)
+        
+        print(f"✅ 사용자 인증 확인: user_id={request.user_id}")
+        
+        try:
+            inventory = Inventory.objects.get(pk=pk, **get_user_queryset_filter(request))
+            inventory.delete()
+            return JsonResponse({'message': '재고가 삭제되었습니다.'}, status=204)
+        except Inventory.DoesNotExist:
+            return JsonResponse({'error': '재고를 찾을 수 없습니다.'}, status=404)
 
 
-class FishTypeListView(generics.ListAPIView):
-    """어종 목록 조회 (재고 추가 시 선택용)"""
-    serializer_class = FishTypeSerializer
-    permission_classes = []  # 인증 제거 - 어종 목록은 공개
+@method_decorator(csrf_exempt, name='dispatch')
+class InventoryLogListView(View):
+    """재고 로그 목록 조회 - Django View 기반 JWT 미들웨어 인증"""
     
-    def get_queryset(self):
+    def get(self, request, inventory_id=None):
+        """재고 로그 목록 조회"""
+        print(f"📜 재고 로그 목록 조회 요청: inventory_id={inventory_id}")
+        print(f"🆔 request.user_id: {getattr(request, 'user_id', 'NOT SET')}")
+        
+        # 미들웨어에서 설정된 사용자 정보 확인
+        if not hasattr(request, 'user_id') or not request.user_id:
+            print(f"❌ 사용자 인증 정보 없음")
+            return JsonResponse({'error': '사용자 인증이 필요합니다.'}, status=401)
+        
+        print(f"✅ 사용자 인증 확인: user_id={request.user_id}")
+        
+        if inventory_id:
+            # 특정 재고에 대한 로그
+            # 사용자 범위 내에서 재고 확인
+            try:
+                inventory = Inventory.objects.get(id=inventory_id, **get_user_queryset_filter(request))
+                logs = InventoryLog.objects.filter(
+                    inventory_id=inventory_id
+                ).select_related('fish_type').order_by('-created_at')
+            except Inventory.DoesNotExist:
+                return JsonResponse({'error': '재고를 찾을 수 없습니다.'}, status=404)
+        else:
+            # 전체 로그 (사용자의 모든 재고)
+            logs = InventoryLog.objects.filter(
+                inventory__user_id=request.user_id
+            ).select_related('fish_type', 'inventory').order_by('-created_at')
+        
+        serializer = InventoryLogSerializer(logs, many=True)
+        return JsonResponse(serializer.data, safe=False)
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class FishTypeListView(View):
+    """어종 목록 조회 (재고 추가 시 선택용) - Django View 기반 JWT 미들웨어 인증"""
+    
+    def get(self, request):
+        """어종 목록 조회"""
+        print(f"🐠 어종 목록 조회 요청")
+        print(f"🆔 request.user_id: {getattr(request, 'user_id', 'NOT SET')}")
+        
+        # 미들웨어에서 설정된 사용자 정보 확인
+        if not hasattr(request, 'user_id') or not request.user_id:
+            print(f"❌ 사용자 인증 정보 없음")
+            return JsonResponse({'error': '사용자 인증이 필요합니다.'}, status=401)
+        
+        print(f"✅ 사용자 인증 확인: user_id={request.user_id}")
+        
         # 미들웨어에서 설정된 user_id 사용
-        return FishType.objects.filter(**get_user_queryset_filter(self.request)).order_by('name')
+        fish_types = FishType.objects.filter(**get_user_queryset_filter(request)).order_by('name')
+        serializer = FishTypeSerializer(fish_types, many=True)
+        return JsonResponse(serializer.data, safe=False)
