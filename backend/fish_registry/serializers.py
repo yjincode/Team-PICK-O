@@ -8,7 +8,6 @@ class FishTypeSerializer(serializers.ModelSerializer):
             'id',
             'name',
             'aliases',
-            'scientific_name',
             'unit',
             'notes',
             'created_at'
