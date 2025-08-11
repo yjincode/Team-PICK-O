@@ -1,27 +1,25 @@
 """
-사용자 인증 미들웨어
-모든 API 요청에서 요청 바디의 user_id를 검증하고 request.user_id를 설정합니다.
+JWT 토큰 기반 사용자 인증 미들웨어
+모든 API 요청에서 JWT 토큰을 검증하고 사용자 정보를 설정합니다.
 """
 import logging
-import json
+import jwt
 from django.http import JsonResponse
 from django.urls import resolve
 from django.conf import settings
+from django.core.exceptions import ObjectDoesNotExist
+from business.models import User
 
 logger = logging.getLogger(__name__)
 
-class UserAuthMiddleware:
-    """
-    요청 바디의 user_id를 검증하고 request에 user_id를 추가하는 미들웨어
-    스프링의 필터와 비슷한 역할을 합니다.
-    """
-    
-    # 인증이 필요 없는 URL 패턴들
+class JWTAuthMiddleware:
+    # 인증이 필요 없는 URL 패턴들 (회원가입, 로그인 등)
     EXCLUDED_PATHS = [
         '/admin/',
+        '/api/v1/business/auth/firebase-to-jwt/',
         '/api/v1/business/auth/register/',
         '/api/v1/business/auth/status/',
-        '/api/v1/business/auth/get-user-id/',
+        '/api/v1/business/auth/refresh/',
         '/static/',
         '/media/',
         '/api/docs/',
@@ -33,41 +31,36 @@ class UserAuthMiddleware:
 
     def __call__(self, request):
         # 요청 전 처리
-        logger.info(f"🔍 미들웨어 처리: {request.method} {request.path}")
-        
         if self._should_process_request(request):
-            logger.info(f"📝 user_id 검증 필요한 요청: {request.path}")
-            user_id = self._extract_user_from_body(request)
-            
-            logger.info(f"🆔 추출된 user_id: {user_id}")
-            
-            if not user_id:
-                logger.warning(f"❌ user_id 없음: {request.path}")
+            try:
+                user_data = self._authenticate_request(request)
+                if not user_data:
+                    return JsonResponse(
+                        {'error': '유효하지 않은 인증 토큰입니다.'}, 
+                        status=401
+                    )
+                
+                # request에 사용자 정보 추가
+                request.user_id = user_data['user_id']
+                request.user_status = user_data['status']
+                request.business_name = user_data['business_name']
+                
+                logger.debug(f"User {user_data['user_id']} ({user_data['status']}) 인증됨 for {request.path}")
+                
+            except Exception as e:
+                logger.error(f"인증 오류: {str(e)}")
                 return JsonResponse(
-                    {'error': 'user_id가 필요합니다.'}, 
-                    status=400
+                    {'error': '인증 처리 중 오류가 발생했습니다.'}, 
+                    status=500
                 )
-            
-            # request에 user_id 추가 (View에서 사용 가능)
-            request.user_id = user_id
-            
-            logger.info(f"✅ User ID {user_id} 설정됨 for {request.path}")
-        else:
-            logger.info(f"⏭️ 미들웨어 제외 경로: {request.path}")
         
         response = self.get_response(request)
-        
-        # 응답 후 처리 (필요시)
         return response
 
     def _should_process_request(self, request):
-        """요청이 처리되어야 하는지 확인"""
+        """요청이 인증을 필요로 하는지 확인"""
         # OPTIONS 요청은 제외 (CORS preflight)
         if request.method == 'OPTIONS':
-            return False
-            
-        # GET 요청도 제외 (조회는 user_id 불필요)
-        if request.method == 'GET':
             return False
             
         # 제외할 경로들 확인
@@ -78,54 +71,74 @@ class UserAuthMiddleware:
         # API 경로만 처리
         return request.path.startswith('/api/v1/')
 
-    def _extract_user_from_body(self, request):
-        """요청 바디에서 user_id를 추출"""
+    def _authenticate_request(self, request):
+        """JWT 토큰을 검증하고 사용자 정보를 반환"""
+        # Authorization 헤더에서 Bearer 토큰 추출
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return None
+        
+        token = auth_header.split(' ')[1]
+        
         try:
-            if hasattr(request, 'body') and request.body:
-                # JSON 파싱
-                body = json.loads(request.body.decode('utf-8'))
-                user_id = body.get('user_id')
+            # JWT 토큰 검증 (전용 JWT 시크릿 키 사용)
+            from core.jwt_utils import verify_access_token
+            payload = verify_access_token(token)
+            
+            if not payload:
+                return None
                 
-                if user_id:
-                    try:
-                        return int(user_id)
-                    except (ValueError, TypeError):
-                        logger.warning(f"Invalid user_id format: {user_id}")
-                        return None
-                        
+            user_id = payload.get('user_id')
+            if not user_id:
+                return None
+            
+            # 데이터베이스에서 사용자 정보 조회 및 승인 상태 확인
+            try:
+                user = User.objects.get(id=user_id)
+                
+                # 승인 상태 확인 (pending, rejected, suspended는 접근 제한)
+                if user.status not in ['approved']:
+                    logger.warning(f"User {user_id} status: {user.status} - 접근 거부")
+                    return None
+                
+                return {
+                    'user_id': user.id,
+                    'status': user.status,
+                    'business_name': user.business_name
+                }
+                
+            except ObjectDoesNotExist:
+                logger.warning(f"User {user_id} not found in database")
+                return None
+                
+        except jwt.ExpiredSignatureError:
+            logger.warning("JWT 토큰 만료됨")
             return None
-        except (json.JSONDecodeError, UnicodeDecodeError) as e:
-            logger.warning(f"JSON 파싱 오류: {e}")
-            return None
-        except Exception as e:
-            logger.error(f"user_id 추출 오류: {e}")
+        except jwt.InvalidTokenError as e:
+            logger.warning(f"Invalid JWT token: {str(e)}")
             return None
 
 
 class UserValidationMixin:
     """
     View에서 사용할 수 있는 믹스인
-    request.user_id가 유효한 사용자인지 검증합니다.
+    미들웨어에서 이미 검증된 사용자 정보를 사용합니다.
     """
     
     def dispatch(self, request, *args, **kwargs):
-        # 미들웨어에서 설정된 user_id 확인
+        # 미들웨어에서 설정된 사용자 정보 확인
         if not hasattr(request, 'user_id') or not request.user_id:
             return JsonResponse(
                 {'error': '사용자 인증이 필요합니다.'}, 
                 status=401
             )
         
-        # 실제 사용자 존재 여부 확인 (선택사항)
-        if getattr(settings, 'VALIDATE_USER_EXISTS', False):
-            from business.models import User
-            try:
-                User.objects.get(id=request.user_id, status='approved')
-            except User.DoesNotExist:
-                return JsonResponse(
-                    {'error': '유효하지 않은 사용자입니다.'}, 
-                    status=401
-                )
+        # 승인 상태 확인 (미들웨어에서 이미 확인했지만 추가 검증)
+        if not hasattr(request, 'user_status') or request.user_status != 'approved':
+            return JsonResponse(
+                {'error': '승인된 사용자만 접근할 수 있습니다.'}, 
+                status=403
+            )
         
         return super().dispatch(request, *args, **kwargs)
 

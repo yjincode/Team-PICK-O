@@ -28,6 +28,13 @@ FILE_UPLOAD_DIRECTORY_PERMISSIONS = 0o755
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-change-me-in-production')
 
+# JWT Settings for fast authentication (replacing Firebase token verification)
+JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', 'jwt-super-secret-key-change-in-production')
+JWT_REFRESH_SECRET_KEY = os.getenv('JWT_REFRESH_SECRET_KEY', 'refresh-super-secret-key-change-in-production')
+JWT_ALGORITHM = 'HS256'
+JWT_ACCESS_EXPIRATION_MINUTES = 15  # 액세스 토큰: 15분
+JWT_REFRESH_EXPIRATION_DAYS = 7    # 리프레시 토큰: 7일
+
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('DEBUG', 'True').lower() == 'true'
 
@@ -71,7 +78,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
-    'core.middleware.UserAuthMiddleware',  # Firebase 토큰 검증 미들웨어
+    'core.middleware.JWTAuthMiddleware',  # 빠른 JWT 토큰 검증 미들웨어 (Firebase 지연시간 해결)
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
