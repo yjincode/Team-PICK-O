@@ -26,6 +26,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "../../components/ui/pop
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../components/ui/table"
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card"
+import { OrderListItem } from "../../types"
+import toast from 'react-hot-toast'
 import OrderForm from "./OrderForm"
 
 // API 설정
@@ -55,43 +57,16 @@ api.interceptors.request.use(
   }
 )
 
-// 주문 데이터 타입 정의 (DB 구조 반영)
-interface Order {
-  id: number;
-  business_id: number;
-  total_price: number;
-  order_datetime: string;
-  delivery_datetime?: string;
+// 주문 데이터 타입 정의 (OrderListSerializer 반영)
+interface Order extends OrderListItem {
+  // OrderListItem에서 확장하여 필요한 필드 추가
   memo?: string;
-  source_type: 'manual' | 'voice' | 'text';
+  source_type?: 'manual' | 'voice' | 'text';
   transcribed_text?: string;
-  order_status: 'placed' | 'ready' | 'delivered' | 'cancelled';
-  is_urgent: boolean;
-  last_updated_at: string;
-  business?: {
-    id: number;
-    business_name: string;
-    phone_number: string;
-  };
-  items?: Array<{
-    id: number;
-    fish_type_id: number;
-    item_name_snapshot: string;
-    quantity: number;
-    unit_price?: number;
-    unit?: string;
-    remarks?: string;
-  }>;
-  payment?: {
-    id: number;
-    payment_status: 'pending' | 'paid' | 'refunded';
-    amount: number;
-    method: 'cash' | 'bank_transfer' | 'card';
-    paid_at?: string;
-  };
+  last_updated_at?: string;
 }
 
-// 목업 데이터 (DB 구조 반영)
+// 목업 데이터 (OrderListSerializer 구조 반영)
 const mockOrders: Order[] = [
   {
     id: 1,
@@ -404,7 +379,15 @@ const OrderList: React.FC = () => {
 
     // 결제 상태별 필터
     if (paymentStatusFilter !== "all") {
-      filtered = filtered.filter(order => order.payment?.payment_status === paymentStatusFilter)
+      // OrderListSerializer에는 payment_status가 없으므로 필터링 제거
+      // 대신 주문 상태에 따라 필터링
+      if (paymentStatusFilter === "paid") {
+        filtered = filtered.filter(order => order.order_status === "delivered" || order.order_status === "cancelled")
+      } else if (paymentStatusFilter === "pending") {
+        filtered = filtered.filter(order => order.order_status === "placed")
+      } else if (paymentStatusFilter === "refunded") {
+        filtered = filtered.filter(order => order.order_status === "cancelled")
+      }
     }
 
     // 날짜별 필터
@@ -419,7 +402,7 @@ const OrderList: React.FC = () => {
     if (searchQuery) {
       const query = searchQuery.toLowerCase()
       filtered = filtered.filter(order => 
-        order.business?.business_name.toLowerCase().includes(query) ||
+        order.business_name.toLowerCase().includes(query) ||
         order.id.toString().includes(query) ||
         order.memo?.toLowerCase().includes(query)
       )
@@ -442,55 +425,36 @@ const OrderList: React.FC = () => {
     const newOrder: Order = {
       id: orderData.order_id || Math.max(...orders.map(o => o.id)) + 1,
       business_id: orderData.business_id,
+      business_name: orderData.business_name || '거래처명 없음',
+      business_phone: orderData.phone_number || '연락처 없음',
       total_price: orderData.total_price || 0,
       order_datetime: orderData.order_datetime || new Date().toISOString(),
       delivery_datetime: orderData.delivery_datetime || '',
+      order_status: 'placed',
+      is_urgent: orderData.is_urgent || false,
+      items_summary: orderData.order_items?.map((item: any) => `${item.item_name_snapshot || '품목명 없음'} ${item.quantity}${item.unit}`).join(', ') || '주문 항목 없음',
       memo: orderData.memo || '',
       source_type: orderData.source_type || 'manual',
       transcribed_text: orderData.transcribed_text || '',
-      order_status: 'placed',
-      is_urgent: orderData.is_urgent || false,
-      last_updated_at: new Date().toISOString(),
-      business: {
-        id: orderData.business_id,
-        business_name: orderData.business_name || '거래처명 없음',
-        phone_number: orderData.phone_number || '연락처 없음',
-      },
-      items: orderData.order_items?.map((item: any, index: number) => ({
-        id: index + 1,
-        fish_type_id: item.fish_type_id,
-        item_name_snapshot: item.item_name_snapshot || '품목명 없음',
-        quantity: item.quantity,
-        unit_price: item.unit_price,
-        unit: item.unit
-      })) || [],
-      payment: {
-        id: Math.max(...orders.map(o => o.payment?.id || 0)) + 1,
-        payment_status: 'pending',
-        amount: orderData.total_price || 0,
-        method: 'cash',
-      }
+      last_updated_at: new Date().toISOString()
     }
     
     setOrders(prev => [newOrder, ...prev])
     setShowOrderForm(false)
   }
 
-  // 결제 처리
+  // 결제 처리 (OrderListSerializer에는 payment 정보가 없으므로 주문 상태만 변경)
   const handlePayment = (orderId: number) => {
     setOrders(prev => prev.map(order => {
-      if (order.id === orderId && order.payment) {
+      if (order.id === orderId) {
         return {
           ...order,
-          payment: {
-            ...order.payment,
-            payment_status: 'paid' as const,
-            paid_at: new Date().toISOString()
-          }
+          order_status: 'delivered' as const
         }
       }
       return order
     }))
+    toast.success('주문이 배송 완료로 변경되었습니다.')
   }
 
   // 상세보기 처리
@@ -559,8 +523,8 @@ const OrderList: React.FC = () => {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">전체</SelectItem>
-                    <SelectItem value="pending">미결제</SelectItem>
                     <SelectItem value="paid">결제 완료</SelectItem>
+                    <SelectItem value="pending">미결제</SelectItem>
                     <SelectItem value="refunded">환불됨</SelectItem>
                   </SelectContent>
                 </Select>
@@ -655,8 +619,8 @@ const OrderList: React.FC = () => {
                         </TableCell>
                         <TableCell className="font-medium">
                           <div>
-                            <div className="font-semibold">{order.business?.business_name}</div>
-                            <div className="text-sm text-gray-500">{order.business?.phone_number}</div>
+                            <div className="font-semibold">{order.business_name}</div>
+                            <div className="text-sm text-gray-500">{order.business_phone}</div>
                           </div>
                         </TableCell>
                         <TableCell className="text-gray-600">
@@ -666,15 +630,13 @@ const OrderList: React.FC = () => {
                           {order.delivery_datetime ? format(new Date(order.delivery_datetime), "yyyy-MM-dd") : "-"}
                         </TableCell>
                         <TableCell className="text-gray-600 max-w-[200px] truncate">
-                          {getItemsSummary(order.items)}
+                          {order.items_summary}
                         </TableCell>
                         <TableCell className="font-semibold text-gray-900">
                           {formatPrice(order.total_price)}원
                         </TableCell>
                         <TableCell>
-                          <PaymentStatusBadge status={order.payment?.payment_status || 'pending'} />
-                        </TableCell>
-                        <TableCell>
+                          {/* OrderListSerializer에는 payment_status가 없으므로 필터링 제거 */}
                           <OrderStatusBadge status={order.order_status} />
                         </TableCell>
                         <TableCell className="text-center">
@@ -688,7 +650,8 @@ const OrderList: React.FC = () => {
                               <Eye className="h-4 w-4 mr-1" />
                               상세보기
                             </Button>
-                            {(order.payment?.payment_status === 'pending' || order.order_status === 'placed') && (
+                            {/* OrderListSerializer에는 payment_status가 없으므로 필터링 제거 */}
+                            {(order.order_status === 'placed' || order.order_status === 'ready') && (
                               <Button
                                 variant="outline"
                                 size="sm"
