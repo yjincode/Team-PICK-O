@@ -8,12 +8,14 @@ import { UserData, UserStatus } from '../types/auth';
 interface AuthContextType {
   user: User | null;
   userData: UserData | null;
+  userId: number | null;
   loading: boolean;
   isAuthenticated: boolean;
   isApproved: boolean;
   login: (user: User, userData: UserData) => Promise<void>;
   logout: () => void;
   refreshUserData: () => Promise<void>;
+  setUserData: (userData: UserData | null) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -32,6 +34,7 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
     console.log('🔧 AuthContext 초기화 시작');
     
     const initAuth = async () => {
+      
       // 즉시 현재 사용자 확인 (캐시된 값)
       const currentUser = getCurrentUser();
       if (currentUser) {
@@ -173,7 +176,7 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
     
     setUser(firebaseUser);
     setUserData(userInfo);
-    // userInfo는 localStorage에 저장하지 않음 (보안상 이유)
+    console.log('💾 Login - 사용자 정보 컨텍스트 저장:', userInfo);
   };
 
   const logout = async (): Promise<void> => {
@@ -210,16 +213,24 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
 
   const isAuthenticated = !!(user && userData);
   const isApproved = userData?.status === 'approved';
+  const userId = userData?.id || null;
+
+  // setUserData 함수 추가
+  const handleSetUserData = (newUserData: UserData | null) => {
+    setUserData(newUserData);
+  };
 
   const value = {
     user,
     userData,
+    userId,
     loading,
     isAuthenticated,
     isApproved,
     login,
     logout,
     refreshUserData,
+    setUserData: handleSetUserData,
   };
 
   return (

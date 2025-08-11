@@ -12,7 +12,8 @@ class Inventory(models.Model):
     ]
 
     id = models.AutoField(primary_key=True)
-    fish_type = models.OneToOneField('fish_registry.FishType', on_delete=models.CASCADE, verbose_name="어종")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, verbose_name="사용자")
+    fish_type = models.ForeignKey('fish_registry.FishType', on_delete=models.CASCADE, verbose_name="어종")
     
     stock_quantity = models.FloatField(default=0, verbose_name="재고 수량")
     unit = models.CharField(max_length=20, verbose_name="단위")
