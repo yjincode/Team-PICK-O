@@ -12,7 +12,8 @@ import { Label } from "../../components/ui/label"
 import { Textarea } from "../../components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../components/ui/tabs"
-import { X, Plus, Save } from "lucide-react"
+import { Popover, PopoverContent, PopoverTrigger } from "../../components/ui/popover"
+import { X, Plus, Save, CalendarDays } from "lucide-react"
 import BusinessSearch from "../../components/BusinessSearch"
 import { parseVoiceOrder, validateAndCompleteOrder } from "../../utils/orderParser"
 import { formatPhoneNumber } from "../../utils/phoneFormatter"
@@ -24,6 +25,9 @@ import {
   startRealTimeSpeechRecognition,
   AudioFileInfo 
 } from "../../utils/audioProcessor"
+import MinimalCalendar from "../../components/ui/MinimalCalendar"
+import { format } from "date-fns"
+import { ko } from "date-fns/locale"
 
 // 공통 컴포넌트들 import
 import VoiceUploadTab from "./components/VoiceUploadTab"
@@ -62,6 +66,23 @@ api.interceptors.request.use(
   }
 )
 
+// 한국 시간대로 날짜를 처리하는 함수들
+const toKoreanDate = (date: Date): string => {
+  const koreanDate = new Date(date.getTime() + (9 * 60 * 60 * 1000)) // UTC+9
+  return koreanDate.toISOString().split('T')[0]
+}
+
+const fromKoreanDate = (dateString: string): Date => {
+  const [year, month, day] = dateString.split('-').map(Number)
+  return new Date(year, month - 1, day, 9, 0, 0) // 한국 시간 9시로 설정
+}
+
+const formatKoreanDate = (dateString: string): string => {
+  if (!dateString) return ""
+  const date = fromKoreanDate(dateString)
+  return format(date, "yyyy-MM-dd", { locale: ko })
+}
+
 interface OrderFormProps {
   onClose: () => void;
   onSubmit: (orderData: any) => void;
@@ -69,7 +90,7 @@ interface OrderFormProps {
     order: {
       business_id: number;
       contact: string;
-      delivery_date: string;
+      delivery_datetime: string;
       transcribed_text: string;
       raw_input_path?: string;
     };
@@ -91,7 +112,7 @@ interface OrderItem {
   unit_price: number;
   unit: string;
   remarks?: string;
-  delivery_date: string;
+  delivery_datetime: string;
 }
 
 interface FormData {
@@ -101,7 +122,7 @@ interface FormData {
   source_type: "voice" | "text" | "manual" | "image";
   transcribed_text: string;
   raw_input_path: string;
-  delivery_date: string;
+  delivery_datetime: string;
   items: OrderItem[];
 }
 
@@ -195,7 +216,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
       source_type: "text" as "voice" | "text" | "manual" | "image",
       transcribed_text: "",
       raw_input_path: "",
-      delivery_date: "",
+      delivery_datetime: "",
       items: [] as OrderItem[]
     }
   })
@@ -206,7 +227,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
     unit_price: 0,
     unit: "박스",
     remarks: "",
-    delivery_date: ""
+    delivery_datetime: ""
   })
 
   const handleInputChange = (field: string, value: string) => {
@@ -306,7 +327,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
         
         setFormData((prev: FormData) => ({
           ...prev,
-          delivery_date: validatedData.delivery_date || prev.delivery_date,
+          delivery_datetime: validatedData.delivery_date || prev.delivery_datetime,
           memo: validatedData.memo || prev.memo,
           items: validatedData.items.map((item: any) => ({
             id: Date.now().toString(),
@@ -315,7 +336,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
             quantity: item.quantity,
             unit_price: item.unit_price || 0,
             unit: item.unit,
-            delivery_date: formData.delivery_date
+            delivery_datetime: formData.delivery_datetime
           }))
         }))
         
@@ -337,7 +358,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
         
         setFormData((prev: FormData) => ({
           ...prev,
-          delivery_date: validatedData.delivery_date || prev.delivery_date,
+          delivery_datetime: validatedData.delivery_date || prev.delivery_datetime,
           memo: validatedData.memo || prev.memo,
           items: validatedData.items.map((item: any) => ({
             id: Date.now().toString(),
@@ -346,7 +367,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
             quantity: item.quantity,
             unit_price: item.unit_price || 0,
             unit: item.unit,
-            delivery_date: formData.delivery_date
+            delivery_datetime: formData.delivery_datetime
           }))
         }))
         
@@ -371,7 +392,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
         unit_price: newItem.unit_price || 0,
         unit: newItem.unit || "박스",
         remarks: newItem.remarks,
-        delivery_date: newItem.delivery_date || formData.delivery_date
+        delivery_datetime: newItem.delivery_datetime || formData.delivery_datetime
       }
       
       setFormData((prev: FormData) => ({
@@ -385,7 +406,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
         unit_price: 0,
         unit: "박스",
         remarks: "",
-        delivery_date: ""
+        delivery_datetime: ""
       })
     }
   }
@@ -410,9 +431,11 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
     
     // delivery_date가 비어있으면 null로 설정
     let delivery_datetime = null
-    if (formData.delivery_date) {
+    if (formData.delivery_datetime) {
       try {
-        delivery_datetime = new Date(formData.delivery_date).toISOString()
+        // 한국 시간대로 날짜 처리
+        const koreanDate = fromKoreanDate(formData.delivery_datetime)
+        delivery_datetime = koreanDate.toISOString()
       } catch (error) {
         console.error('날짜 변환 오류:', error)
       }
@@ -448,7 +471,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
       } else {
         throw new Error('주문 저장에 실패했습니다.')
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('주문 저장 오류:', error)
       if (error.response && error.response.data) {
         console.error('서버 응답 오류:', error.response.data)
@@ -477,42 +500,59 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
             {/* 거래처 선택 */}
             <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
               <h3 className="text-lg font-semibold mb-3 text-blue-900">거래처 선택</h3>
-              <Select 
-                value={selectedBusinessId?.toString() || ""} 
-                onValueChange={(value: string) => setSelectedBusinessId(parseInt(value))}
-              >
-                <SelectTrigger className="bg-white">
-                  <SelectValue placeholder="거래처를 선택하세요" />
-                </SelectTrigger>
-                <SelectContent>
-                  {businesses.map((business: Business) => (
-                    <SelectItem key={business.id} value={business.id.toString()}>
-                      <div className="flex flex-col">
-                        <span className="font-medium">{business.business_name}</span>
-                        <span className="text-xs text-gray-500">{business.phone_number}</span>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {selectedBusinessId && (
-                <div className="mt-2 text-sm text-blue-700">
-                  ✓ 선택된 거래처: {businesses.find((b: Business) => b.id === selectedBusinessId)?.business_name}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="business-select">거래처</Label>
+                  <Select 
+                    value={selectedBusinessId?.toString() || ""} 
+                    onValueChange={(value: string) => setSelectedBusinessId(parseInt(value))}
+                  >
+                    <SelectTrigger className="bg-white">
+                      <SelectValue placeholder="거래처를 선택하세요" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {businesses.map((business: Business) => (
+                        <SelectItem key={business.id} value={business.id.toString()}>
+                          <div className="flex flex-col">
+                            <span className="font-medium">{business.business_name}</span>
+                            <span className="text-xs text-gray-500">{business.phone_number}</span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {selectedBusinessId && (
+                    <div className="mt-2 text-sm text-blue-700">
+                      ✓ 선택된 거래처: {businesses.find((b: Business) => b.id === selectedBusinessId)?.business_name}
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-
-
-            {/* 주문 정보 */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="delivery_date">배송일</Label>
-                <Input
-                  id="delivery_date"
-                  type="date"
-                  value={formData.delivery_date}
-                  onChange={(e: ChangeEvent<HTMLInputElement>) => handleInputChange("delivery_date", e.target.value)}
-                />
+                
+                <div className="space-y-2">
+                  <Label htmlFor="delivery_date">납품일</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className="w-full justify-start text-left font-normal bg-white"
+                      >
+                        <CalendarDays className="mr-2 h-4 w-4" />
+                        {formData.delivery_datetime ? (
+                          formatKoreanDate(formData.delivery_datetime)
+                        ) : (
+                          "납품일 선택"
+                        )}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0">
+                      <MinimalCalendar
+                        value={formData.delivery_datetime ? fromKoreanDate(formData.delivery_datetime) : null}
+                        onChange={(date: Date | null) => handleInputChange("delivery_datetime", date ? toKoreanDate(date) : "")}
+                        placeholder="납품일 선택"
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
               </div>
             </div>
 

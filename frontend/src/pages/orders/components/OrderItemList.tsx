@@ -16,7 +16,7 @@ interface OrderItem {
   unit_price: number
   unit: string
   remarks?: string
-  delivery_date: string
+  delivery_datetime: string
 }
 
 interface OrderItemListProps {
@@ -57,7 +57,7 @@ const OrderItemList: React.FC<OrderItemListProps> = ({
               <TableCell>{item.unit_price.toLocaleString()}원</TableCell>
               <TableCell>{item.unit}</TableCell>
               <TableCell>{item.remarks || "-"}</TableCell>
-              <TableCell>{item.delivery_date}</TableCell>
+              <TableCell>{item.delivery_datetime}</TableCell>
               <TableCell>
                 <Button
                   variant="ghost"

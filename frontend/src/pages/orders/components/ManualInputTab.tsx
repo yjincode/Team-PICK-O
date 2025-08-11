@@ -19,7 +19,7 @@ interface OrderItem {
   unit_price: number
   unit: string
   remarks?: string
-  delivery_date: string
+  delivery_datetime: string
 }
 
 interface ManualInputTabProps {
@@ -52,7 +52,7 @@ const ManualInputTab: React.FC<ManualInputTabProps> = ({
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="space-y-2">
           <Label htmlFor="fish-type">어종 선택</Label>
           <Select onValueChange={handleFishTypeChange}>
@@ -100,26 +100,17 @@ const ManualInputTab: React.FC<ManualInputTabProps> = ({
             placeholder="kg, 마리 등"
           />
         </div>
+      </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="delivery-date">납품일</Label>
-          <Input
-            id="delivery-date"
-            type="date"
-            value={currentItem.delivery_date || ""}
-            onChange={(e) => setCurrentItem({ ...currentItem, delivery_date: e.target.value })}
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="remarks">요청사항</Label>
-          <Input
-            id="remarks"
-            value={currentItem.remarks || ""}
-            onChange={(e) => setCurrentItem({ ...currentItem, remarks: e.target.value })}
-            placeholder="요청사항을 입력하세요"
-          />
-        </div>
+      <div className="space-y-2">
+        <Label htmlFor="remarks">요청사항</Label>
+        <Input
+          id="remarks"
+          value={currentItem.remarks || ""}
+          onChange={(e) => setCurrentItem({ ...currentItem, remarks: e.target.value })}
+          placeholder="요청사항을 입력하세요"
+          className="w-full"
+        />
       </div>
 
       <Button 

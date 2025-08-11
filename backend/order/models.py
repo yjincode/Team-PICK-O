@@ -1,4 +1,5 @@
 from django.db import models
+from django.conf import settings
 
 
 class Order(models.Model):
@@ -18,6 +19,11 @@ class Order(models.Model):
     ]
 
     id = models.AutoField(primary_key=True, verbose_name="주문 ID")
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, 
+        on_delete=models.CASCADE, 
+        verbose_name="사용자"
+    )
     business = models.ForeignKey(
         'business.Business', 
         on_delete=models.CASCADE, 

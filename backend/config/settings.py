@@ -71,6 +71,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'core.middleware.UserAuthMiddleware',  # Firebase 토큰 검증 미들웨어
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -95,17 +96,100 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'config.wsgi.application'
 
-# Database - PostgreSQL 사용 (환경변수로 설정)
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.getenv('POSTGRES_DB', 'teamPicko'),
-        'USER': os.getenv('POSTGRES_USER', 'teamPicko'),
-        'PASSWORD': os.getenv('POSTGRES_PASSWORD', '12341234'),
-        'HOST': os.getenv('DB_HOST', 'localhost'),
-        'PORT': os.getenv('DB_PORT', '5432'),
-    }
+# Database - PostgreSQL 사용 (1차: 외부 서버, 2차: 로컬 도커)
+# 1차 연결 실패 시 자동으로 2차 데이터베이스로 전환
+import psycopg2
+
+def test_database_connection(host, port, name, user, password):
+    """데이터베이스 연결을 테스트하는 함수"""
+    try:
+        conn = psycopg2.connect(
+            host=host,
+            port=port,
+            database=name,
+            user=user,
+            password=password,
+            connect_timeout=5
+        )
+        conn.close()
+        return True
+    except:
+        return False
+
+# 1차 데이터베이스 설정 (외부 서버)
+PRIMARY_DB_CONFIG = {
+    'ENGINE': 'django.db.backends.postgresql',
+    'NAME': os.getenv('POSTGRES_DB', 'teamPicko'),
+    'USER': os.getenv('POSTGRES_USER', 'teamPicko'),
+    'PASSWORD': os.getenv('POSTGRES_PASSWORD', '12341234'),
+    'HOST': os.getenv('DB_HOST', '192.168.0.137'),  # 1차: 외부 서버
+    'PORT': os.getenv('DB_PORT', '5432'),
+    'OPTIONS': {
+        'connect_timeout': 5,
+    },
 }
+
+# 2차 데이터베이스 설정 (로컬 도커)
+FALLBACK_DB_CONFIG = {
+    'ENGINE': 'django.db.backends.postgresql',
+    'NAME': os.getenv('FALLBACK_POSTGRES_DB', 'teamPicko'),
+    'USER': os.getenv('FALLBACK_POSTGRES_USER', 'teamPicko'),
+    'PASSWORD': os.getenv('FALLBACK_POSTGRES_PASSWORD', '12341234'),
+    'HOST': os.getenv('FALLBACK_DB_HOST', 'localhost'),  # 2차: 로컬 도커
+    'PORT': os.getenv('FALLBACK_DB_PORT', '5432'),
+    'OPTIONS': {
+        'connect_timeout': 5,
+    },
+}
+
+# 데이터베이스 연결 테스트 후 선택
+print("🔍 데이터베이스 연결 상태를 확인중...")
+
+# 1차 데이터베이스 연결 테스트
+primary_available = test_database_connection(
+    PRIMARY_DB_CONFIG['HOST'],
+    PRIMARY_DB_CONFIG['PORT'], 
+    PRIMARY_DB_CONFIG['NAME'],
+    PRIMARY_DB_CONFIG['USER'],
+    PRIMARY_DB_CONFIG['PASSWORD']
+)
+
+if primary_available:
+    print("✅ 1차 데이터베이스(외부 서버) 연결 성공")
+    DATABASES = {
+        'default': PRIMARY_DB_CONFIG,
+        'fallback': FALLBACK_DB_CONFIG,
+    }
+    CURRENT_DATABASE = 'primary'
+else:
+    # 2차 데이터베이스 연결 테스트
+    fallback_available = test_database_connection(
+        FALLBACK_DB_CONFIG['HOST'],
+        FALLBACK_DB_CONFIG['PORT'],
+        FALLBACK_DB_CONFIG['NAME'], 
+        FALLBACK_DB_CONFIG['USER'],
+        FALLBACK_DB_CONFIG['PASSWORD']
+    )
+    
+    if fallback_available:
+        print("⚠️ 1차 데이터베이스 연결 실패, 2차 데이터베이스(로컬 도커) 사용")
+        DATABASES = {
+            'default': FALLBACK_DB_CONFIG,
+            'fallback': FALLBACK_DB_CONFIG,
+        }
+        CURRENT_DATABASE = 'fallback'
+    else:
+        print("❌ 모든 데이터베이스 연결 실패, 기본 설정 사용")
+        DATABASES = {
+            'default': PRIMARY_DB_CONFIG,
+            'fallback': FALLBACK_DB_CONFIG,
+        }
+        CURRENT_DATABASE = 'primary'
+
+print(f"📊 활성 데이터베이스: {CURRENT_DATABASE} ({DATABASES['default']['HOST']}:{DATABASES['default']['PORT']})")
+
+# 데이터베이스 연결 fallback 설정
+DATABASE_FALLBACK_ENABLED = True
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [

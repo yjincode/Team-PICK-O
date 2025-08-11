@@ -28,21 +28,84 @@ const api = axios.create({
 })
 
 
-// Request interceptor (Firebase 토큰 사용)
+// Request interceptor (user_id 헤더 및 Firebase 토큰 사용)
+
+// 전역 user_id 캐시 (컨텍스트가 사라져도 유지)
+let cachedUserId: number | null = null
+let isGettingUserId = false // user_id 조회 중인지 플래그
+
+// user_id 조회 함수
+const getUserId = async (): Promise<number | null> => {
+  if (cachedUserId) return cachedUserId
+  if (isGettingUserId) return null // 이미 조회 중이면 기다리지 않음
+
+  const firebaseToken = localStorage.getItem('firebase_token')
+  if (!firebaseToken) return null
+
+  isGettingUserId = true
+  
+  try {
+    const response = await fetch('/api/v1/business/auth/get-user-id/', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${firebaseToken}`,
+        'Content-Type': 'application/json'
+      }
+    })
+    
+    if (response.ok) {
+      const data = await response.json()
+      cachedUserId = data.user_id
+      console.log('✅ user_id 자동 조회 성공:', cachedUserId)
+      return cachedUserId
+    }
+  } catch (error) {
+    console.error('❌ user_id 자동 조회 오류:', error)
+  } finally {
+    isGettingUserId = false
+  }
+  
+  return null
+}
 
 api.interceptors.request.use(
-  (config) => {
+  async (config) => {
+    // Firebase 토큰 추가
     const firebaseToken = localStorage.getItem('firebase_token')
+    if (firebaseToken) {
+      config.headers.Authorization = `Bearer ${firebaseToken}`
+    }
+
+    // POST, PUT, PATCH 요청에 user_id 추가
+    if (['post', 'put', 'patch'].includes(config.method?.toLowerCase() || '')) {
+      let userId = cachedUserId
+      
+      // user_id가 없으면 비동기로 가져오기
+      if (!userId) {
+        userId = await getUserId()
+      }
+      
+      // user_id를 요청 데이터에 추가
+      if (userId) {
+        if (config.data && typeof config.data === 'object') {
+          config.data = {
+            ...config.data,
+            user_id: userId
+          }
+        } else if (!config.data) {
+          config.data = { user_id: userId }
+        }
+      }
+    }
+    
     console.log('🌐 API 요청:', {
       url: config.url,
       method: config.method?.toUpperCase(),
       hasToken: !!firebaseToken,
-      tokenPreview: firebaseToken ? firebaseToken.substring(0, 20) + '...' : 'None'
+      hasUserId: !!config.data?.user_id,
+      userId: config.data?.user_id
     });
     
-    if (firebaseToken) {
-      config.headers.Authorization = `Bearer ${firebaseToken}`
-    }
     return config
   },
   (error) => {

@@ -2,6 +2,7 @@ from rest_framework import generics, status
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.db.models import Q
+from core.middleware import get_user_queryset_filter
 from .models import Inventory, InventoryLog
 from .serializers import (
     InventorySerializer, InventoryLogSerializer, InventoryListSerializer,
@@ -12,7 +13,7 @@ from fish_registry.models import FishType
 
 class InventoryListCreateView(generics.ListCreateAPIView):
     """재고 목록 조회 및 생성"""
-    permission_classes = []  # 임시로 인증 제거
+    permission_classes = []  # 인증 제거
     
     def get_serializer_class(self):
         if self.request.method == 'POST':
@@ -20,7 +21,8 @@ class InventoryListCreateView(generics.ListCreateAPIView):
         return InventoryListSerializer
     
     def get_queryset(self):
-        queryset = Inventory.objects.select_related('fish_type').all()
+        # 미들웨어에서 설정된 user_id 사용
+        queryset = Inventory.objects.select_related('fish_type').filter(**get_user_queryset_filter(self.request))
         
         # 검색 기능
         search = self.request.query_params.get('search', None)
@@ -40,7 +42,7 @@ class InventoryListCreateView(generics.ListCreateAPIView):
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         if serializer.is_valid():
-            inventory = serializer.save()
+            inventory = serializer.save(user_id=request.user_id)
             
             # 재고 생성 로그 기록
             InventoryLog.objects.create(
@@ -65,9 +67,12 @@ class InventoryListCreateView(generics.ListCreateAPIView):
 
 class InventoryDetailView(generics.RetrieveUpdateDestroyAPIView):
     """재고 상세 조회, 수정, 삭제"""
-    queryset = Inventory.objects.select_related('fish_type').all()
     serializer_class = InventorySerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = []
+    
+    def get_queryset(self):
+        # 미들웨어에서 설정된 user_id 사용
+        return Inventory.objects.select_related('fish_type').filter(**get_user_queryset_filter(self.request))
     
     def update(self, request, *args, **kwargs):
         instance = self.get_object()
@@ -119,6 +124,9 @@ class InventoryLogListView(generics.ListAPIView):
 
 class FishTypeListView(generics.ListAPIView):
     """어종 목록 조회 (재고 추가 시 선택용)"""
-    queryset = FishType.objects.all().order_by('name')
     serializer_class = FishTypeSerializer
     permission_classes = []  # 인증 제거 - 어종 목록은 공개
+    
+    def get_queryset(self):
+        # 미들웨어에서 설정된 user_id 사용
+        return FishType.objects.filter(**get_user_queryset_filter(self.request)).order_by('name')
