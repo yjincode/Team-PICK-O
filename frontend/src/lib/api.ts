@@ -18,6 +18,7 @@ import {
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1'
 
 
+
 // axios 인스턴스 생성
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -27,83 +28,120 @@ const api = axios.create({
   },
 })
 
+console.log('🚀 API 인스턴스 생성됨:', {
+  baseURL: API_BASE_URL,
+  fullURL: `${API_BASE_URL}/business/auth/firebase-to-jwt/`
+})
 
-// Request interceptor (user_id 헤더 및 Firebase 토큰 사용)
 
-// 전역 user_id 캐시 (컨텍스트가 사라져도 유지)
-let cachedUserId: number | null = null
-let isGettingUserId = false // user_id 조회 중인지 플래그
+// Request interceptor (JWT 토큰 전용, 매우 간단하고 빠름)
 
-// user_id 조회 함수
-const getUserId = async (): Promise<number | null> => {
-  if (cachedUserId) return cachedUserId
-  if (isGettingUserId) return null // 이미 조회 중이면 기다리지 않음
+import { TokenManager } from './tokenManager'
 
-  const firebaseToken = localStorage.getItem('firebase_token')
-  if (!firebaseToken) return null
+// 토큰 갱신 중인지 추적
+let isRefreshing = false
+let refreshPromise: Promise<string> | null = null
 
-  isGettingUserId = true
-  
-  try {
-    const response = await fetch('/api/v1/business/auth/get-user-id/', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${firebaseToken}`,
-        'Content-Type': 'application/json'
-      }
-    })
-    
-    if (response.ok) {
-      const data = await response.json()
-      cachedUserId = data.user_id
-      console.log('✅ user_id 자동 조회 성공:', cachedUserId)
-      return cachedUserId
-    }
-  } catch (error) {
-    console.error('❌ user_id 자동 조회 오류:', error)
-  } finally {
-    isGettingUserId = false
+// 액세스 토큰 자동 갱신 함수
+const refreshAccessToken = async (): Promise<string | null> => {
+  if (isRefreshing && refreshPromise) {
+    return await refreshPromise
   }
   
-  return null
+  isRefreshing = true
+  refreshPromise = new Promise(async (resolve, reject) => {
+    try {
+      const refreshToken = TokenManager.getRefreshToken()
+      
+      if (!refreshToken) {
+        resolve(null as any)
+        return
+      }
+      
+      console.log('🔄 액세스 토큰 자동 갱신 시작')
+      
+      const response = await fetch('/api/v1/business/auth/refresh/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          refresh_token: refreshToken
+        })
+      })
+      
+      if (response.ok) {
+        const data = await response.json()
+        const newAccessToken = data.access_token
+        
+        TokenManager.setAccessToken(newAccessToken)
+        console.log('✅ 액세스 토큰 자동 갱신 성공')
+        
+        resolve(newAccessToken)
+      } else {
+        console.log('❌ 토큰 갱신 실패 - 리로그인 필요')
+        TokenManager.removeTokens()
+        resolve(null as any)
+      }
+    } catch (error) {
+      console.error('❌ 토큰 갱신 오류:', error)
+      TokenManager.removeTokens()
+      resolve(null as any)
+    }
+  })
+  
+  const result = await refreshPromise
+  isRefreshing = false
+  refreshPromise = null
+  
+  return result
 }
 
 api.interceptors.request.use(
   async (config) => {
-    // Firebase 토큰 추가
-    const firebaseToken = localStorage.getItem('firebase_token')
-    if (firebaseToken) {
-      config.headers.Authorization = `Bearer ${firebaseToken}`
+    // 🔥 토큰이 필요하지 않은 엔드포인트들
+    const publicEndpoints = [
+      '/business/auth/firebase-to-jwt/',
+      '/business/auth/register/',
+      '/business/auth/refresh/'
+    ]
+    
+    const isPublicEndpoint = publicEndpoints.some(endpoint => config.url?.includes(endpoint))
+    
+    if (isPublicEndpoint) {
+      console.log('🔓 공개 엔드포인트 - 토큰 없이 요청:', config.url)
+      return config
     }
-
-    // POST, PUT, PATCH 요청에 user_id 추가
-    if (['post', 'put', 'patch'].includes(config.method?.toLowerCase() || '')) {
-      let userId = cachedUserId
+    
+    // 일반 엔드포인트는 토큰 필요
+    let accessToken = TokenManager.getAccessToken()
+    
+    // 액세스 토큰이 없거나 만료된 경우 갱신 시도
+    if (!accessToken || !TokenManager.isAccessTokenValid()) {
+      console.log('🔄 액세스 토큰 갱신 필요')
+      accessToken = await refreshAccessToken()
       
-      // user_id가 없으면 비동기로 가져오기
-      if (!userId) {
-        userId = await getUserId()
-      }
-      
-      // user_id를 요청 데이터에 추가
-      if (userId) {
-        if (config.data && typeof config.data === 'object') {
-          config.data = {
-            ...config.data,
-            user_id: userId
-          }
-        } else if (!config.data) {
-          config.data = { user_id: userId }
-        }
+      // 갱신에 실패한 경우 로그인 페이지로 리다이렉트
+      if (!accessToken) {
+        window.location.href = '/login'
+        return Promise.reject(new Error('토큰 갱신 실패'))
       }
     }
     
-    console.log('🌐 API 요청:', {
+    // Authorization 헤더에 액세스 토큰 추가
+    if (accessToken) {
+      config.headers.Authorization = `Bearer ${accessToken}`
+    }
+    
+
+    
+    console.log('🚀 자동 토큰 갱신 API 요청:', {
       url: config.url,
+      fullUrl: `${config.baseURL}${config.url}`,
       method: config.method?.toUpperCase(),
-      hasToken: !!firebaseToken,
-      hasUserId: !!config.data?.user_id,
-      userId: config.data?.user_id
+      hasAccessToken: !!accessToken,
+      tokenTimeLeft: TokenManager.getAccessTokenTimeUntilExpiry() + '초',
+      headers: config.headers
     });
     
     return config
@@ -114,28 +152,44 @@ api.interceptors.request.use(
   }
 )
 
-// 응답 인터셉터: 401 에러 시 자동 로그아웃
+// 응답 인터셉터: 401 오류 시 토큰 갱신 재시도
 api.interceptors.response.use(
   (response) => {
-    console.log('✅ API 성공:', {
+    console.log('✅ 자동 토큰 갱신 API 성공:', {
       url: response.config.url,
       status: response.status,
       method: response.config.method?.toUpperCase()
     });
     return response;
   },
-  (error) => {
+  async (error) => {
     console.error('❌ API 오류:', {
       url: error.config?.url,
       status: error.response?.status,
       method: error.config?.method?.toUpperCase(),
-      message: error.response?.data?.message || error.message
+      message: error.response?.data?.error || error.message
     });
     
-    if (error.response?.status === 401) {
-      console.log('🚫 401 오류 - 인증 실패');
-      // 자동 리다이렉트 제거 - AuthContext에서 처리하도록 함
+    // 401 오류 시 토큰 갱신 후 재시도
+    if (error.response?.status === 401 && !error.config._retry) {
+      error.config._retry = true;
+      
+      console.log('🔄 401 오류로 인한 토큰 갱신 및 재시도');
+      
+      const newAccessToken = await refreshAccessToken();
+      
+      if (newAccessToken) {
+        // 새로운 액세스 토큰으로 원래 요청 재시도
+        error.config.headers.Authorization = `Bearer ${newAccessToken}`;
+        return api(error.config);
+      } else {
+        // 토큰 갱신 실패 시 로그인 페이지로 리다이렉트
+        console.log('🚫 토큰 갱신 실패 - 로그인 페이지로 이동');
+        TokenManager.removeTokens();
+        window.location.href = '/login';
+      }
     }
+    
     return Promise.reject(error)
   }
 )
@@ -176,39 +230,38 @@ export const businessApi = {
 // 어종 관리 API
 export const fishTypeApi = {
   // 모든 어종 조회
-  getAll: async (): Promise<ApiResponse<FishType[]>> => {
+  getAll: async (): Promise<{ data: FishType[] }> => {
     const response = await api.get('/fish-registry/fish-types/')
-    return response.data
+    return { data: response.data }
   },
 
   // ID로 어종 조회
-  getById: async (id: number): Promise<ApiResponse<FishType>> => {
+  getById: async (id: number): Promise<{ data: FishType }> => {
     const response = await api.get(`/fish-registry/fish-types/${id}/`)
-    return response.data
+    return { data: response.data }
   },
 
   // 새 어종 생성
-  create: async (fishType: Omit<FishType, 'id'>): Promise<ApiResponse<FishType>> => {
+  create: async (fishType: Omit<FishType, 'id' | 'created_at'>): Promise<{ data: FishType }> => {
     const response = await api.post('/fish-registry/fish-types/', fishType)
-    return response.data
+    return { data: response.data }
   },
 
   // 어종 정보 수정
-  update: async (id: number, fishType: Partial<FishType>): Promise<ApiResponse<FishType>> => {
+  update: async (id: number, fishType: Partial<FishType>): Promise<{ data: FishType }> => {
     const response = await api.put(`/fish-registry/fish-types/${id}/`, fishType)
-    return response.data
+    return { data: response.data }
   },
 
   // 어종 삭제
-  delete: async (id: number): Promise<ApiResponse<void>> => {
-    const response = await api.delete(`/fish-registry/fish-types/${id}/`)
-    return response.data
+  delete: async (id: number): Promise<void> => {
+    await api.delete(`/fish-registry/fish-types/${id}/`)
   },
 
-  // 어종 검색 (벡터 검색)
-  search: async (query: string): Promise<ApiResponse<FishType[]>> => {
+  // 어종 검색
+  search: async (query: string): Promise<{ data: FishType[] }> => {
     const response = await api.get('/fish-registry/fish-types/', { params: { search: query } })
-    return response.data
+    return { data: response.data }
   },
 }
 
@@ -221,9 +274,9 @@ export const inventoryApi = {
   },
   
   // 어종 목록 조회 (재고 추가시 선택용)
-  getFishTypes: async (): Promise<ApiResponse<FishType[]>> => {
-    const response = await api.get('/inventory/fish-types/')
-    return response.data
+  getFishTypes: async (): Promise<{ data: FishType[] }> => {
+    const response = await api.get('/fish-registry/fish-types/')
+    return { data: response.data }
   },
 
   // ID로 재고 조회
@@ -405,3 +458,5 @@ export const aiApi = {
 
 // 기존 호환성을 위한 별칭 (점진적 마이그레이션)
 export const customerApi = businessApi
+
+export { api }

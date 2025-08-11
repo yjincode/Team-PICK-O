@@ -10,7 +10,7 @@ class FishTypeViewSet(viewsets.ModelViewSet):
     """
     serializer_class = FishTypeSerializer
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
-    search_fields = ['name', 'aliases', 'scientific_name']
+    search_fields = ['name', 'aliases']
     ordering_fields = ['name', 'created_at']
     ordering = ['name']
     permission_classes = []  # 인증 제거 - 어종 데이터는 공개

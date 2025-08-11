@@ -279,6 +279,7 @@ const BusinessList: React.FC = () => {
 
     // 거래처 등록은 인증이 필요한 기능
     if (!isAuthenticated || !user ) {
+
       toast.error('로그인이 필요한 기능입니다.');
       return;
     }

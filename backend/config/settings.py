@@ -28,8 +28,18 @@ FILE_UPLOAD_DIRECTORY_PERMISSIONS = 0o755
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-change-me-in-production')
 
+# JWT Settings for fast authentication (replacing Firebase token verification)
+JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', 'jwt-super-secret-key-change-in-production')
+JWT_REFRESH_SECRET_KEY = os.getenv('JWT_REFRESH_SECRET_KEY', 'refresh-super-secret-key-change-in-production')
+JWT_ALGORITHM = 'HS256'
+JWT_ACCESS_EXPIRATION_MINUTES = 15  # 액세스 토큰: 15분
+JWT_REFRESH_EXPIRATION_DAYS = 7    # 리프레시 토큰: 7일
+
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('DEBUG', 'True').lower() == 'true'
+
+# CSRF 보호 비활성화 (JWT 사용 시)
+# 미들웨어에서 이미 비활성화했으므로 추가 설정 불필요
 
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
 
@@ -69,9 +79,9 @@ MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
+    # 'django.middleware.csrf.CsrfViewMiddleware',  # ❌ JWT 사용 시 불필요
     'django.contrib.auth.middleware.AuthenticationMiddleware',
-    'core.middleware.UserAuthMiddleware',  # Firebase 토큰 검증 미들웨어
+    'core.middleware.JWTAuthMiddleware',  # 빠른 JWT 토큰 검증 미들웨어 (Firebase 지연시간 해결)
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -254,7 +264,6 @@ REST_FRAMEWORK = {
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 20,
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'core.authentication.FirebaseAuthentication',
         'rest_framework.authentication.SessionAuthentication',
         'rest_framework.authentication.TokenAuthentication',
     ],
@@ -316,6 +325,23 @@ CORS_ALLOW_METHODS = [
     'PUT',
 ]
 
+# CSRF settings
+CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:8080",
+    "http://127.0.0.1:8080",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]
+
+# 개발 환경에서는 모든 Origin 허용
+if DEBUG:
+    CSRF_TRUSTED_ORIGINS.extend([
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ])
+
 # Logging configuration - Console only
 LOGGING = {
     'version': 1,
@@ -339,7 +365,7 @@ LOGGING = {
     },
     'root': {
         'handlers': ['console'],
-        'level': 'INFO',
+        'level': 'DEBUG',
     },
     'loggers': {
         'django': {
@@ -348,6 +374,11 @@ LOGGING = {
             'propagate': False,
         },
         'fish_analysis': {
+            'handlers': ['console'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
+        'core': {
             'handlers': ['console'],
             'level': 'DEBUG',
             'propagate': False,

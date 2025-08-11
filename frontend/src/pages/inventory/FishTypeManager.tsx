@@ -9,7 +9,6 @@ import { Input } from "../../components/ui/input"
 import { Label } from "../../components/ui/label"
 import { Textarea } from "../../components/ui/textarea"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../components/ui/table"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select"
 import { Plus, Edit, Trash2, Save, X, Fish } from "lucide-react"
 import { fishTypeApi } from "../../lib/api"
 import toast from 'react-hot-toast'
@@ -19,6 +18,7 @@ interface FishType {
   id: number;
   name: string;
   aliases?: string;
+  scientific_name?: string;
   unit: string;
   notes?: string;
   created_at?: string;
@@ -28,11 +28,12 @@ interface FishType {
 interface FishFormData {
   name: string;
   aliases: string;
+  scientific_name: string;
   unit: string;
   notes: string;
 }
 
-const FishItemForm: React.FC = () => {
+const FishTypeManager: React.FC = () => {
   const [fishTypes, setFishTypes] = useState<FishType[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -40,6 +41,7 @@ const FishItemForm: React.FC = () => {
   const [formData, setFormData] = useState<FishFormData>({
     name: "",
     aliases: "",
+    scientific_name: "",
     unit: "박스",
     notes: "",
   })
@@ -48,10 +50,7 @@ const FishItemForm: React.FC = () => {
   const fetchFishTypes = async () => {
     try {
       setLoading(true)
-      console.log('🔄 어종 목록 로딩 시작...')
       const response = await fishTypeApi.getAll()
-      console.log('✅ 어종 목록 로딩 성공:', response)
-      // DRF ViewSet은 배열을 직접 반환하므로 response.data를 직접 사용
       setFishTypes(response.data || [])
     } catch (error) {
       console.error('어종 목록 불러오기 실패:', error)
@@ -70,6 +69,7 @@ const FishItemForm: React.FC = () => {
     setFormData({
       name: "",
       aliases: "",
+      scientific_name: "",
       unit: "박스",
       notes: "",
     })
@@ -131,6 +131,7 @@ const FishItemForm: React.FC = () => {
     setFormData({
       name: fishType.name,
       aliases: fishType.aliases || "",
+      scientific_name: fishType.scientific_name || "",
       unit: fishType.unit,
       notes: fishType.notes || "",
     })
@@ -197,19 +198,14 @@ const FishItemForm: React.FC = () => {
                   <Label htmlFor="unit" className="text-sm font-medium text-gray-700">
                     단위 *
                   </Label>
-                  <Select value={formData.unit} onValueChange={(value) => handleInputChange('unit', value)}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="단위를 선택하세요" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="박스">박스</SelectItem>
-                      <SelectItem value="kg">kg</SelectItem>
-                      <SelectItem value="마리">마리</SelectItem>
-                      <SelectItem value="미터">미터</SelectItem>
-                      <SelectItem value="포">포</SelectItem>
-                      <SelectItem value="팩">팩</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <Input
+                    id="unit"
+                    type="text"
+                    placeholder="예: 박스, kg, 마리"
+                    value={formData.unit}
+                    onChange={(e) => handleInputChange('unit', e.target.value)}
+                    className="w-full"
+                  />
                 </div>
 
                 {/* 별칭 */}
@@ -223,6 +219,21 @@ const FishItemForm: React.FC = () => {
                     placeholder="예: 참고등어, 삼치고등어 (쉼표로 구분)"
                     value={formData.aliases}
                     onChange={(e) => handleInputChange('aliases', e.target.value)}
+                    className="w-full"
+                  />
+                </div>
+
+                {/* 학명 */}
+                <div className="space-y-2">
+                  <Label htmlFor="scientific_name" className="text-sm font-medium text-gray-700">
+                    학명
+                  </Label>
+                  <Input
+                    id="scientific_name"
+                    type="text"
+                    placeholder="예: Scomber japonicus"
+                    value={formData.scientific_name}
+                    onChange={(e) => handleInputChange('scientific_name', e.target.value)}
                     className="w-full"
                   />
                 </div>
@@ -281,6 +292,7 @@ const FishItemForm: React.FC = () => {
                     <TableHead className="font-semibold text-gray-900">어종명</TableHead>
                     <TableHead className="font-semibold text-gray-900">단위</TableHead>
                     <TableHead className="font-semibold text-gray-900">별칭</TableHead>
+                    <TableHead className="font-semibold text-gray-900">학명</TableHead>
                     <TableHead className="font-semibold text-gray-900">등록일</TableHead>
                     <TableHead className="font-semibold text-gray-900 text-center">작업</TableHead>
                   </TableRow>
@@ -288,7 +300,7 @@ const FishItemForm: React.FC = () => {
                 <TableBody>
                   {loading ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center py-8">
+                      <TableCell colSpan={7} className="text-center py-8">
                         <div className="flex items-center justify-center gap-2">
                           <svg className="animate-spin h-6 w-6 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
@@ -300,7 +312,7 @@ const FishItemForm: React.FC = () => {
                     </TableRow>
                   ) : fishTypes.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center py-8 text-gray-500">
+                      <TableCell colSpan={7} className="text-center py-8 text-gray-500">
                         등록된 어종이 없습니다.
                       </TableCell>
                     </TableRow>
@@ -318,6 +330,9 @@ const FishItemForm: React.FC = () => {
                         </TableCell>
                         <TableCell className="text-gray-600">
                           {fishType.aliases || "-"}
+                        </TableCell>
+                        <TableCell className="text-gray-600 italic">
+                          {fishType.scientific_name || "-"}
                         </TableCell>
                         <TableCell className="text-gray-600">
                           {fishType.created_at 
@@ -358,4 +373,4 @@ const FishItemForm: React.FC = () => {
   )
 }
 
-export default FishItemForm; 
+export default FishTypeManager
