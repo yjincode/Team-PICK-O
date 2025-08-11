@@ -35,6 +35,9 @@ JWT_ALGORITHM = 'HS256'
 JWT_ACCESS_EXPIRATION_MINUTES = 15  # 액세스 토큰: 15분
 JWT_REFRESH_EXPIRATION_DAYS = 7    # 리프레시 토큰: 7일
 
+# Firebase Admin SDK 설정
+FIREBASE_ADMIN_CREDENTIALS = os.path.join(BASE_DIR, 'firebase-admin-key.json')
+
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('DEBUG', 'True').lower() == 'true'
 
