@@ -5,10 +5,13 @@
  */
 "use client"
 
+import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card"
 import { Button } from "../../components/ui/button"
 import { Badge } from "../../components/ui/badge"
 import { BarChart3, TrendingUp, TrendingDown, DollarSign, Calendar } from "lucide-react"
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+
 
 // 월별 매출 데이터 타입 정의
 interface MonthlySales {
@@ -135,13 +138,24 @@ export default function SalesChart() {
         </CardHeader>
         <CardContent>
           {/* 차트 플레이스홀더 */}
-          <div className="h-60 bg-muted rounded-lg flex items-center justify-center mb-6">
+          {/* <div className="h-60 bg-muted rounded-lg flex items-center justify-center mb-6">
             <div className="text-center text-gray-500">
               <BarChart3 className="h-16 w-16 mx-auto mb-4 opacity-50" />
               <p className="text-lg font-medium">[Sales Chart Placeholder]</p>
               <p className="text-sm">월별 매출 추이 차트가 표시됩니다</p>
             </div>
           </div>
+          <div className="h-60 bg-muted rounded-lg mb-6"> */}
+            
+      <ResponsiveContainer width="100%" height={300}>
+        <LineChart data={mockMonthlySales}>
+          <CartesianGrid strokeDasharray="3 3" />
+          <XAxis dataKey="month" />
+          <YAxis />
+          <Tooltip />
+          <Line type="monotone" dataKey="sales" stroke="#8884d8" />
+        </LineChart>
+      </ResponsiveContainer>
 
           {/* 월별 매출 데이터 */}
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
