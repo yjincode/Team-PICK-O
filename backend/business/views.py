@@ -18,6 +18,10 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.generics import ListAPIView
 from core.middleware import get_user_queryset_filter
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
+from django.views import View
+from django.http import JsonResponse
 import firebase_admin
 from firebase_admin import auth
 from core.jwt_utils import generate_token_pair, verify_refresh_token, generate_access_token
@@ -422,43 +426,76 @@ def refresh_access_token(request):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-class BusinessCreateAPIView(APIView):
-    permission_classes = [AllowAny]
+@method_decorator(csrf_exempt, name='dispatch')
+class BusinessCreateView(View):
+    """Django 기본 View 사용 - REST Framework 권한 검증 완전 우회"""
     
     def post(self, request):
-        print(f"🏢 Business 생성 요청 받음")
-        print(f"📝 요청 데이터: {request.data}")
+        print(f"🏢 Business 생성 요청 받음 (Django View)")
+        print(f"📝 요청 데이터: {request.POST}")
+        print(f"📝 JSON 데이터: {request.body}")
         print(f"🆔 request.user_id: {getattr(request, 'user_id', 'NOT SET')}")
         
-        data = request.data.copy()
+        # 미들웨어에서 설정된 사용자 정보 확인
+        if not hasattr(request, 'user_id') or not request.user_id:
+            print(f"❌ 사용자 인증 정보 없음")
+            return JsonResponse({'error': '사용자 인증이 필요합니다.'}, status=401)
+        
+        print(f"✅ 사용자 인증 확인: user_id={request.user_id}")
+        
+        # Django View에서 JSON 데이터 파싱
+        try:
+            import json
+            if request.content_type == 'application/json':
+                data = json.loads(request.body)
+            else:
+                data = request.POST.dict()
+            print(f"📋 파싱된 데이터: {data}")
+        except json.JSONDecodeError as e:
+            print(f"❌ JSON 파싱 오류: {e}")
+            return JsonResponse({'error': '잘못된 JSON 형식입니다.'}, status=400)
         
         serializer = BusinessSerializer(data=data)
         if serializer.is_valid():
             print(f"✅ Serializer 검증 통과")
             business = serializer.save(user_id=request.user_id)  # 미들웨어의 사용자 ID로 저장
             print(f"✅ Business 생성 성공: {business.id}")
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
+            return JsonResponse(serializer.data, status=201)
         
         print(f"❌ Serializer 검증 실패: {serializer.errors}")
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        return JsonResponse(serializer.errors, status=400)
         
     def get(self, request):
         # 미들웨어에서 설정된 user_id 사용 (GET 요청도 JWT 인증 적용)
+        if not hasattr(request, 'user_id') or not request.user_id:
+            return JsonResponse({'error': '사용자 인증이 필요합니다.'}, status=401)
+        
         businesses = Business.objects.filter(user_id=request.user_id)
         serializer = BusinessSerializer(businesses, many=True)
-        return Response(serializer.data)
+        return JsonResponse(serializer.data, safe=False)
     
     def put(self, request, pk):
         try:
             # 미들웨어에서 설정된 user_id 사용
             business = Business.objects.get(id=pk, **get_user_queryset_filter(request))
-            serializer = BusinessSerializer(business, data=request.data, partial=True)
+            
+            # Django View에서 JSON 데이터 파싱
+            try:
+                import json
+                if request.content_type == 'application/json':
+                    data = json.loads(request.body)
+                else:
+                    data = request.POST.dict()
+            except json.JSONDecodeError as e:
+                return JsonResponse({'error': '잘못된 JSON 형식입니다.'}, status=400)
+            
+            serializer = BusinessSerializer(business, data=data, partial=True)
             if serializer.is_valid():
                 serializer.save()
-                return Response(serializer.data, status=status.HTTP_200_OK)
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+                return JsonResponse(serializer.data, status=200)
+            return JsonResponse(serializer.errors, status=400)
         except Business.DoesNotExist:
-            return Response({'error': '거래처를 찾을 수 없습니다.'}, status=status.HTTP_404_NOT_FOUND)
+            return JsonResponse({'error': '거래처를 찾을 수 없습니다.'}, status=404)
 
 class BusinessPagination(PageNumberPagination):
     page_size = 10  # 한 페이지에 10개 아이템
@@ -468,7 +505,9 @@ class BusinessPagination(PageNumberPagination):
 class BusinessListAPIView(ListAPIView):
     serializer_class = BusinessSerializer
     pagination_class = BusinessPagination
-    permission_classes = [AllowAny]
+    # REST Framework 인증/권한 검증 완전 비활성화
+    authentication_classes = []  # ❌ 인증 클래스 비활성화
+    permission_classes = []      # ❌ 권한 클래스 비활성화
     
     def get_queryset(self):
         # 미들웨어에서 설정된 user_id 사용
