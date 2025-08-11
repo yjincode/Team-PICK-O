@@ -59,10 +59,6 @@ api.interceptors.request.use(
 )
 
 
-// 주문 데이터 타입 정의 (OrderListSerializer 반영)
-interface Order extends OrderListItem {
-  // OrderListItem에서 확장하여 필요한 필드 추가
-
 // 한국 시간대로 날짜를 처리하는 함수들
 const toKoreanDate = (date: Date): string => {
   const koreanDate = new Date(date.getTime() + (9 * 60 * 60 * 1000)) // UTC+9
@@ -85,32 +81,21 @@ const formatKoreanDate = (dateString: string): string => {
   }
 }
 
-// 주문 데이터 타입 정의 (DB 구조 반영)
-interface Order {
+// 주문 데이터 타입 정의 (OrderListItem 기반)
+interface Order extends OrderListItem {
   id: number;
   business_id: number;
+  business_name: string;
+  business_phone: string;
   total_price: number;
   order_datetime: string;
   delivery_datetime?: string;
-
+  order_status: 'placed' | 'ready' | 'delivered' | 'cancelled';
+  is_urgent: boolean;
   memo?: string;
   source_type?: 'manual' | 'voice' | 'text';
   transcribed_text?: string;
-
-  last_updated_at?: string;
-}
-
-
-
-
-  order_status: 'placed' | 'ready' | 'delivered' | 'cancelled';
-  is_urgent: boolean;
   last_updated_at: string;
-  business?: {
-    id: number;
-    business_name: string;
-    phone_number: string;
-  };
   items_summary?: string;
   items?: Array<{
     id: number;
@@ -490,7 +475,9 @@ const OrderList: React.FC = () => {
                           {formatPrice(order.total_price)}원
                         </TableCell>
                         <TableCell>
-                          {/* OrderListSerializer에는 payment_status가 없으므로 필터링 제거 */}
+                          <PaymentStatusBadge status={order.payment?.payment_status || 'pending'} />
+                        </TableCell>
+                        <TableCell>
                           <OrderStatusBadge status={order.order_status} />
                         </TableCell>
                         <TableCell className="text-center">
