@@ -21,6 +21,7 @@ class JWTAuthMiddleware:
         '/api/v1/business/auth/status/',
         '/api/v1/business/auth/refresh/',
         '/api/v1/transcription/',  # STT 서비스는 인증 없이 사용 가능
+        '/api/v1/payment/',  # 결제 관련 API는 인증 없이 사용 가능
         '/static/',
         '/media/',
         '/api/docs/',

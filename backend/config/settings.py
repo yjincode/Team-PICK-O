@@ -70,6 +70,7 @@ LOCAL_APPS = [
     'accounts',
     'dashboard',
     'order',
+    'payment',  # 결제 관리 앱
     'fish_registry',
     'transcription',
     'inventory',  # 재고 관리 앱

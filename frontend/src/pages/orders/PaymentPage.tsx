@@ -72,9 +72,9 @@ const PaymentPage: React.FC = () => {
   }, [order])
 
   const submitCashOrBank = async () => {
-    if (!orderId) return
+    if (!id) return
     try {
-      await orderApi.updateStatus(Number(orderId), 'placed')
+      await orderApi.updateStatus(Number(id), 'placed')
       alert('결제 정보가 저장되었습니다. 결제 완료는 주문상세에서 수동으로 처리하세요.')
       navigate('/orders')
     } catch (e) {
@@ -83,20 +83,20 @@ const PaymentPage: React.FC = () => {
   }
 
   const submitCard = async () => {
-    if (!orderId) return
+    if (!id) return
     try {
       await loadTossScript()
       const clientKey = import.meta.env.VITE_TOSS_CLIENT_KEY
       if (!clientKey) throw new Error('TOSS CLIENT KEY가 설정되지 않았습니다.')
       const toss = window.TossPayments(clientKey)
-      const orderName = `주문 #${orderId}`
+      const orderName = `주문 #${id}`
       const amountNumber = Number(amount)
       await toss.requestPayment('카드', {
         amount: amountNumber,
-        orderId: `order-${orderId}-${Date.now()}`,
+        orderId: `order-${id}-${Date.now()}`,
         orderName,
-        successUrl: window.location.origin + `/orders/${orderId}/payment`,
-        failUrl: window.location.origin + `/orders/${orderId}/payment?fail=1`,
+        successUrl: window.location.origin + `/orders/${id}/payment`,
+        failUrl: window.location.origin + `/orders/${id}/payment?fail=1`,
       })
     } catch (e) {
       alert('카드 결제창 호출 실패')
@@ -135,7 +135,7 @@ const PaymentPage: React.FC = () => {
           alert('결제 승인 처리 실패: ' + (error.response?.data?.error || error.message))
         })
     }
-  }, [orderId])
+  }, [id])
 
   if (loading) return <div className="p-6">로딩 중...</div>
   if (!order) return null
@@ -147,7 +147,7 @@ const PaymentPage: React.FC = () => {
           <div className="flex items-center justify-between">
             <div>
               <div className="text-sm text-gray-500">주문 결제</div>
-              <CardTitle className="text-2xl">주문 #{orderId} 결제</CardTitle>
+              <CardTitle className="text-2xl">주문 #{id} 결제</CardTitle>
             </div>
             <Badge className={`${badge.color}`}>{badge.text}</Badge>
           </div>
