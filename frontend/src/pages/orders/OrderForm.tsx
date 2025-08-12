@@ -13,7 +13,7 @@ import { Textarea } from "../../components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../components/ui/tabs"
 import { Popover, PopoverContent, PopoverTrigger } from "../../components/ui/popover"
-import { X, Plus, Save, CalendarDays } from "lucide-react"
+import { X, Plus, Save, CalendarDays, Mic, Upload } from "lucide-react"
 import BusinessSearch from "../../components/BusinessSearch"
 import { parseVoiceOrder, validateAndCompleteOrder } from "../../utils/orderParser"
 import { formatPhoneNumber } from "../../utils/phoneFormatter"
@@ -552,7 +552,6 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
     e.preventDefault()
     
     if (!selectedBusinessId) {
-      toast.error('거래처를 선택해주세요.')
       return
     }
     
@@ -689,111 +688,193 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
       />
       <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
       <Card className="w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle>새 주문 생성</CardTitle>
-            <Button variant="ghost" size="sm" onClick={onClose}>
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-        </CardHeader>
+        {/* 주문 입력 방식 탭 - 최상단 배치, 패딩 제거 */}
+        <div className="px-0 mb-4">
+          <Tabs value={formData.source_type} onValueChange={(value: string) => handleInputChange("source_type", value)}>
+            <TabsList className="grid w-full grid-cols-4 h-auto p-0 bg-transparent rounded-none border-b-2 border-gray-200">
+              <TabsTrigger 
+                value="voice" 
+                className="data-[state=active]:bg-blue-500 data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-gray-700 h-16 font-medium transition-all duration-200 border-r border-gray-200 last:border-r-0 rounded-tl-lg first:rounded-tl-lg"
+              >
+                <div className="flex flex-col items-center gap-1">
+                  <Mic className="h-5 w-5" />
+                  <span className="text-sm">음성</span>
+                </div>
+              </TabsTrigger>
+              <TabsTrigger 
+                value="text" 
+                className="data-[state=active]:bg-blue-500 data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-gray-700 h-16 font-medium transition-all duration-200 border-r border-gray-200 last:border-r-0 rounded-none"
+              >
+                <div className="flex flex-col items-center gap-1">
+                  <span className="text-lg font-bold">Aa</span>
+                  <span className="text-sm">텍스트</span>
+                </div>
+              </TabsTrigger>
+              <TabsTrigger 
+                value="manual" 
+                className="data-[state=active]:bg-blue-500 data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-gray-700 h-16 font-medium transition-all duration-200 border-r border-gray-200 last:border-r-0 rounded-none"
+              >
+                <div className="flex flex-col items-center gap-1">
+                  <Plus className="h-5 w-5" />
+                  <span className="text-sm">수동</span>
+                </div>
+              </TabsTrigger>
+              <TabsTrigger 
+                value="image" 
+                className="data-[state=active]:bg-blue-500 data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-gray-700 h-16 font-medium transition-all duration-200 border-r border-gray-200 last:border-r-0 rounded-tr-lg last:rounded-tr-lg"
+              >
+                <div className="flex flex-col items-center gap-1">
+                  <Upload className="h-5 w-5" />
+                  <span className="text-sm">이미지</span>
+                </div>
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </div>
+        
         
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
 
-            {/* 거래처 선택 */}
-            <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-              <h3 className="text-lg font-semibold mb-3 text-blue-900">거래처 선택</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="business-select">거래처</Label>
-                  <Select 
-                    value={selectedBusinessId?.toString() || ""} 
-                    onValueChange={(value: string) => setSelectedBusinessId(parseInt(value))}
-                  >
-                    <SelectTrigger className="bg-white">
-                      <SelectValue placeholder="거래처를 선택하세요" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {businesses.map((business: Business) => (
-                        <SelectItem key={business.id} value={business.id.toString()}>
-                          <div className="flex flex-col">
-                            <span className="font-medium">{business.business_name}</span>
-                            <span className="text-xs text-gray-500">{business.phone_number}</span>
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {selectedBusinessId && (
-                    <div className="mt-2 text-sm text-blue-700">
-                      ✓ 선택된 거래처: {businesses.find((b: Business) => b.id === selectedBusinessId)?.business_name}
-                    </div>
-                  )}
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="delivery_date">납품일</Label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className="w-full justify-start text-left font-normal bg-white"
-                      >
-                        <CalendarDays className="mr-2 h-4 w-4" />
-                        {formData.delivery_datetime ? (
-                          formatKoreanDate(formData.delivery_datetime)
-                        ) : (
-                          "납품일 선택"
-                        )}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0">
-                      <MinimalCalendar
-                        value={formData.delivery_datetime ? fromKoreanDate(formData.delivery_datetime) : null}
-                        onChange={(date: Date | null) => handleInputChange("delivery_datetime", date ? toKoreanDate(date) : "")}
-                        placeholder="납품일 선택"
-                      />
-                    </PopoverContent>
-                  </Popover>
+            {/* 거래처 선택 - 수동 탭에서만 표시 */}
+            {formData.source_type === "manual" && (
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <h3 className="text-lg font-semibold mb-3 text-blue-900">거래처 선택</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="business-select">거래처</Label>
+                    <Select 
+                      value={selectedBusinessId?.toString() || ""} 
+                      onValueChange={(value: string) => setSelectedBusinessId(parseInt(value))}
+                    >
+                      <SelectTrigger className="bg-white">
+                        <SelectValue placeholder="거래처를 선택하세요" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {businesses.map((business: Business) => (
+                          <SelectItem key={business.id} value={business.id.toString()}>
+                            <div className="flex flex-col">
+                              <span className="font-medium">{business.business_name}</span>
+                              <span className="text-xs text-gray-500">{business.phone_number}</span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {selectedBusinessId && (
+                      <div className="mt-2 text-sm text-blue-700">
+                        ✓ 선택된 거래처: {businesses.find((b: Business) => b.id === selectedBusinessId)?.business_name}
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="delivery_date">납품일</Label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          className="w-full justify-start text-left font-normal bg-white"
+                        >
+                          <CalendarDays className="mr-2 h-4 w-4" />
+                          {formData.delivery_datetime ? (
+                            formatKoreanDate(formData.delivery_datetime)
+                          ) : (
+                            "납품일 선택"
+                          )}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0">
+                        <MinimalCalendar
+                          value={formData.delivery_datetime ? fromKoreanDate(formData.delivery_datetime) : null}
+                          onChange={(date: Date | null) => handleInputChange("delivery_datetime", date ? toKoreanDate(date) : "")}
+                          placeholder="납품일 선택"
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
 
-            {/* 주문 입력 방식 탭 */}
-            <div>
-              <Label>주문 입력 방식</Label>
+            {/* 탭 콘텐츠 영역 */}
+            <div className="min-h-[300px]">
               <Tabs value={formData.source_type} onValueChange={(value: string) => handleInputChange("source_type", value)}>
-                <TabsList className="grid w-full grid-cols-4">
-                  <TabsTrigger value="voice">음성</TabsTrigger>
-                  <TabsTrigger value="text">텍스트</TabsTrigger>
-                  <TabsTrigger value="manual">수동</TabsTrigger>
-                  <TabsTrigger value="image">이미지</TabsTrigger>
-                </TabsList>
-                
-                <TabsContent value="voice">
+                <TabsContent value="voice" className="mt-0">
                   <VoiceUploadTab
                     onTranscriptionComplete={(text: string) => {
                       setFormData((prev: FormData) => ({ ...prev, transcribed_text: text }))
-                      toast.success('음성 변환이 완료되었습니다!')
+                    }}
+                    onOrderParsed={(orderData: any) => {
+                      // 파싱된 주문 데이터로 폼 자동 업데이트
+                      setFormData((prev: FormData) => ({
+                        ...prev,
+                        transcribed_text: orderData.transcribed_text,
+                        delivery_datetime: orderData.delivery_date || prev.delivery_datetime,
+                        memo: orderData.memo || prev.memo,
+                        items: orderData.items?.map((item: any, index: number) => ({
+                          id: `${Date.now()}-${index}`,
+                          fish_type_id: item.fish_type_id,
+                          fish_name: fishTypes.find((f) => f.id === item.fish_type_id)?.name || '',
+                          quantity: item.quantity,
+                          unit_price: item.unit_price || 0,
+                          unit: item.unit,
+                          delivery_datetime: orderData.delivery_date || prev.delivery_datetime,
+                          remarks: ''
+                        })) || prev.items
+                      }))
+                      
+                      // 거래처가 매칭된 경우 선택된 거래처도 업데이트
+                      if (orderData.business) {
+                        setSelectedBusinessId(orderData.business.id)
+                        toast.success(`🎯 음성에서 주문 정보 추출 완료! 거래처: ${orderData.business.business_name}`)
+                      } else {
+                        toast.success('🎯 음성에서 주문 정보를 자동으로 추출했습니다!')
+                      }
                     }}
                     onError={(error: string) => {
                       toast.error(`음성 변환 실패: ${error}`)
                     }}
+                    selectedBusinessId={selectedBusinessId}
+                    onBusinessChange={setSelectedBusinessId}
+                    deliveryDate={formData.delivery_datetime}
+                    onDeliveryDateChange={(date: string) => handleInputChange("delivery_datetime", date)}
                   />
                 </TabsContent>
                 
-                <TabsContent value="text">
+                <TabsContent value="text" className="mt-0">
                   <TextInputTab
                     textInput={formData.transcribed_text}
                     setTextInput={(text: string) => handleInputChange("transcribed_text", text)}
                     onParse={handleTextParse}
                     isProcessing={isProcessingAudio}
                     transcribedText={formData.transcribed_text}
+                    selectedBusinessId={selectedBusinessId}
+                    onBusinessChange={setSelectedBusinessId}
+                    deliveryDate={formData.delivery_datetime}
+                    onDeliveryDateChange={(date: string) => handleInputChange("delivery_datetime", date)}
+                    onOrderParsed={(orderData: any) => {
+                      // 파싱된 데이터로 폼 업데이트
+                      setFormData((prev: FormData) => ({
+                        ...prev,
+                        delivery_datetime: orderData.delivery_date || prev.delivery_datetime,
+                        memo: orderData.memo || prev.memo,
+                        items: orderData.items?.map((item: any, index: number) => ({
+                          id: `${Date.now()}-${index}`,
+                          fish_type_id: item.fish_type_id,
+                          fish_name: fishTypes.find((f) => f.id === item.fish_type_id)?.name || '',
+                          quantity: item.quantity,
+                          unit_price: item.unit_price || 0,
+                          unit: item.unit,
+                          delivery_datetime: orderData.delivery_date || prev.delivery_datetime,
+                          remarks: ''
+                        })) || prev.items
+                      }))
+                    }}
                   />
                 </TabsContent>
                 
-                <TabsContent value="manual">
+                <TabsContent value="manual" className="mt-0">
                   <ManualInputTab
                     currentItem={newItem}
                     setCurrentItem={setNewItem}
@@ -802,15 +883,40 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
                   />
                 </TabsContent>
                 
-                <TabsContent value="image">
+                <TabsContent value="image" className="mt-0">
                   <ImageUploadTab
                     onFileUpload={handleImageFileUpload}
                     isProcessing={isProcessingImage}
-                    transcribedText={formData.transcribed_text}
+                    transcribed_text={formData.transcribed_text}
                     uploadedFile={imageFile}
                     onRemoveFile={() => {
                       setImageFile(null)
                       setFormData((prev: FormData) => ({ ...prev, transcribed_text: '' }))
+                    }}
+                    selectedBusinessId={selectedBusinessId}
+                    onBusinessChange={setSelectedBusinessId}
+                    deliveryDate={formData.delivery_datetime}
+                    onDeliveryDateChange={(date: string) => handleInputChange("delivery_datetime", date)}
+                    onOrderParsed={(orderData: any) => {
+                      // 파싱된 데이터로 폼 업데이트
+                      setFormData((prev: FormData) => ({
+                        ...prev,
+                        delivery_datetime: orderData.delivery_date || prev.delivery_datetime,
+                        memo: orderData.memo || prev.memo,
+                        items: orderData.items?.map((item: any, index: number) => ({
+                          id: `${Date.now()}-${index}`,
+                          fish_type_id: item.fish_type_id,
+                          fish_name: fishTypes.find((f) => f.id === item.fish_type_id)?.name || '',
+                          quantity: item.quantity,
+                          unit_price: item.unit_price || 0,
+                          unit: item.unit,
+                          delivery_datetime: orderData.delivery_date || prev.delivery_datetime,
+                          remarks: ''
+                        })) || prev.items
+                      }))
+                    }}
+                    onError={(error: string) => {
+                      toast.error(`이미지 처리 실패: ${error}`)
                     }}
                   />
                 </TabsContent>
