@@ -29,7 +29,7 @@ const OrderDetail: React.FC = () => {
         console.log('주문 상세 조회 시작:', id)
         const response = await orderApi.getById(parseInt(id))
         console.log('주문 상세 응답:', response)
-        setOrder(response.data)
+        setOrder(response)
       } catch (error) {
         console.error('주문 정보 조회 실패:', error)
         toast.error('주문 정보를 불러올 수 없습니다.')

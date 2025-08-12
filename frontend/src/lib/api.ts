@@ -389,6 +389,12 @@ export const paymentsApi = {
     const response = await api.get('/payments/', { params })
     return response.data
   },
+  
+  // 토스 페이먼츠 결제 승인
+  confirmToss: async (data: { paymentKey: string; orderId: string; amount: number }) => {
+    const response = await api.post('/payment/toss/confirm/', data)
+    return response.data
+  },
 }
 
 // Firebase Auth API
