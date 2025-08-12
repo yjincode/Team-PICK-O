@@ -21,12 +21,14 @@ class OrderItemSerializer(serializers.ModelSerializer):
 class OrderSerializer(serializers.ModelSerializer):
     order_items = OrderItemSerializer(many=True)
     business_id = serializers.IntegerField()
+    user_id = serializers.IntegerField(required=False)  # user_id 필드 명시적 추가
 
     class Meta:
         model = Order
         fields = [
             'id',
             'business_id',
+            'user_id',  # user_id 필드 추가
             'total_price',
             'delivery_datetime',
             'ship_out_datetime',
@@ -41,6 +43,7 @@ class OrderSerializer(serializers.ModelSerializer):
             'order_items'
         ]
         extra_kwargs = {
+            'user_id': {'required': False},  # user_id는 내부적으로 설정됨
             'delivery_datetime': {'required': False},
             'ship_out_datetime': {'required': False},
             'raw_input_path': {'required': False},
@@ -52,9 +55,22 @@ class OrderSerializer(serializers.ModelSerializer):
         }
 
     def create(self, validated_data):
+        print(f"🏗️ OrderSerializer.create() 호출됨 - 새 버전 3.0")
+        print(f"📦 validated_data keys: {list(validated_data.keys())}")
+        
         order_items_data = validated_data.pop('order_items')
         business_id = validated_data.pop('business_id')
-        order = Order.objects.create(business_id=business_id, **validated_data)
+        
+        print(f"🏢 추출된 business_id: {business_id}")
+        
+        # user_id는 save() 메서드에서 전달받음
+        order = Order.objects.create(
+            business_id=business_id, 
+            **validated_data
+        )
+        
+        print(f"🎯 생성된 주문 ID: {order.id}, user_id: {order.user_id}")
+        print(f"🏪 생성된 주문 business_id: {order.business_id}")
 
         for item_data in order_items_data:
             fish_type_id = item_data.pop('fish_type_id')

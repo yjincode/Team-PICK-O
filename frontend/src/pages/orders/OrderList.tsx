@@ -3,9 +3,9 @@
  * 주문 내역을 조회하고 관리하는 페이지입니다
  */
 import React, { useState, useEffect } from "react"
+import { useNavigate } from "react-router-dom"
 import { format } from "date-fns"
 import { ko } from "date-fns/locale"
-import axios from "axios"
 import { 
   CalendarDays, 
   Search, 
@@ -27,35 +27,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../components/ui/table"
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card"
 import { OrderListItem } from "../../types"
+import { orderApi } from "../../lib/api"
 import toast from 'react-hot-toast'
 import OrderForm from "./OrderForm"
-
-// API 설정
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1'
-
-// axios 인스턴스 생성
-const api = axios.create({
-  baseURL: API_BASE_URL,
-  timeout: 10000,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-})
-
-// Request interceptor (Firebase 토큰 사용)
-api.interceptors.request.use(
-  (config) => {
-    const firebaseToken = localStorage.getItem('firebase_token')
-    if (firebaseToken) {
-      config.headers.Authorization = `Bearer ${firebaseToken}`
-    }
-    return config
-  },
-  (error) => {
-    console.error('API 요청 오류:', error)
-    return Promise.reject(error)
-  }
-)
 
 // 주문 데이터 타입 정의 (OrderListSerializer 반영)
 interface Order extends OrderListItem {
@@ -338,6 +312,7 @@ const formatPrice = (price: number) => {
 }
 
 const OrderList: React.FC = () => {
+  const navigate = useNavigate()
   const [showOrderForm, setShowOrderForm] = useState(false)
   const [orders, setOrders] = useState<Order[]>([])
   const [filteredOrders, setFilteredOrders] = useState<Order[]>([])
@@ -349,14 +324,22 @@ const OrderList: React.FC = () => {
   const [itemsPerPage] = useState(10)
   const [loading, setLoading] = useState(true)
 
-  // 주문 목록 가져오기 (직접 API 호출)
+  // 주문 목록 가져오기 (orderApi 사용)
   useEffect(() => {
     const fetchOrders = async () => {
       try {
         setLoading(true)
-        const response = await api.get('/order/')
-        console.log('주문 목록 응답:', response.data)
-        setOrders(response.data || [])
+        const response = await orderApi.getAll()
+        console.log('전체 응답 객체:', response)
+        console.log('response.data:', response.data)
+        console.log('response 자체:', response)
+        
+        // API 응답 구조에 따라 적절한 데이터 추출
+        const ordersData = response.data || response || []
+        console.log('처리된 주문 데이터:', ordersData)
+        console.log('첫 번째 주문 데이터:', ordersData?.[0])
+        console.log('첫 번째 주문 ID:', ordersData?.[0]?.id, typeof ordersData?.[0]?.id)
+        setOrders(Array.isArray(ordersData) ? ordersData : [])
       } catch (error) {
         console.error('주문 목록 가져오기 실패:', error)
         setOrders([])
@@ -402,7 +385,7 @@ const OrderList: React.FC = () => {
     if (searchQuery) {
       const query = searchQuery.toLowerCase()
       filtered = filtered.filter(order => 
-        order.business_name.toLowerCase().includes(query) ||
+        order.business?.business_name?.toLowerCase().includes(query) ||
         order.id.toString().includes(query) ||
         order.memo?.toLowerCase().includes(query)
       )
@@ -422,11 +405,39 @@ const OrderList: React.FC = () => {
   const handleNewOrder = (orderData: any) => {
     console.log('받은 주문 데이터:', orderData)
     
-    const newOrder: Order = {
-      id: orderData.order_id || Math.max(...orders.map(o => o.id)) + 1,
-      business_id: orderData.business_id,
-      business_name: orderData.business_name || '거래처명 없음',
-      business_phone: orderData.phone_number || '연락처 없음',
+    // PostgreSQL에서 자동 생성된 ID를 우선 사용
+    if (!orderData.id && !orderData.order_id) {
+      console.error('❌ 주문 데이터에 ID가 없습니다:', orderData)
+      toast.error('주문 ID를 받아올 수 없습니다.')
+      return
+    }
+    
+    // 주문이 성공적으로 생성되었으므로 전체 목록을 새로고침
+    const refreshOrders = async () => {
+      try {
+        const response = await orderApi.getAll()
+        const ordersData = response.data || response || []
+        console.log('주문 목록 새로고침:', ordersData)
+        setOrders(Array.isArray(ordersData) ? ordersData : [])
+        setShowOrderForm(false)
+        toast.success('주문이 성공적으로 등록되었습니다!')
+      } catch (error) {
+        console.error('주문 목록 새로고침 실패:', error)
+        toast.error('주문 목록을 새로고침하는데 실패했습니다.')
+      }
+    }
+    
+    refreshOrders()
+    return
+    
+    // 아래는 백업용 로컬 추가 로직 (사용하지 않음)
+    const newOrder: OrderListItem = {
+      id: orderData.id || orderData.order_id,
+      business: orderData.business || { 
+        id: orderData.business_id || 0,
+        business_name: '거래처명 없음',
+        phone_number: '연락처 없음'
+      },
       total_price: orderData.total_price || 0,
       order_datetime: orderData.order_datetime || new Date().toISOString(),
       delivery_datetime: orderData.delivery_datetime || '',
@@ -445,22 +456,18 @@ const OrderList: React.FC = () => {
 
   // 결제 처리 (OrderListSerializer에는 payment 정보가 없으므로 주문 상태만 변경)
   const handlePayment = (orderId: number) => {
-    setOrders(prev => prev.map(order => {
-      if (order.id === orderId) {
-        return {
-          ...order,
-          order_status: 'delivered' as const
-        }
-      }
-      return order
-    }))
-    toast.success('주문이 배송 완료로 변경되었습니다.')
+    navigate(`/orders/${orderId}/payment`)
   }
 
   // 상세보기 처리
   const handleViewDetail = (orderId: number) => {
-    console.log('상세보기:', orderId)
-    // TODO: 상세보기 페이지로 이동 또는 모달 열기
+    console.log('상세보기 클릭:', orderId, typeof orderId)
+    if (!orderId || orderId === undefined || isNaN(orderId)) {
+      console.error('잘못된 주문 ID:', orderId)
+      toast.error('주문 ID가 올바르지 않습니다.')
+      return
+    }
+    navigate(`/orders/${orderId}`)
   }
 
   return (
@@ -589,7 +596,7 @@ const OrderList: React.FC = () => {
                     <TableHead className="font-semibold text-gray-900">총금액</TableHead>
                     <TableHead className="font-semibold text-gray-900">결제 상태</TableHead>
                     <TableHead className="font-semibold text-gray-900">주문 상태</TableHead>
-                    <TableHead className="font-semibold text-gray-900 text-center">작업</TableHead>
+                    <TableHead className="font-semibold text-gray-900 text-center"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -612,15 +619,22 @@ const OrderList: React.FC = () => {
                       </TableCell>
                     </TableRow>
                   ) : (
-                    currentOrders.map((order, index) => (
+                    currentOrders.map((order, index) => {
+                      // 디버깅용 로그
+                      if (index === 0) {
+                        console.log('첫 번째 주문 렌더링:', { id: order.id, order })
+                      }
+                      return (
                       <TableRow key={order.id} className="hover:bg-gray-50 transition-colors">
                         <TableCell className="font-medium text-gray-900">
                           {startIndex + index + 1}
                         </TableCell>
                         <TableCell className="font-medium">
-                          <div>
-                            <div className="font-semibold">{order.business_name}</div>
-                            <div className="text-sm text-gray-500">{order.business_phone}</div>
+                          <div 
+                            className="font-semibold cursor-pointer text-blue-600 hover:text-blue-800 hover:underline"
+                            onClick={() => handleViewDetail(order.id)}
+                          >
+                            {order.business?.business_name || '거래처명 없음'}
                           </div>
                         </TableCell>
                         <TableCell className="text-gray-600">
@@ -644,11 +658,15 @@ const OrderList: React.FC = () => {
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => handleViewDetail(order.id)}
+                              onClick={() => {
+                                console.log('버튼 클릭 시 주문 객체:', order)
+                                console.log('버튼 클릭 시 order.id:', order.id, typeof order.id)
+                                handleViewDetail(order.id)
+                              }}
                               className="border-blue-600 text-blue-600 hover:bg-blue-50"
                             >
                               <Eye className="h-4 w-4 mr-1" />
-                              상세보기
+                              상세
                             </Button>
                             {/* OrderListSerializer에는 payment_status가 없으므로 필터링 제거 */}
                             {(order.order_status === 'placed' || order.order_status === 'ready') && (
@@ -665,7 +683,8 @@ const OrderList: React.FC = () => {
                           </div>
                         </TableCell>
                       </TableRow>
-                    ))
+                      )
+                    })
                   )}
                 </TableBody>
               </Table>

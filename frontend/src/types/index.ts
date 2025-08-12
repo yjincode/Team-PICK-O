@@ -98,9 +98,11 @@ export interface PaginatedResponse<T> {
 // OrderListItem interface for list views (matches OrderListSerializer)
 export interface OrderListItem {
   id: number;
-  business_id: number;
-  business_name: string;
-  business_phone: string;
+  business: {
+    id: number;
+    business_name: string;
+    phone_number: string;
+  };
   total_price: number;
   order_datetime: string;
   delivery_datetime?: string;
