@@ -274,103 +274,6 @@ class OrderUploadView(View):
         else:
             print(f"❌ 백그라운드 STT 처리 실패: {transcription.id}")
 
-
-@method_decorator(csrf_exempt, name='dispatch')
-class TranscriptionStatusView(View):
-    """음성 인식 상태 확인 API"""
-    
-    def get(self, request, transcription_id):
-        """transcription 상태 조회"""
-        try:
-            # 미들웨어에서 설정된 사용자 정보 확인
-            if not hasattr(request, 'user_id') or not request.user_id:
-                return JsonResponse({'error': '사용자 인증이 필요합니다.'}, status=401)
-            
-            from transcription.models import AudioTranscription
-            transcription = AudioTranscription.objects.get(
-                id=transcription_id, 
-                user_id=request.user_id
-            )
-            
-            return JsonResponse({
-                'transcription_id': str(transcription.id),
-                'status': transcription.status,
-                'transcribed_text': transcription.transcription,
-                'created_at': transcription.created_at.isoformat(),
-                'updated_at': transcription.updated_at.isoformat(),
-            })
-            
-        except AudioTranscription.DoesNotExist:
-            return JsonResponse({'error': 'Transcription을 찾을 수 없습니다.'}, status=404)
-        except Exception as e:
-            return JsonResponse({'error': str(e)}, status=500)
-
-
-@method_decorator(csrf_exempt, name='dispatch')
-class TranscriptionToOrderView(View):
-    """STT 완료 후 주문 생성 API"""
-    
-    def post(self, request, transcription_id):
-        """transcription으로 주문 생성"""
-        try:
-            # 미들웨어에서 설정된 사용자 정보 확인
-            if not hasattr(request, 'user_id') or not request.user_id:
-                return JsonResponse({'error': '사용자 인증이 필요합니다.'}, status=401)
-            
-            from transcription.models import AudioTranscription
-            from business.models import User
-            
-            transcription = AudioTranscription.objects.get(
-                id=transcription_id, 
-                user_id=request.user_id
-            )
-            
-            if transcription.status != 'completed':
-                return JsonResponse({'error': 'STT가 완료되지 않았습니다.'}, status=400)
-            
-            if not transcription.transcription:
-                return JsonResponse({'error': '변환된 텍스트가 없습니다.'}, status=400)
-            
-            # 주문 생성
-            user = User.objects.get(id=request.user_id)
-            order_service = OrderCreationService(user)
-            order, order_items = order_service.create_order(
-                text=transcription.transcription,
-                business_id=transcription.business_id
-            )
-            
-            # transcription과 order 연결
-            transcription.order = order
-            transcription.save()
-            
-            return JsonResponse({
-                'message': '음성 주문이 성공적으로 생성되었습니다.',
-                'data': {
-                    'id': order.id,
-                    'transcription_id': str(transcription.id),
-                    'transcribed_text': transcription.transcription,
-                    'business_name': order.business.business_name,
-                    'total_price': order.total_price,
-                    'order_status': order.order_status,
-                    'delivery_datetime': order.delivery_datetime.isoformat() if order.delivery_datetime else None,
-                    'order_items': [
-                        {
-                            'fish_type_id': item.fish_type_id,
-                            'fish_name': item.fish_type.name,
-                            'quantity': item.quantity,
-                            'unit_price': float(item.unit_price),
-                            'unit': item.unit,
-                            'remarks': item.remarks
-                        } for item in order_items
-                    ]
-                }
-            }, status=201)
-            
-        except AudioTranscription.DoesNotExist:
-            return JsonResponse({'error': 'Transcription을 찾을 수 없습니다.'}, status=404)
-        except Exception as e:
-            return JsonResponse({'error': str(e)}, status=500)
-    
     def _handle_text_order(self, request, data):
         """텍스트 파싱을 통한 주문 등록"""
         text = data.get('text')
@@ -418,16 +321,55 @@ class TranscriptionToOrderView(View):
         print(f"📋 수동 주문 데이터: {data}")
         
         try:
-            # 사용자 정보 설정
-            validated_data = dict(data)  # 데이터 복사
-            validated_data['user_id'] = request.user_id
+            # 데이터 복사 (user_id는 save()에서 직접 전달)
+            validated_data = dict(data)
             
             print(f"✅ 검증할 데이터: {validated_data}")
+            
+            # order_items JSON 파싱 처리
+            if 'order_items' in validated_data and isinstance(validated_data['order_items'], str):
+                try:
+                    import json
+                    validated_data['order_items'] = json.loads(validated_data['order_items'])
+                    print(f"✅ order_items JSON 파싱 성공: {validated_data['order_items']}")
+                except json.JSONDecodeError as e:
+                    print(f"❌ order_items JSON 파싱 실패: {e}")
+                    return JsonResponse({'error': 'order_items JSON 형식이 올바르지 않습니다.'}, status=400)
+            
+            # 각 필드 검증
+            required_fields = ['business_id', 'order_items']
+            for field in required_fields:
+                if field not in validated_data or not validated_data[field]:
+                    print(f"❌ 필수 필드 누락: {field}")
+                    return JsonResponse({'error': f'필수 필드가 누락되었습니다: {field}'}, status=400)
+            
+            # business_id 존재 여부 확인
+            try:
+                from business.models import Business
+                business = Business.objects.get(id=validated_data['business_id'])
+                print(f"✅ 비즈니스 확인 성공: {business.business_name}")
+            except Business.DoesNotExist:
+                print(f"❌ 존재하지 않는 business_id: {validated_data['business_id']}")
+                return JsonResponse({'error': f"존재하지 않는 비즈니스입니다: {validated_data['business_id']}"}, status=400)
+            
+            # fish_type_id 검증
+            from fish_registry.models import FishType
+            for item in validated_data['order_items']:
+                if 'fish_type_id' not in item:
+                    print(f"❌ order_item에 fish_type_id 누락: {item}")
+                    return JsonResponse({'error': 'order_item에 fish_type_id가 필요합니다.'}, status=400)
+                
+                try:
+                    fish_type = FishType.objects.get(id=item['fish_type_id'])
+                    print(f"✅ 어종 확인 성공: {fish_type.name}")
+                except FishType.DoesNotExist:
+                    print(f"❌ 존재하지 않는 fish_type_id: {item['fish_type_id']}")
+                    return JsonResponse({'error': f"존재하지 않는 어종입니다: {item['fish_type_id']}"}, status=400)
             
             serializer = OrderSerializer(data=validated_data)
             if serializer.is_valid():
                 print(f"✅ Serializer 검증 성공")
-                order = serializer.save()
+                order = serializer.save(user_id=request.user_id)
                 
                 print(f"✅ 주문 생성 성공: order_id={order.id}")
                 
@@ -632,6 +574,103 @@ class TranscriptionToOrderView(View):
 
 
 # 중복된 OCRImageUploadView 제거됨 - _handle_image_order에서 처리
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class TranscriptionStatusView(View):
+    """음성 인식 상태 확인 API"""
+    
+    def get(self, request, transcription_id):
+        """transcription 상태 조회"""
+        try:
+            # 미들웨어에서 설정된 사용자 정보 확인
+            if not hasattr(request, 'user_id') or not request.user_id:
+                return JsonResponse({'error': '사용자 인증이 필요합니다.'}, status=401)
+            
+            from transcription.models import AudioTranscription
+            transcription = AudioTranscription.objects.get(
+                id=transcription_id, 
+                user_id=request.user_id
+            )
+            
+            return JsonResponse({
+                'transcription_id': str(transcription.id),
+                'status': transcription.status,
+                'transcribed_text': transcription.transcription,
+                'created_at': transcription.created_at.isoformat(),
+                'updated_at': transcription.updated_at.isoformat(),
+            })
+            
+        except AudioTranscription.DoesNotExist:
+            return JsonResponse({'error': 'Transcription을 찾을 수 없습니다.'}, status=404)
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=500)
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class TranscriptionToOrderView(View):
+    """STT 완료 후 주문 생성 API"""
+    
+    def post(self, request, transcription_id):
+        """transcription으로 주문 생성"""
+        try:
+            # 미들웨어에서 설정된 사용자 정보 확인
+            if not hasattr(request, 'user_id') or not request.user_id:
+                return JsonResponse({'error': '사용자 인증이 필요합니다.'}, status=401)
+            
+            from transcription.models import AudioTranscription
+            from business.models import User
+            
+            transcription = AudioTranscription.objects.get(
+                id=transcription_id, 
+                user_id=request.user_id
+            )
+            
+            if transcription.status != 'completed':
+                return JsonResponse({'error': 'STT가 완료되지 않았습니다.'}, status=400)
+            
+            if not transcription.transcription:
+                return JsonResponse({'error': '변환된 텍스트가 없습니다.'}, status=400)
+            
+            # 주문 생성
+            user = User.objects.get(id=request.user_id)
+            order_service = OrderCreationService(user)
+            order, order_items = order_service.create_order(
+                text=transcription.transcription,
+                business_id=transcription.business_id
+            )
+            
+            # transcription과 order 연결
+            transcription.order = order
+            transcription.save()
+            
+            return JsonResponse({
+                'message': '음성 주문이 성공적으로 생성되었습니다.',
+                'data': {
+                    'id': order.id,
+                    'transcription_id': str(transcription.id),
+                    'transcribed_text': transcription.transcription,
+                    'business_name': order.business.business_name,
+                    'total_price': order.total_price,
+                    'order_status': order.order_status,
+                    'delivery_datetime': order.delivery_datetime.isoformat() if order.delivery_datetime else None,
+                    'order_items': [
+                        {
+                            'fish_type_id': item.fish_type_id,
+                            'fish_name': item.fish_type.name,
+                            'quantity': item.quantity,
+                            'unit_price': float(item.unit_price),
+                            'unit': item.unit,
+                            'remarks': item.remarks
+                        } for item in order_items
+                    ]
+                }
+            }, status=201)
+            
+        except AudioTranscription.DoesNotExist:
+            return JsonResponse({'error': 'Transcription을 찾을 수 없습니다.'}, status=404)
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=500)
 
 
 @method_decorator(csrf_exempt, name='dispatch')

@@ -135,24 +135,17 @@ PRIMARY_DB_CONFIG = {
     'NAME': os.getenv('POSTGRES_DB', 'teamPicko'),
     'USER': os.getenv('POSTGRES_USER', 'teamPicko'),
     'PASSWORD': os.getenv('POSTGRES_PASSWORD', '12341234'),
-    'HOST': os.getenv('DB_HOST', '192.168.0.137'),  # 1차: 외부 서버
+    'HOST': os.getenv('DB_HOST', 'localhost'),  # 1차: 로컬 서버 (기존: 192.168.0.137)
     'PORT': os.getenv('DB_PORT', '5432'),
     'OPTIONS': {
         'connect_timeout': 5,
     },
 }
 
-# 2차 데이터베이스 설정 (로컬 도커)
+# 2차 데이터베이스 설정 (SQLite - 로컬 개발용)
 FALLBACK_DB_CONFIG = {
-    'ENGINE': 'django.db.backends.postgresql',
-    'NAME': os.getenv('FALLBACK_POSTGRES_DB', 'teamPicko'),
-    'USER': os.getenv('FALLBACK_POSTGRES_USER', 'teamPicko'),
-    'PASSWORD': os.getenv('FALLBACK_POSTGRES_PASSWORD', '12341234'),
-    'HOST': os.getenv('FALLBACK_DB_HOST', 'localhost'),  # 2차: 로컬 도커
-    'PORT': os.getenv('FALLBACK_DB_PORT', '5432'),
-    'OPTIONS': {
-        'connect_timeout': 5,
-    },
+    'ENGINE': 'django.db.backends.sqlite3',
+    'NAME': BASE_DIR / 'db.sqlite3',
 }
 
 # 데이터베이스 연결 테스트 후 선택
@@ -175,14 +168,8 @@ if primary_available:
     }
     CURRENT_DATABASE = 'primary'
 else:
-    # 2차 데이터베이스 연결 테스트
-    fallback_available = test_database_connection(
-        FALLBACK_DB_CONFIG['HOST'],
-        FALLBACK_DB_CONFIG['PORT'],
-        FALLBACK_DB_CONFIG['NAME'], 
-        FALLBACK_DB_CONFIG['USER'],
-        FALLBACK_DB_CONFIG['PASSWORD']
-    )
+    # SQLite는 별도 연결 테스트 없이 항상 사용 가능
+    fallback_available = True
     
     if fallback_available:
         print("⚠️ 1차 데이터베이스 연결 실패, 2차 데이터베이스(로컬 도커) 사용")

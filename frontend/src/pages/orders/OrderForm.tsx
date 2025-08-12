@@ -631,21 +631,61 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
           throw new Error(result.error || '주문 저장에 실패했습니다.')
         }
       } else {
-        // 일반 JSON 요청 (수동, 텍스트, 이미지)
-        const response = await orderApi.create(orderData)
+        // 일반 JSON 요청 (수동, 텍스트, 이미지) - fetchWithAuth 사용
+        const response = await fetchWithAuth('/api/v1/order/upload/', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(orderData)
+        })
         
-        if (response.data) {
+        const result = await response.json()
+        
+        if (response.ok && result.data) {
           toast.success('주문이 성공적으로 저장되었습니다!')
-          onSubmit(response.data)
+          onSubmit(result.data)
         } else {
-          throw new Error('주문 저장에 실패했습니다.')
+          throw new Error(result.error || '주문 저장에 실패했습니다.')
         }
       }
     } catch (error: any) {
       console.error('주문 저장 오류:', error)
       
-      // 에러 메시지를 간단하게 처리
+      // 에러 메시지를 상세하게 처리
       let errorMessage = '주문 저장 중 오류가 발생했습니다.'
+      
+      if (error.response) {
+        // 서버에서 응답한 오류
+        const status = error.response.status
+        const data = error.response.data
+        
+        if (status === 400 && data?.error) {
+          // 유효성 검사 오류 - 상세 메시지 표시
+          if (typeof data.error === 'object') {
+            // Django serializer 오류 형식
+            const errorFields = Object.keys(data.error)
+            errorMessage = `입력 오류: ${errorFields.map(field => `${field}: ${data.error[field]}`).join(', ')}`
+          } else {
+            errorMessage = `입력 오류: ${data.error}`
+          }
+        } else if (status === 401) {
+          errorMessage = '인증이 필요합니다. 다시 로그인해주세요.'
+        } else if (status === 500 && data?.error) {
+          errorMessage = `서버 오류: ${data.error}`
+        } else {
+          errorMessage = `서버 오류 (${status}): ${data?.error || error.message}`
+        }
+        
+        console.error('API 오류 상세:', {
+          status,
+          data,
+          url: error.config?.url,
+          method: error.config?.method
+        })
+      } else if (error.message) {
+        errorMessage = error.message
+      }
       
       if (error.response?.data?.error) {
         // 백엔드에서 보낸 에러 메시지가 있는 경우
