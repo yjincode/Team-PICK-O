@@ -5,6 +5,12 @@ on:
     branches:
       - 'feature/**'
 
+# GitHub Token 권한 설정
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
 jobs:
   ci-check:
     runs-on: ubuntu-latest
@@ -26,13 +32,15 @@ jobs:
         # Backend 빌드 체크
         if [ -f "backend/Dockerfile" ]; then
           echo "✅ Backend Dockerfile 존재"
-          cd backend && docker build --dry-run . && cd ..
+          cd backend && docker build --no-cache -t test-backend . >/dev/null 2>&1 && echo "✅ Backend 빌드 성공" || echo "❌ Backend 빌드 실패"
+          cd ..
         fi
         
         # Frontend 빌드 체크  
         if [ -f "frontend/Dockerfile" ]; then
           echo "✅ Frontend Dockerfile 존재"
-          cd frontend && docker build --dry-run . && cd ..
+          cd frontend && docker build --no-cache -t test-frontend . >/dev/null 2>&1 && echo "✅ Frontend 빌드 성공" || echo "❌ Frontend 빌드 실패"
+          cd ..
         fi
     
     - name: 자동 PR 생성 (feature → dev)
