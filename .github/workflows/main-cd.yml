@@ -197,6 +197,31 @@ jobs:
         echo "$EC2_KEY" > ec2_key.pem
         chmod 600 ec2_key.pem
         
+        # GitHub Actions runner IP 확인
+        echo "🔍 GitHub Actions runner IP:"
+        curl -s http://checkip.amazonaws.com/
+        
+        # SSH 키 파일 검증
+        echo "🔍 SSH 키 파일 검증:"
+        ls -la ec2_key.pem
+        echo "키 파일 첫 줄:"
+        head -1 ec2_key.pem
+        echo "키 파일 마지막 줄:"
+        tail -1 ec2_key.pem
+        
+        # 네트워크 연결 테스트
+        echo "🔍 네트워크 연결 테스트:"
+        nc -zv $EC2_HOST 22 || echo "⚠️ Port 22 연결 실패"
+        
+        # SSH 연결 테스트 (상세 로그)
+        echo "🔍 SSH 연결 테스트:"
+        ssh -vvv -i ec2_key.pem -o ConnectTimeout=30 -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST "echo 'SSH 연결 성공'" || {
+          echo "❌ SSH 연결 실패"
+          echo "EC2_HOST: $EC2_HOST"
+          echo "EC2_USER: $EC2_USER"
+          exit 1
+        }
+        
         # Copy deployment files to EC2
         scp -i ec2_key.pem -o StrictHostKeyChecking=no \
           deployment/docker-compose.yml \
