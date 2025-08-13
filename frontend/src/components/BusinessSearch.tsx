@@ -5,10 +5,11 @@
 import React, { useState, useEffect } from "react"
 import { Input } from "./ui/input"
 import { Button } from "./ui/button"
-import { Card, CardContent } from "./ui/card"
+import { Card } from "./ui/card"
 import { Search, User, Phone, Check } from "lucide-react"
 import type { Business } from "../types"
-        
+import { formatPhoneNumber } from "../utils/phoneFormatter";
+
 interface BusinessSearchProps {
   onSelect: (business: Business) => void;
   onClose: () => void;

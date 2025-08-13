@@ -11,6 +11,7 @@ export interface Business {
   business_name: string;
   phone_number: string;
   address?: string;
+  memo?: string;
 }
 
 // 2. 어종 테이블
