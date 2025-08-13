@@ -36,37 +36,55 @@ jobs:
         fi
     
     - name: 자동 PR 생성 (feature → dev)
-      uses: repo-sync/pull-request@v2
-      with:
-        source_branch: ${{ github.ref_name }}
-        destination_branch: "dev"
-        github_token: ${{ secrets.GITHUB_TOKEN }}
-        pr_title: "🚀 [자동생성] ${{ github.ref_name }} → dev"
-        pr_body: |
-          ## 📋 변경사항
-          - Feature 브랜치: `${{ github.ref_name }}`
-          - 커밋 해시: `${{ github.sha }}`
-          - 작성자: ${{ github.actor }}
-          - 푸시 시간: ${{ github.event.head_commit.timestamp }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        BRANCH_NAME: ${{ github.ref_name }}
+        REPO: ${{ github.repository }}
+      run: |
+        echo "🔄 GitHub CLI로 PR 생성 중..."
+        
+        # PR 제목과 본문 설정
+        PR_TITLE="🚀 [자동생성] ${BRANCH_NAME} → dev"
+        PR_BODY="## 📋 변경사항
+        - Feature 브랜치: \`${BRANCH_NAME}\`
+        - 커밋 해시: \`${{ github.sha }}\`
+        - 작성자: ${{ github.actor }}
+        - 푸시 시간: $(date -u)
+        
+        ## 🔍 체크리스트
+        - [x] Docker 빌드 가능 확인
+        - [ ] 코드 리뷰 필요
+        - [ ] 기능 테스트 필요
+        - [ ] 충돌 해결 확인
+        
+        ## 🤖 자동 생성된 PR
+        이 PR은 \`${BRANCH_NAME}\` 브랜치 푸시 시 자동으로 생성되었습니다.
+        
+        **⚠️ 병합 전 확인사항:**
+        1. ✅ 코드 리뷰 완료
+        2. ✅ 기능 테스트 완료  
+        3. ✅ 충돌 해결 완료
+        4. ✅ CI 체크 통과"
+        
+        # 기존 PR 확인
+        EXISTING_PR=$(gh pr list --head "${BRANCH_NAME}" --base "dev" --state open --json number --jq '.[0].number' || echo "")
+        
+        if [ -n "$EXISTING_PR" ] && [ "$EXISTING_PR" != "null" ]; then
+          echo "⚠️ 기존 PR #${EXISTING_PR}이 이미 존재합니다"
+          echo "🔗 PR URL: https://github.com/${REPO}/pull/${EXISTING_PR}"
+        else
+          # 새 PR 생성
+          echo "📝 새로운 PR 생성 중..."
+          PR_URL=$(gh pr create \
+            --title "$PR_TITLE" \
+            --body "$PR_BODY" \
+            --base "dev" \
+            --head "${BRANCH_NAME}" \
+            --repo "$REPO")
           
-          ## 🔍 체크리스트
-          - [x] Docker 빌드 가능 확인
-          - [ ] 코드 리뷰 필요
-          - [ ] 기능 테스트 필요
-          - [ ] 충돌 해결 확인
-          
-          ## 🤖 자동 생성된 PR
-          이 PR은 `${{ github.ref_name }}` 브랜치 푸시 시 자동으로 생성되었습니다.
-          
-          **⚠️ 병합 전 확인사항:**
-          1. ✅ 코드 리뷰 완료
-          2. ✅ 기능 테스트 완료  
-          3. ✅ 충돌 해결 완료
-          4. ✅ CI 체크 통과
-          
-          **📝 변경된 파일들:**
-          - 자동으로 감지된 변경사항들이 포함됩니다
-        pr_draft: false
+          echo "✅ PR 생성 완료!"
+          echo "🔗 PR URL: $PR_URL"
+        fi
         
     - name: PR 생성 결과
       run: |
