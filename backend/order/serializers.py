@@ -83,12 +83,14 @@ class OrderSerializer(serializers.ModelSerializer):
 class OrderListSerializer(serializers.ModelSerializer):
     business = serializers.SerializerMethodField()
     items_summary = serializers.SerializerMethodField()
+    payment = serializers.SerializerMethodField()
     
     class Meta:
         model = Order
         fields = [
             'id', 'business', 'total_price', 
-            'order_datetime', 'delivery_datetime', 'order_status', 'is_urgent', 'items_summary'
+            'order_datetime', 'delivery_datetime', 'order_status', 'is_urgent', 'items_summary',
+            'memo', 'source_type', 'transcribed_text', 'last_updated_at', 'payment'
         ]
     
     def get_business(self, obj):
@@ -123,6 +125,24 @@ class OrderListSerializer(serializers.ModelSerializer):
             item_names.append(f"{item.fish_type.name} {quantity_str}{unit}")
         
         return ", ".join(item_names[:3]) + ("..." if len(item_names) > 3 else "")
+    
+    def get_payment(self, obj):
+        """주문의 결제 정보를 반환합니다"""
+        try:
+            # 주문과 연결된 가장 최근 결제 정보 조회
+            payment = obj.payment_set.order_by('-created_at').first()
+            if payment:
+                return {
+                    'id': payment.id,
+                    'payment_status': payment.payment_status,
+                    'amount': payment.amount,
+                    'method': payment.method,
+                    'paid_at': payment.paid_at.isoformat() if payment.paid_at else None
+                }
+        except Exception as e:
+            print(f"결제 정보 조회 중 오류: {e}")
+        
+        return None
 
 
 class OrderDetailItemSerializer(serializers.ModelSerializer):
@@ -156,3 +176,65 @@ class OrderStatusUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Order
         fields = ['order_status']
+
+
+class OrderUpdateSerializer(serializers.ModelSerializer):
+    """주문 수정을 위한 Serializer"""
+    order_items = OrderItemSerializer(many=True)
+    
+    class Meta:
+        model = Order
+        fields = [
+            'business_id', 'delivery_datetime', 'memo', 
+            'is_urgent', 'order_items'
+        ]
+        extra_kwargs = {
+            'business_id': {'required': True},
+            'delivery_datetime': {'required': False},
+            'memo': {'required': False},
+            'is_urgent': {'required': False},
+            'order_items': {'required': True}
+        }
+    
+    def validate(self, data):
+        """주문 수정 가능 여부 검증"""
+        order = self.instance
+        
+        # 결제 완료된 주문은 수정 불가
+        if order.payment_set.filter(payment_status='paid').exists():
+            raise serializers.ValidationError("결제가 완료된 주문은 수정할 수 없습니다.")
+        
+        # 취소된 주문은 수정 불가
+        if order.order_status == 'cancelled':
+            raise serializers.ValidationError("취소된 주문은 수정할 수 없습니다.")
+        
+        return data
+    
+    def update(self, instance, validated_data):
+        """주문 정보 및 항목 수정"""
+        order_items_data = validated_data.pop('order_items', [])
+        
+        # 주문 기본 정보 업데이트
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        
+        # 총액 재계산을 위해 임시 저장
+        instance.save()
+        
+        # 기존 주문 항목 삭제
+        instance.items.all().delete()
+        
+        # 새로운 주문 항목 생성
+        for item_data in order_items_data:
+            fish_type_id = item_data.pop('fish_type_id')
+            OrderItem.objects.create(order=instance, fish_type_id=fish_type_id, **item_data)
+        
+        # 총액 재계산
+        total_price = sum(
+            item.quantity * item.unit_price 
+            for item in instance.items.all()
+        )
+        instance.total_price = total_price
+        instance.save()
+        
+        return instance

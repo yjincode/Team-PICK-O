@@ -114,6 +114,13 @@ export interface OrderListItem {
   source_type?: 'manual' | 'voice' | 'text';
   transcribed_text?: string;
   last_updated_at?: string;
+  payment?: {
+    id: number;
+    payment_status: 'pending' | 'paid' | 'refunded';
+    amount: number;
+    method: 'cash' | 'bank_transfer' | 'card';
+    paid_at?: string;
+  };
 }
 
 // ==================== 폼 데이터 관련 타입 ====================

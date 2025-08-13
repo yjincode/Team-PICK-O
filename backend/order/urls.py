@@ -2,7 +2,8 @@ from django.urls import path
 from .views import (
     OrderUploadView, OrderListView, OrderDetailView, 
     OrderStatusUpdateView, OrderCancelView,
-    TranscriptionStatusView, TranscriptionToOrderView
+    TranscriptionStatusView, TranscriptionToOrderView,
+    cancel_order_view, update_order_view, ship_out_order_view
 )
 
 urlpatterns = [
@@ -12,6 +13,15 @@ urlpatterns = [
     path('<int:order_id>/', OrderDetailView.as_view(), name='order-detail'),
     path('<int:order_id>/status/', OrderStatusUpdateView.as_view(), name='order-status-update'),
     path('<int:order_id>/cancel/', OrderCancelView.as_view(), name='order-cancel'),
+    
+    # 주문 취소 API (DRF 스타일)
+    path('cancel/', cancel_order_view, name='order-cancel-api'),
+    
+    # 주문 수정 API
+    path('<int:order_id>/update/', update_order_view, name='order-update'),
+    
+    # 주문 출고 API
+    path('<int:order_id>/ship-out/', ship_out_order_view, name='order-ship-out'),
     
     # STT 관련 API
     path('transcription/<uuid:transcription_id>/status/', TranscriptionStatusView.as_view(), name='transcription-status'),
