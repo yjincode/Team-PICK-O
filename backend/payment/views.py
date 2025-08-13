@@ -128,6 +128,145 @@ def toss_confirm_view(request):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+@api_view(['POST'])
+def manual_payment_complete_view(request):
+    """
+    현금/계좌이체 결제 완료 처리 API
+    운영자가 수동으로 결제 상태를 'paid'로 변경
+    """
+    # 사용자 인증 확인
+    if not hasattr(request, 'user_id') or not request.user_id:
+        return Response({
+            'error': '사용자 인증이 필요합니다.'
+        }, status=status.HTTP_401_UNAUTHORIZED)
+    
+    order_id = request.data.get('order_id')
+    payment_method = request.data.get('method')  # 'cash' 또는 'bank_transfer'
+    amount = request.data.get('amount')
+    
+    if not order_id or not payment_method or not amount:
+        return Response({
+            'error': 'order_id, method, amount는 필수입니다.'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        amount = int(amount)
+    except Exception:
+        return Response({
+            'error': 'amount는 정수여야 합니다.'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    if payment_method not in ['cash', 'bank_transfer']:
+        return Response({
+            'error': 'method는 cash 또는 bank_transfer여야 합니다.'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        order = get_object_or_404(Order, id=order_id)
+        
+        # 사용자 권한 확인 - 자신이 생성한 주문만 결제 완료 처리 가능 (임시 주석처리)
+        # if order.user_id != request.user_id:
+        #     return Response({
+        #         'error': '해당 주문을 결제 완료 처리할 권한이 없습니다.'
+        #     }, status=status.HTTP_403_FORBIDDEN)
+        
+        # 결제 정보 생성 또는 업데이트
+        payment, created = Payment.objects.get_or_create(
+            order=order,
+            defaults={
+                'business_id': order.business_id,
+                'amount': amount,
+                'method': payment_method,
+                'payment_status': 'paid',
+                'paid_at': timezone.now()
+            }
+        )
+        
+        if not created:
+            # 기존 결제 정보가 있으면 업데이트
+            payment.amount = amount
+            payment.method = payment_method
+            payment.payment_status = 'paid'
+            payment.paid_at = timezone.now()
+            payment.save()
+        
+        # 주문 상태를 'ready'로 변경 (결제 완료 시)
+        order.order_status = 'ready'
+        order.save()
+        
+        return Response({
+            'message': '결제가 완료되었습니다',
+            'order_id': order.id,
+            'payment_id': payment.id,
+            'status': 'paid'
+        })
+        
+    except Exception as e:
+        return Response({
+            'error': '결제 완료 처리 중 오류 발생',
+            'details': str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+def refund_payment_view(request):
+    """
+    결제 환불 처리 API
+    결제 상태를 'refunded'로 변경하고 환불 사유 기록
+    """
+    # 사용자 인증 확인
+    if not hasattr(request, 'user_id') or not request.user_id:
+        return Response({
+            'error': '사용자 인증이 필요합니다.'
+        }, status=status.HTTP_401_UNAUTHORIZED)
+    
+    payment_id = request.data.get('payment_id')
+    refund_reason = request.data.get('refund_reason', '')
+    
+    if not payment_id:
+        return Response({
+            'error': 'payment_id는 필수입니다.'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        payment = Payment.objects.get(id=payment_id)
+        
+        # 사용자 권한 확인 - 자신이 생성한 주문의 결제만 환불 가능 (임시 주석처리)
+        # if payment.order.user_id != request.user_id:
+        #     return Response({
+        #         'error': '해당 결제를 환불할 권한이 없습니다.'
+        #     }, status=status.HTTP_403_FORBIDDEN)
+        
+        # 환불 가능 여부 확인
+        if payment.payment_status != 'paid':
+            return Response({
+                'error': '결제 완료된 결제만 환불할 수 있습니다.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # 환불 처리
+        payment.payment_status = 'refunded'
+        payment.refund_reason = refund_reason
+        payment.refunded = True
+        payment.save()
+        
+        return Response({
+            'message': '환불이 처리되었습니다',
+            'payment_id': payment.id,
+            'payment_status': 'refunded',
+            'refund_reason': refund_reason
+        })
+        
+    except Payment.DoesNotExist:
+        return Response({
+            'error': '결제를 찾을 수 없습니다.'
+        }, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({
+            'error': '환불 처리 중 오류 발생',
+            'details': str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 # 기존 클래스 기반 뷰를 유지하되 사용하지 않음
 class TossConfirmView:
     """레거시 - 사용하지 않음"""

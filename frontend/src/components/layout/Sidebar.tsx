@@ -56,7 +56,6 @@ const menuItems: MenuItem[] = [
     title: "매출 관리",
     icon: TrendingUp,
     items: [
-      { title: "판매 내역", url: "/sales" },
       { title: "매출 통계", url: "/sales/chart" },
       { title: "경매 시세 예측", url: "/sales/prediction" },
     ],

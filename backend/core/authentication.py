@@ -15,30 +15,31 @@ User = get_user_model()
 # Firebase Admin 초기화 (한 번만 실행)
 if not firebase_admin._apps:
     try:
-        # Firebase Admin SDK 인증서 경로
-        cred_path = getattr(settings, 'FIREBASE_ADMIN_CREDENTIALS', None)
-        
-        if cred_path and os.path.exists(cred_path):
-            print(f"🔍 Firebase 인증서 경로: {cred_path}")
-            print(f"🔍 인증서 파일 존재: {os.path.exists(cred_path)}")
-            
-            cred = credentials.Certificate(cred_path)
-            print("🔍 Firebase 인증서 로드 완료")
-            
+        # 1. 환경변수에서 JSON 문자열로 인증서 정보 로드 (프로덕션용 - 우선순위)
+        firebase_cred_json = os.getenv('FIREBASE_ADMIN_CREDENTIALS_JSON')
+        if firebase_cred_json:
+            print("🔍 Firebase 인증서를 환경변수에서 로드 중...")
+            import json
+            cred_dict = json.loads(firebase_cred_json)
+            cred = credentials.Certificate(cred_dict)
             firebase_admin.initialize_app(cred)
-            print("✅ Firebase Admin SDK 초기화 완료 (Service Account Key 사용)")
-            print(f"✅ Firebase Apps: {firebase_admin._apps}")
+            print("✅ Firebase Admin SDK 초기화 완료 (환경변수 사용)")
         else:
-            # Service Account Key가 없는 경우
-            print("⚠️ Firebase Admin SDK Service Account Key가 없습니다.")
-            print(f"   설정된 경로: {cred_path}")
-            print("   Firebase Console에서 Service Account Key를 다운로드하여")
-            print("   firebase-admin-key.json으로 저장하세요.")
+            # 2. 파일 경로 방식 (로컬 개발용)
+            cred_path = getattr(settings, 'FIREBASE_ADMIN_CREDENTIALS', None)
+            if cred_path and os.path.exists(cred_path):
+                print(f"🔍 Firebase 인증서 파일 경로: {cred_path}")
+                cred = credentials.Certificate(cred_path)
+                firebase_admin.initialize_app(cred)
+                print("✅ Firebase Admin SDK 초기화 완료 (파일 경로 사용)")
+            else:
+                print("⚠️ Firebase Admin SDK 인증서를 찾을 수 없습니다.")
+                print("   프로덕션: 환경변수 FIREBASE_ADMIN_CREDENTIALS_JSON 설정")
+                print("   로컬 개발: firebase-admin-key.json 파일 필요")
         
     except Exception as e:
         print(f"❌ Firebase Admin SDK 초기화 실패: {e}")
-        print(f"❌ 에러 타입: {type(e).__name__}")
-        print("   Firebase Console에서 Service Account Key를 다운로드하세요.")
+        print("   Firebase Console에서 Service Account Key를 확인하세요.")
 
 
 class FirebaseAuthentication(BaseAuthentication):

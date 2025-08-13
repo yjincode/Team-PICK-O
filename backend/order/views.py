@@ -10,9 +10,13 @@ from django.conf import settings
 from django.shortcuts import get_object_or_404
 from django.db import transaction
 from django.core.files.storage import default_storage
+from django.utils import timezone
 from core.middleware import get_user_queryset_filter
 
-from .serializers import OrderSerializer, OrderListSerializer, OrderDetailSerializer, OrderStatusUpdateSerializer
+from .serializers import OrderSerializer, OrderListSerializer, OrderDetailSerializer, OrderStatusUpdateSerializer, OrderUpdateSerializer
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+from rest_framework import status
 from .models import Order
 from .ocr_utils import extract_text_from_image
 from transcription.services.order_service import OrderCreationService
@@ -802,3 +806,186 @@ class OrderCancelView(View):
             })
         except Order.DoesNotExist:
             return JsonResponse({'error': '주문을 찾을 수 없습니다.'}, status=404)
+
+
+@api_view(['POST'])
+def cancel_order_view(request):
+    """
+    주문 취소 API (DRF 스타일)
+    주문 상태를 'cancelled'로 변경하고 취소 사유 기록
+    """
+    # 사용자 인증 확인
+    if not hasattr(request, 'user_id') or not request.user_id:
+        return Response({
+            'error': '사용자 인증이 필요합니다.'
+        }, status=status.HTTP_401_UNAUTHORIZED)
+    
+    order_id = request.data.get('order_id')
+    cancel_reason = request.data.get('cancel_reason', '')
+    
+    if not order_id:
+        return Response({
+            'error': 'order_id는 필수입니다.'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        order = Order.objects.get(id=order_id)
+        
+        # 사용자 권한 확인 - 자신이 생성한 주문만 취소 가능 (임시 주석처리)
+        # if order.user_id != request.user_id:
+        #     return Response({
+        #         'error': '해당 주문을 취소할 권한이 없습니다.'
+        #     }, status=status.HTTP_403_FORBIDDEN)
+        
+        # 이미 취소된 주문인지 확인
+        if order.order_status == 'cancelled':
+            return Response({
+                'error': '이미 취소된 주문입니다.'
+            }, status=status.HTTP_401_UNAUTHORIZED)
+        
+        # 출고된 주문은 취소 불가
+        if order.order_status == 'delivered':
+            return Response({
+                'error': '출고 완료된 주문은 취소할 수 없습니다.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # 주문 취소 처리
+        order.order_status = 'cancelled'
+        order.cancel_reason = cancel_reason
+        order.save()
+        
+        return Response({
+            'message': '주문이 취소되었습니다',
+            'order_id': order.id,
+            'order_status': 'cancelled',
+            'cancel_reason': cancel_reason
+        })
+        
+    except Order.DoesNotExist:
+        return Response({
+            'error': '주문을 찾을 수 없습니다.'
+        }, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({
+            'error': '주문 취소 처리 중 오류 발생',
+            'details': str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+def ship_out_order_view(request, order_id):
+    """
+    주문 출고 처리 API
+    주문 상태를 'ready'에서 'delivered'로 변경하고 ship_out_datetime 설정
+    """
+    try:
+        # 사용자 인증 확인
+        if not hasattr(request, 'user_id') or not request.user_id:
+            return Response({
+                'error': '사용자 인증이 필요합니다.'
+            }, status=status.HTTP_401_UNAUTHORIZED)
+        
+        order = Order.objects.get(id=order_id)
+        
+        # 사용자 권한 확인 - 자신이 생성한 주문만 출고 가능 (임시 주석처리)
+        # if order.user_id != request.user_id:
+        #     return Response({
+        #         'error': '해당 주문을 출고할 권한이 없습니다.'
+        #     }, status=status.HTTP_403_FORBIDDEN)
+        
+        # 출고 가능 여부 확인
+        if order.order_status != 'ready':
+            return Response({
+                'error': '출고 준비된 주문만 출고할 수 있습니다.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # 결제 완료 여부 확인
+        if not order.payment_set.filter(payment_status='paid').exists():
+            return Response({
+                'error': '결제가 완료되지 않은 주문은 출고할 수 없습니다.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # 출고 처리
+        order.order_status = 'delivered'
+        order.ship_out_datetime = timezone.now()
+        order.save()
+        
+        return Response({
+            'message': '주문이 출고되었습니다',
+            'order_id': order.id,
+            'order_status': 'delivered',
+            'ship_out_datetime': order.ship_out_datetime.isoformat()
+        })
+        
+    except Order.DoesNotExist:
+        return Response({
+            'error': '주문을 찾을 수 없습니다.'
+        }, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({
+            'error': '출고 처리 중 오류 발생',
+            'details': str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['PUT', 'PATCH'])
+def update_order_view(request, order_id):
+    """
+    주문 수정 API
+    PUT: 전체 수정, PATCH: 부분 수정
+    """
+    try:
+        # 사용자 인증 확인
+        if not hasattr(request, 'user_id') or not request.user_id:
+            return Response({
+                'error': '사용자 인증이 필요합니다.'
+            }, status=status.HTTP_401_UNAUTHORIZED)
+        
+        order = Order.objects.get(id=order_id)
+        
+        # 사용자 권한 확인 - 자신이 생성한 주문만 수정 가능 (임시 주석처리)
+        # if order.user_id != request.user_id:
+        #     return Response({
+        #         'error': '해당 주문을 수정할 권한이 없습니다.'
+        #     }, status=status.HTTP_403_FORBIDDEN)
+        
+        # 주문 수정 가능 여부 확인
+        if order.order_status == 'cancelled':
+            return Response({
+                'error': '취소된 주문은 수정할 수 없습니다.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # 결제 완료된 주문은 수정 불가
+        if order.payment_set.filter(payment_status='paid').exists():
+            return Response({
+                'error': '결제가 완료된 주문은 수정할 수 없습니다.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Serializer로 수정 처리
+        serializer = OrderUpdateSerializer(order, data=request.data, partial=request.method == 'PATCH')
+        
+        if serializer.is_valid():
+            updated_order = serializer.save()
+            
+            return Response({
+                'message': '주문이 성공적으로 수정되었습니다',
+                'order_id': updated_order.id,
+                'total_price': updated_order.total_price,
+                'order_status': updated_order.order_status,
+                'business_name': updated_order.business.business_name if updated_order.business else None
+            })
+        else:
+            return Response({
+                'error': '주문 수정 데이터가 올바르지 않습니다',
+                'details': serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+            
+    except Order.DoesNotExist:
+        return Response({
+            'error': '주문을 찾을 수 없습니다.'
+        }, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({
+            'error': '주문 수정 처리 중 오류 발생',
+            'details': str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

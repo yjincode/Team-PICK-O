@@ -40,7 +40,7 @@ import { TokenManager } from './tokenManager'
 
 // 토큰 갱신 중인지 추적
 let isRefreshing = false
-let refreshPromise: Promise<string> | null = null
+let refreshPromise: Promise<string | null> | null = null
 
 // 액세스 토큰 자동 갱신 함수
 const refreshAccessToken = async (): Promise<string | null> => {
@@ -49,12 +49,12 @@ const refreshAccessToken = async (): Promise<string | null> => {
   }
   
   isRefreshing = true
-  refreshPromise = new Promise(async (resolve, reject) => {
+  refreshPromise = new Promise(async (resolve) => {
     try {
       const refreshToken = TokenManager.getRefreshToken()
       
       if (!refreshToken) {
-        resolve(null as any)
+        resolve(null)
         return
       }
       
@@ -81,12 +81,12 @@ const refreshAccessToken = async (): Promise<string | null> => {
       } else {
         console.log('❌ 토큰 갱신 실패 - 리로그인 필요')
         TokenManager.removeTokens()
-        resolve(null as any)
+        resolve(null)
       }
     } catch (error) {
       console.error('❌ 토큰 갱신 오류:', error)
       TokenManager.removeTokens()
-      resolve(null as any)
+      resolve(null)
     }
   })
   
@@ -315,37 +315,37 @@ export const inventoryApi = {
 export const orderApi = {
   // 모든 주문 조회
   getAll: async (params?: { page?: number; page_size?: number }): Promise<ApiResponse<OrderListItem[]>> => {
-    const response = await api.get('/order/', { params })
+    const response = await api.get('/orders/', { params })
     return response.data
   },
 
   // ID로 주문 조회
   getById: async (id: number): Promise<ApiResponse<Order>> => {
-    const response = await api.get(`/order/${id}/`)
+    const response = await api.get(`/orders/${id}/`)
     return response.data
   },
 
   // 새 주문 생성
   create: async (order: Omit<Order, 'id'>): Promise<ApiResponse<Order>> => {
-    const response = await api.post('/order/upload/', order)
+    const response = await api.post('/orders/upload/', order)
     return response.data
   },
 
   // 주문 정보 수정
   update: async (id: number, order: Partial<Order>): Promise<ApiResponse<Order>> => {
-    const response = await api.put(`/order/${id}/`, order)
+    const response = await api.put(`/orders/${id}/`, order)
     return response.data
   },
 
   // 주문 삭제
   delete: async (id: number): Promise<ApiResponse<void>> => {
-    const response = await api.delete(`/order/${id}/`)
+    const response = await api.delete(`/orders/${id}/`)
     return response.data
   },
 
   // 주문 상태 업데이트
   updateStatus: async (id: number, status: Order['status']): Promise<ApiResponse<Order>> => {
-    const response = await api.patch(`/order/${id}/status/`, { order_status: status })
+    const response = await api.patch(`/orders/${id}/status/`, { order_status: status })
     return response.data
   },
 }
@@ -355,31 +355,31 @@ export const orderApi = {
 export const paymentApi = {
   // 모든 결제 조회
   getAll: async (): Promise<ApiResponse<Payment[]>> => {
-    const response = await api.get('/payments')
+    const response = await api.get('/payments/')
     return response.data
   },
 
   // ID로 결제 조회
   getById: async (id: number): Promise<ApiResponse<Payment>> => {
-    const response = await api.get(`/payments/${id}`)
+    const response = await api.get(`/payments/${id}/`)
     return response.data
   },
 
   // 새 결제 생성
   create: async (payment: Omit<Payment, 'id' | 'created_at'>): Promise<ApiResponse<Payment>> => {
-    const response = await api.post('/payments', payment)
+    const response = await api.post('/payments/', payment)
     return response.data
   },
 
   // 결제 정보 수정
   update: async (id: number, payment: Partial<Payment>): Promise<ApiResponse<Payment>> => {
-    const response = await api.put(`/payments/${id}`, payment)
+    const response = await api.put(`/payments/${id}/`, payment)
     return response.data
   },
 
   // 결제 삭제
   delete: async (id: number): Promise<ApiResponse<void>> => {
-    const response = await api.delete(`/payments/${id}`)
+    const response = await api.delete(`/payments/${id}/`)
     return response.data
   },
 }
@@ -390,9 +390,9 @@ export const paymentsApi = {
     return response.data
   },
   
-  // 토스 페이먼츠 결제 승인
+  // 토스 페이먼츠 결제 승인 (복수형 payments로 통일)
   confirmToss: async (data: { paymentKey: string; orderId: string; amount: number }) => {
-    const response = await api.post('/payment/toss/confirm/', data)
+    const response = await api.post('/payments/toss/confirm/', data)
     return response.data
   },
 }
@@ -434,7 +434,7 @@ export const authApi = {
 // Sales API
 export const salesApi = {
   getAll: async (params?: { page?: number; page_size?: number }): Promise<ApiResponse<OrderListItem[]>> => {
-    const response = await api.get('/order/', { params })
+    const response = await api.get('/orders/', { params })
     return response.data
   },
 

@@ -4,7 +4,7 @@
  * 모든 사용자 정보는 토큰 페이로드에서 추출
  */
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import { ConfirmationResult } from 'firebase/auth'
 import { TokenManager } from '../lib/tokenManager'
 import { sendPhoneVerification, verifyPhoneCode } from '../lib/firebase'
