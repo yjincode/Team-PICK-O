@@ -6,7 +6,7 @@ import React from "react"
 import { Card, CardContent } from "../../components/ui/card"
 import { Button } from "../../components/ui/button"
 import { Badge } from "../../components/ui/badge"
-import { TrendingUp, DollarSign, Calendar, Package } from "lucide-react"
+import { TrendingUp, DollarSign, Calendar } from "lucide-react"
 
 // 판매 기록 데이터 타입 정의
 interface SalesRecord {
