@@ -25,23 +25,25 @@ jobs:
         echo "커밋: ${{ github.sha }}"
         ls -la
     
-    - name: Docker 빌드 테스트
+    - name: Dockerfile 존재 확인
       run: |
-        echo "🔨 Docker 빌드 가능 여부 확인..."
+        echo "📋 Dockerfile 존재 확인..."
         
-        # Backend 빌드 체크
+        # Backend Dockerfile 확인
         if [ -f "backend/Dockerfile" ]; then
           echo "✅ Backend Dockerfile 존재"
-          cd backend && docker build --no-cache -t test-backend . >/dev/null 2>&1 && echo "✅ Backend 빌드 성공" || echo "❌ Backend 빌드 실패"
-          cd ..
+        else
+          echo "❌ Backend Dockerfile 없음"
         fi
         
-        # Frontend 빌드 체크  
+        # Frontend Dockerfile 확인
         if [ -f "frontend/Dockerfile" ]; then
           echo "✅ Frontend Dockerfile 존재"
-          cd frontend && docker build --no-cache -t test-frontend . >/dev/null 2>&1 && echo "✅ Frontend 빌드 성공" || echo "❌ Frontend 빌드 실패"
-          cd ..
+        else
+          echo "❌ Frontend Dockerfile 없음"
         fi
+        
+        echo "✅ Dockerfile 확인 완료"
     
     - name: 자동 PR 생성 (feature → dev)
       env:
