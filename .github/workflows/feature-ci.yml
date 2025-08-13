@@ -114,7 +114,7 @@ jobs:
           
           # 방법 1: 기본 PR 생성
           if gh pr create \
-            --title "🚀 Auto PR: ${BRANCH_NAME} → dev" \
+            --title "Auto PR: ${BRANCH_NAME} → dev" \
             --body "자동 생성된 PR - Feature 브랜치: ${BRANCH_NAME}" \
             --base "dev" \
             --head "${BRANCH_NAME}"; then

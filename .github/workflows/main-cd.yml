@@ -103,32 +103,43 @@ jobs:
         IMAGE_TAG: demo-${{ github.sha }}
         DOCKER_BUILDKIT: 1
       run: |
-        echo "🔨 Backend 이미지 빌드 중..."
+        echo "🔍 Backend 이미지 존재 여부 확인 중..."
         echo "📍 ECR Registry: $ECR_REGISTRY"
         echo "📍 Repository: $ECR_REPOSITORY"
         echo "📍 Tag: $IMAGE_TAG"
         
-        # Docker context 확인
-        cd backend
-        ls -la
-        
-        # Backend 이미지 빌드 및 푸시
-        docker buildx build \
-          --platform linux/amd64 \
-          --tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
-          --tag $ECR_REGISTRY/$ECR_REPOSITORY:latest \
-          --push \
-          --progress=plain \
-          .
-        
-        echo "✅ Backend 이미지 빌드 및 푸시 완료"
-        echo "📦 이미지: $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
-        
-        # 푸시된 이미지 확인
-        aws ecr describe-images \
+        # 이미지가 이미 존재하는지 확인
+        if aws ecr describe-images \
           --repository-name $ECR_REPOSITORY \
           --image-ids imageTag=$IMAGE_TAG \
-          --region ${{ secrets.AWS_REGION }}
+          --region ${{ secrets.AWS_REGION }} > /dev/null 2>&1; then
+          echo "✅ Backend 이미지가 이미 존재합니다. 빌드를 스킵합니다."
+          echo "📦 기존 이미지: $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+        else
+          echo "🔨 Backend 이미지 빌드 중..."
+          
+          # Docker context 확인
+          cd backend
+          ls -la
+          
+          # Backend 이미지 빌드 및 푸시
+          docker buildx build \
+            --platform linux/amd64 \
+            --tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
+            --tag $ECR_REGISTRY/$ECR_REPOSITORY:latest \
+            --push \
+            --progress=plain \
+            .
+          
+          echo "✅ Backend 이미지 빌드 및 푸시 완료"
+          echo "📦 이미지: $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+          
+          # 푸시된 이미지 확인
+          aws ecr describe-images \
+            --repository-name $ECR_REPOSITORY \
+            --image-ids imageTag=$IMAGE_TAG \
+            --region ${{ secrets.AWS_REGION }}
+        fi
     
     - name: Build and push frontend image
       env:
@@ -137,32 +148,43 @@ jobs:
         IMAGE_TAG: demo-${{ github.sha }}
         DOCKER_BUILDKIT: 1
       run: |
-        echo "🔨 Frontend 이미지 빌드 중..."
+        echo "🔍 Frontend 이미지 존재 여부 확인 중..."
         echo "📍 ECR Registry: $ECR_REGISTRY"
         echo "📍 Repository: $ECR_REPOSITORY"  
         echo "📍 Tag: $IMAGE_TAG"
         
-        # Docker context 확인
-        cd frontend
-        ls -la
-        
-        # Frontend 이미지 빌드 및 푸시
-        docker buildx build \
-          --platform linux/amd64 \
-          --tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
-          --tag $ECR_REGISTRY/$ECR_REPOSITORY:latest \
-          --push \
-          --progress=plain \
-          .
-        
-        echo "✅ Frontend 이미지 빌드 및 푸시 완료"
-        echo "📦 이미지: $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
-        
-        # 푸시된 이미지 확인
-        aws ecr describe-images \
+        # 이미지가 이미 존재하는지 확인
+        if aws ecr describe-images \
           --repository-name $ECR_REPOSITORY \
           --image-ids imageTag=$IMAGE_TAG \
-          --region ${{ secrets.AWS_REGION }}
+          --region ${{ secrets.AWS_REGION }} > /dev/null 2>&1; then
+          echo "✅ Frontend 이미지가 이미 존재합니다. 빌드를 스킵합니다."
+          echo "📦 기존 이미지: $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+        else
+          echo "🔨 Frontend 이미지 빌드 중..."
+          
+          # Docker context 확인
+          cd frontend
+          ls -la
+          
+          # Frontend 이미지 빌드 및 푸시
+          docker buildx build \
+            --platform linux/amd64 \
+            --tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
+            --tag $ECR_REGISTRY/$ECR_REPOSITORY:latest \
+            --push \
+            --progress=plain \
+            .
+          
+          echo "✅ Frontend 이미지 빌드 및 푸시 완료"
+          echo "📦 이미지: $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+          
+          # 푸시된 이미지 확인
+          aws ecr describe-images \
+            --repository-name $ECR_REPOSITORY \
+            --image-ids imageTag=$IMAGE_TAG \
+            --region ${{ secrets.AWS_REGION }}
+        fi
     
     - name: Deploy to Demo EC2
       env:
