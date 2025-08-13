@@ -1,22 +1,24 @@
-# Whisper 로컬 모델 → API 마이그레이션 가이드
+# Whisper 모델 마이그레이션 가이드
 
 ## 변경사항
 
-### 이전 (로컬 Whisper 모델)
+### 이전 (Hugging Face Transformers)
 - Hugging Face Transformers로 `openai/whisper-large-v3` 모델 다운로드
 - GPU/CPU에서 직접 모델 실행
 - 큰 메모리 사용량 (수 GB)
 - 초기 로딩 시간 필요
 
-### 이후 (OpenAI Whisper API)
-- OpenAI API 호출로 변경
-- 서버 메모리 사용량 대폭 감소
-- API 호출당 과금 (분당 $0.006)
-- 안정적이고 빠른 응답
+### 이후 (오픈소스 Whisper)
+- OpenAI의 오픈소스 Whisper 라이브러리 사용
+- API 키 불필요
+- 로컬에서 모델 실행
+- 안정적이고 효율적인 음성 인식
 
 ## 마이그레이션 단계
 
 ### 1. 기존 Whisper 캐시 정리
+
+#### Linux/macOS
 ```bash
 # 자동 정리 스크립트 실행
 ./cleanup_whisper_cache.sh
@@ -27,21 +29,26 @@ rm -rf ~/.cache/torch/hub/checkpoints/whisper*
 pip uninstall -y torch torchaudio torchvision transformers accelerate
 ```
 
+#### Windows
+```cmd
+# CMD에서 배치 파일 실행
+cleanup_whisper_cache.bat
+
+# 또는 PowerShell에서 실행
+.\cleanup_whisper_cache.ps1
+
+# 또는 수동 정리
+rmdir /s /q "%USERPROFILE%\.cache\huggingface\transformers\models--openai--whisper*"
+del /f /q "%USERPROFILE%\.cache\torch\hub\checkpoints\whisper*"
+pip uninstall -y torch torchaudio torchvision transformers accelerate
+```
+
 ### 2. 새로운 의존성 설치
 ```bash
 pip install -r requirements.txt
 ```
 
-### 3. OpenAI API 키 설정
-```bash
-# 환경변수 설정
-export OPENAI_API_KEY="your_openai_api_key_here"
-
-# 또는 Django settings.py에 추가
-OPENAI_API_KEY = "your_openai_api_key_here"
-```
-
-### 4. Django 서버 재시작
+### 3. Django 서버 재시작
 ```bash
 python manage.py runserver
 ```
@@ -50,86 +57,69 @@ python manage.py runserver
 
 ### transcription/views.py
 - `transformers`, `torch`, `torchaudio` 제거
-- `openai` 패키지 추가
-- `process_audio_directly()` → `process_audio_with_whisper_api()` 변경
-- 모델 로딩 코드 제거
+- `whisper` 패키지 추가
+- `process_audio_directly()` → `process_audio_with_whisper()` 변경
+- 오픈소스 Whisper 모델 로딩 코드 추가
 
 ### requirements.txt
 - PyTorch 관련 패키지 제거: `torch`, `torchaudio`, `torchvision`
 - Transformers 패키지 제거: `transformers`, `accelerate`
-- OpenAI 패키지 추가: `openai==1.3.7`
+- 오픈소스 Whisper 패키지 추가: `openai-whisper==20231117`
 
 ## 비용 및 성능
 
 ### 비용
-- OpenAI Whisper API: $0.006 per minute
-- 예상 비용: 100분 음성 = $0.60
+- 오픈소스 Whisper: 완전 무료
+- API 호출 비용 없음
 
 ### 성능
-- 응답 속도: 더 빠름 (모델 로딩 시간 없음)
-- 메모리 사용량: 대폭 감소 (GB → MB 단위)
-- 안정성: OpenAI 인프라로 향상
+- 응답 속도: 안정적 (첫 로딩 후 빠름)
+- 메모리 사용량: 적절한 수준 (~1GB)
+- 안정성: 로컬 실행으로 높은 안정성
 
 ### 장점
-- 서버 자원 절약
-- 모델 업데이트 자동 적용
-- 높은 안정성과 가용성
-- 초기 설정 간소화
+- 완전 무료 사용
+- API 키 불필요
+- 인터넷 연결 불필요 (모델 다운로드 후)
+- 데이터 프라이버시 보장
 
 ### 단점
-- 인터넷 연결 필수
-- API 호출당 비용 발생
-- OpenAI 서비스 의존성
-
-## API 키 보안
-
-### 환경변수 설정 (권장)
-```bash
-# .env 파일
-OPENAI_API_KEY=sk-...
-
-# 또는 시스템 환경변수
-export OPENAI_API_KEY="sk-..."
-```
-
-### Django settings.py
-```python
-import os
-from dotenv import load_dotenv
-
-load_dotenv()
-
-OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
-```
+- 초기 모델 다운로드 필요
+- 로컬 리소스 사용
 
 ## 트러블슈팅
 
-### 1. API 키 오류
+### 1. 모델 다운로드 오류
 ```
-openai.error.AuthenticationError: Incorrect API key provided
+FileNotFoundError: [Errno 2] No such file or directory
 ```
-**해결**: OPENAI_API_KEY 환경변수 확인
+**해결**: 인터넷 연결 확인 및 모델 재다운로드
 
-### 2. 네트워크 오류
+### 2. 메모리 부족 오류
 ```
-openai.error.APIConnectionError: Error communicating with OpenAI
+RuntimeError: CUDA out of memory
 ```
-**해결**: 인터넷 연결 및 방화벽 설정 확인
+**해결**: 더 작은 모델 사용 (base → tiny) 또는 CPU 모드로 실행
 
-### 3. 요청 한도 초과
+### 3. 오디오 파일 형식 오류
 ```
-openai.error.RateLimitError: Rate limit reached
+ffmpeg.Error: ffmpeg not found
 ```
-**해결**: API 사용량 확인 및 요청 간격 조정
+**해결**: ffmpeg 설치 필요 (brew install ffmpeg)
 
 ## 모니터링
 
-### API 사용량 추적
-OpenAI 대시보드에서 월별 사용량 모니터링 가능:
-- https://platform.openai.com/usage
-
-### 로그 확인
+### 모델 로딩 상태 확인
 ```python
 # views.py에서 로그 확인
-logger.info(f"✅ Whisper API STT 처리 완료: {transcription_text[:50]}...")
+logger.info(f"✅ Whisper 모델 로딩 완료")
+logger.info(f"✅ Whisper STT 처리 완료: {transcription_text[:50]}...")
+```
+
+### 메모리 사용량 모니터링
+```bash
+# 시스템 메모리 사용량 확인
+htop
+# 또는
+ps aux | grep python
 ```
