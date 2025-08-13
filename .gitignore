@@ -36,12 +36,18 @@ ENV/
 ENV.bak/
 venv.bak/
 
-# 민감한 정보 및 설정 파일
+# 민감한 정보 및 설정 파일 (절대 커밋 금지!)
 .env
 .env.*
 !.env.example
 config/local_settings.py
 config/secret_settings.py
+
+# 프론트엔드/백엔드 환경변수 (시크릿 키 포함)
+frontend/.env
+backend/.env
+deployment/.env
+!**/.env.example
 
 # 데이터베이스 파일
 *.db

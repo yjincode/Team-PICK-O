@@ -2,29 +2,24 @@
  * 주문 폼 컴포넌트
  * 새 주문을 생성하는 폼입니다
  */
-import React, { useState, useEffect } from "react"
+import { useState, useEffect } from "react"
 import type { ChangeEvent, FormEvent } from "react"
-import { businessApi, fishTypeApi, orderApi } from "../../lib/api"
-import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card"
+import { businessApi, fishTypeApi } from "../../lib/api"
+import { Card, CardContent } from "../../components/ui/card"
 import { Button } from "../../components/ui/button"
-import { Input } from "../../components/ui/input"
+// import { Input } from "../../components/ui/input"
 import { Label } from "../../components/ui/label"
 import { Textarea } from "../../components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../components/ui/tabs"
 import { Popover, PopoverContent, PopoverTrigger } from "../../components/ui/popover"
-import { X, Plus, Save, CalendarDays, Mic, Upload } from "lucide-react"
+import { Plus, Save, CalendarDays, Mic, Upload } from "lucide-react"
 import BusinessSearch from "../../components/BusinessSearch"
 import { parseVoiceOrder, validateAndCompleteOrder } from "../../utils/orderParser"
-import { formatPhoneNumber } from "../../utils/phoneFormatter"
+// import { formatPhoneNumber } from "../../utils/phoneFormatter"
 import toast, { Toaster } from 'react-hot-toast'
 import { TokenManager } from "../../lib/tokenManager"
 import { 
-  convertAudioToText, 
-  isSupportedAudioFormat, 
-  formatFileSize, 
-  getAudioDuration,
-  startRealTimeSpeechRecognition,
   AudioFileInfo 
 } from "../../utils/audioProcessor"
 import MinimalCalendar from "../../components/ui/MinimalCalendar"
@@ -39,7 +34,7 @@ import ImageUploadTab from "./components/ImageUploadTab"
 import OrderItemList from "./components/OrderItemList"
 
 // 타입 정의 - types/index.ts에서 가져온 타입 사용
-import type { Business, FishType, OrderItem as ApiOrderItem } from "../../types"
+import type { Business, FishType } from "../../types"
 
 // JWT 토큰 기반 API 사용 (../../lib/api.ts에서 import)
 
@@ -190,7 +185,7 @@ const fetchWithAuth = async (url: string, options: RequestInit = {}): Promise<Re
 }
 
 // STT 상태를 폴링하는 함수 (중복 요청 방지)
-const pollTranscriptionStatus = async (transcriptionId: string, businessId: number): Promise<void> => {
+const pollTranscriptionStatus = async (transcriptionId: string, _businessId: number, setFormDataCallback: React.Dispatch<React.SetStateAction<FormData>>, onSubmitCallback: (data: any) => void): Promise<void> => {
   const maxAttempts = 20 // 최대 20번 시도 (10분)
   let attempts = 0
   let isPolling = true
@@ -216,7 +211,7 @@ const pollTranscriptionStatus = async (transcriptionId: string, businessId: numb
         
         // STT 완료 - 텍스트 표시 후 주문 생성
         if (data.transcribed_text) {
-          setFormData(prev => ({ ...prev, transcribed_text: data.transcribed_text }))
+          setFormDataCallback(prev => ({ ...prev, transcribed_text: data.transcribed_text }))
           toast.success(`음성 인식 완료: "${data.transcribed_text.substring(0, 50)}..."`)
           
           // 주문 생성
@@ -228,7 +223,7 @@ const pollTranscriptionStatus = async (transcriptionId: string, businessId: numb
             
             if (orderResponse.ok && orderResult.data) {
               toast.success('주문이 성공적으로 생성되었습니다!')
-              onSubmit(orderResult.data)
+              onSubmitCallback(orderResult.data)
             } else {
               toast.error(orderResult.error || '주문 생성에 실패했습니다.')
             }
@@ -267,27 +262,27 @@ const pollTranscriptionStatus = async (transcriptionId: string, businessId: numb
   setTimeout(poll, 2000)
 }
 
-const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderData }) => {
+const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderData: _parsedOrderData }) => {
   const [showBusinessSearch, setShowBusinessSearch] = useState<boolean>(false)
-  const [audioFile, setAudioFile] = useState<AudioFileInfo | null>(null)
+  // const [audioFile, setAudioFile] = useState<AudioFileInfo | null>(null)
   const [imageFile, setImageFile] = useState<File | null>(null)
-  const [isProcessingAudio, setIsProcessingAudio] = useState<boolean>(false)
+  // const [isProcessingAudio, setIsProcessingAudio] = useState<boolean>(false)
   const [isProcessingImage, setIsProcessingImage] = useState<boolean>(false)
-  const [isRecording, setIsRecording] = useState<boolean>(false)
+  // const [isRecording, setIsRecording] = useState<boolean>(false)
   
   // 어종 목록 상태 (API에서 가져올 예정)
   const [fishTypes, setFishTypes] = useState<FishType[]>([])
-  const [isLoadingFishTypes, setIsLoadingFishTypes] = useState<boolean>(false)
+  // const [isLoadingFishTypes, setIsLoadingFishTypes] = useState<boolean>(false)
 
   const [businesses, setBusinesses] = useState<Business[]>([])
   const [selectedBusinessId, setSelectedBusinessId] = useState<number | null>(null)
-  const [isLoadingBusinesses, setIsLoadingBusinesses] = useState<boolean>(false)
+  // const [isLoadingBusinesses, setIsLoadingBusinesses] = useState<boolean>(false)
 
   // 어종 목록 가져오기 (JWT 토큰 기반 API 사용)
   useEffect(() => {
     const fetchFishTypes = async () => {
       try {
-        setIsLoadingFishTypes(true)
+        // setIsLoadingFishTypes(true)
         const response = await fishTypeApi.getAll()
         console.log('어종 목록 응답:', response.data)
         
@@ -296,7 +291,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
         console.error('어종 목록 가져오기 실패:', error)
         setFishTypes([])
       } finally {
-        setIsLoadingFishTypes(false)
+        // setIsLoadingFishTypes(false)
       }
     }
 
@@ -307,7 +302,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
   useEffect(() => {
     const fetchBusinesses = async () => {
       try {
-        setIsLoadingBusinesses(true)
+        // setIsLoadingBusinesses(true)
         const response = await businessApi.getAll()
         console.log('거래처 목록 응답:', response)
         
@@ -316,8 +311,8 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
         
         if (response && Array.isArray(response)) {
           businessData = response
-        } else if (response && response.results && Array.isArray(response.results)) {
-          businessData = response.results
+        } else if (response && response.data && Array.isArray(response.data.results)) {
+          businessData = response.data.results
         } else if (response && response.data && Array.isArray(response.data)) {
           businessData = response.data
         }
@@ -327,7 +322,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
         console.error('거래처 목록 가져오기 실패:', error)
         setBusinesses([])
       } finally {
-        setIsLoadingBusinesses(false)
+        // setIsLoadingBusinesses(false)
       }
     }
 
@@ -335,9 +330,9 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
   }, [])
 
   // business_id로 거래처 정보 찾기
-  const findBusinessById = (businessId: number): Business | undefined => {
-    return businesses.find((business: Business) => business.id === businessId)
-  }
+  // const findBusinessById = (businessId: number): Business | undefined => {
+  //   return businesses.find((business: Business) => business.id === businessId)
+  // }
 
   const [formData, setFormData] = useState<FormData>(() => {
     return {
@@ -378,37 +373,37 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
   }
 
   // 음성 파일 업로드 처리 (백엔드 STT 사용)
-  const handleVoiceFileUpload = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (!file) return
+  // const handleVoiceFileUpload = async (event: ChangeEvent<HTMLInputElement>) => {
+  //   const file = event.target.files?.[0]
+  //   if (!file) return
 
-    if (!isSupportedAudioFormat(file)) {
-      toast.error('지원하지 않는 오디오 파일 형식입니다. WAV, MP3, OGG, WEBM, M4A, AAC, FLAC 파일을 사용해주세요.')
-      return
-    }
+  //   if (!isSupportedAudioFormat(file)) {
+  //     toast.error('지원하지 않는 오디오 파일 형식입니다. WAV, MP3, OGG, WEBM, M4A, AAC, FLAC 파일을 사용해주세요.')
+  //     return
+  //   }
 
-    try {
-      const duration = await getAudioDuration(file)
-      const audioInfo: AudioFileInfo = {
-        file,
-        name: file.name,
-        size: file.size,
-        type: file.type,
-        duration
-      }
+  //   try {
+  //     const duration = await getAudioDuration(file)
+  //     const audioInfo: AudioFileInfo = {
+  //       file,
+  //       name: file.name,
+  //       size: file.size,
+  //       type: file.type,
+  //       duration
+  //     }
       
-      setAudioFile(audioInfo)
-      setFormData((prev: FormData) => ({ 
-        ...prev, 
-        source_type: 'voice',
-        raw_input_path: file.name // 파일명 저장
-      }))
+  //     setAudioFile(audioInfo)
+  //     setFormData((prev: FormData) => ({ 
+  //       ...prev, 
+  //       source_type: 'voice',
+  //       raw_input_path: file.name // 파일명 저장
+  //     }))
       
-      toast.success('음성 파일이 업로드되었습니다. 주문 생성 시 음성 인식이 처리됩니다.')
-    } catch (error) {
-      toast.error(`음성 파일 처리 오류: ${error instanceof Error ? error.message : '알 수 없는 오류'}`)
-    }
-  }
+  //     toast.success('음성 파일이 업로드되었습니다. 주문 생성 시 음성 인식이 처리됩니다.')
+  //   } catch (error) {
+  //     toast.error(`음성 파일 처리 오류: ${error instanceof Error ? error.message : '알 수 없는 오류'}`)
+  //   }
+  // }
 
   // 이미지 파일 업로드 처리
   const handleImageFileUpload = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -438,7 +433,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
   }
 
   // 이미지에서 텍스트 추출 함수 (OCR)
-  const extractTextFromImage = async (file: File): Promise<string> => {
+  const extractTextFromImage = async (_file: File): Promise<string> => {
     // 실제로는 OCR API를 사용해야 하지만, 여기서는 모의 구현
     return new Promise((resolve) => {
       setTimeout(() => {
@@ -448,35 +443,35 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
   }
 
   // 음성 파싱 처리
-  const handleVoiceParse = () => {
-    if (formData.transcribed_text.trim()) {
-      try {
-        const parsedData = parseVoiceOrder(formData.transcribed_text)
-        const validatedData = validateAndCompleteOrder(parsedData)
+  // const handleVoiceParse = () => {
+  //   if (formData.transcribed_text.trim()) {
+  //     try {
+  //       const parsedData = parseVoiceOrder(formData.transcribed_text)
+  //       const validatedData = validateAndCompleteOrder(parsedData)
         
-        setFormData((prev: FormData) => ({
-          ...prev,
-          delivery_datetime: validatedData.delivery_date || prev.delivery_datetime,
-          memo: validatedData.memo || prev.memo,
-          items: validatedData.items.map((item: any) => ({
-            id: Date.now().toString(),
-            fish_type_id: item.fish_type_id,
-            fish_name: fishTypes.find((f: FishType) => f.id === item.fish_type_id)?.name || '',
-            quantity: item.quantity,
-            unit_price: item.unit_price || 0,
-            unit: item.unit,
-            delivery_datetime: formData.delivery_datetime
-          }))
-        }))
+  //       setFormData((prev: FormData) => ({
+  //         ...prev,
+  //         delivery_datetime: validatedData.delivery_date || prev.delivery_datetime,
+  //         memo: validatedData.memo || prev.memo,
+  //         items: validatedData.items.map((item: any) => ({
+  //           id: Date.now().toString(),
+  //           fish_type_id: item.fish_type_id,
+  //           fish_name: fishTypes.find((f: FishType) => f.id === item.fish_type_id)?.name || '',
+  //           quantity: item.quantity,
+  //           unit_price: item.unit_price || 0,
+  //           unit: item.unit,
+  //           delivery_datetime: formData.delivery_datetime
+  //         }))
+  //       }))
         
-        toast.success('음성 파싱이 완료되었습니다!')
-      } catch (error) {
-        toast.error(`파싱 오류: ${error instanceof Error ? error.message : '알 수 없는 오류'}`)
-      }
-    } else {
-      toast.error('음성 원문을 먼저 입력해주세요.')
-    }
-  }
+  //       toast.success('음성 파싱이 완료되었습니다!')
+  //     } catch (error) {
+  //       toast.error(`파싱 오류: ${error instanceof Error ? error.message : '알 수 없는 오류'}`)
+  //     }
+  //   } else {
+  //     toast.error('음성 원문을 먼저 입력해주세요.')
+  //   }
+  // }
 
   // 텍스트 파싱 처리
   const handleTextParse = () => {
@@ -592,18 +587,18 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
       console.log('전송할 주문 데이터:', orderData)
       
       // 음성 파일이 있는 경우 FormData로 전송
-      if (formData.source_type === 'voice' && audioFile?.file) {
+      if (false && formData.source_type === 'voice') { // audioFile이 주석처리됨
         const formDataToSend = new FormData()
         
         // 음성 파일 추가
-        formDataToSend.append('audio_file', audioFile.file)
+        // formDataToSend.append('audio_file', audioFile.file)
         
         // 주문 데이터를 JSON으로 추가
-        Object.keys(orderData).forEach(key => {
+        Object.entries(orderData).forEach(([key, value]) => {
           if (key === 'order_items') {
-            formDataToSend.append(key, JSON.stringify(orderData[key]))
+            formDataToSend.append(key, JSON.stringify(value))
           } else {
-            formDataToSend.append(key, orderData[key] as string)
+            formDataToSend.append(key, String(value))
           }
         })
         
@@ -623,7 +618,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
           const businessId = result.data.business_id
           
           // STT 상태를 폴링하여 확인
-          pollTranscriptionStatus(transcriptionId, businessId)
+          pollTranscriptionStatus(transcriptionId, businessId, setFormData, onSubmit)
         } else if (response.ok && result.data) {
           toast.success('주문이 성공적으로 저장되었습니다!')
           onSubmit(result.data)
@@ -887,7 +882,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
                     textInput={formData.transcribed_text}
                     setTextInput={(text: string) => handleInputChange("transcribed_text", text)}
                     onParse={handleTextParse}
-                    isProcessing={isProcessingAudio}
+                    isProcessing={false}
                     transcribedText={formData.transcribed_text}
                     selectedBusinessId={selectedBusinessId}
                     onBusinessChange={setSelectedBusinessId}

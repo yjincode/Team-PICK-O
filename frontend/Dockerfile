@@ -7,8 +7,8 @@ WORKDIR /app
 # package.json과 package-lock.json 복사 (캐시 최적화)
 COPY package*.json ./
 
-# Node.js 의존성 설치
-RUN npm ci --only=production --silent
+# Node.js 의존성 설치 (모든 의존성 포함 - 빌드용)
+RUN npm ci --silent
 
 # 소스 코드 복사
 COPY . .
@@ -27,8 +27,8 @@ RUN apk add --no-cache curl
 # nginx 설정 파일 복사
 COPY --from=builder /app/nginx.conf /etc/nginx/conf.d/default.conf
 
-# 빌드된 React 앱을 nginx 웹 루트로 복사
-COPY --from=builder /app/build /usr/share/nginx/html
+# 빌드된 React 앱을 nginx 웹 루트로 복사 (Vite 기본값: dist)
+COPY --from=builder /app/dist /usr/share/nginx/html
 
 # nginx 사용자 권한 설정
 RUN chown -R nginx:nginx /usr/share/nginx/html && \
@@ -42,8 +42,8 @@ RUN chown -R nginx:nginx /usr/share/nginx/html && \
 EXPOSE 3000
 
 # 헬스체크 추가
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:3000/ || exit 1
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD curl -f http://localhost:3000/health || exit 1
 
 # nginx 사용자로 실행
 USER nginx
