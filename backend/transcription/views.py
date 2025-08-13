@@ -1,7 +1,7 @@
 import logging
 import os
 import tempfile
-import whisper
+from faster_whisper import WhisperModel
 from django.conf import settings
 from django.db import transaction
 from rest_framework import status
@@ -14,23 +14,23 @@ from .services.order_service import OrderCreationService
 
 logger = logging.getLogger(__name__)
 
-# Whisper 모델 로드 (한 번만 로드)
+# Faster-Whisper 모델 로드 (한 번만 로드)
 whisper_model = None
 
 def get_whisper_model():
-    """Whisper 모델을 로드하고 캐싱"""
+    """Faster-Whisper 모델을 로드하고 캐싱"""
     global whisper_model
     if whisper_model is None:
-        logger.info("🔄 Whisper 모델 로딩 중...")
-        # 'base' 모델 사용 (속도와 정확도의 균형)
-        whisper_model = whisper.load_model("base")
-        logger.info("✅ Whisper 모델 로딩 완료")
+        logger.info("🔄 Faster-Whisper 모델 로딩 중...")
+        # 'small' 모델 사용, CPU 최적화
+        whisper_model = WhisperModel("small", device="cpu", compute_type="int8")
+        logger.info("✅ Faster-Whisper 모델 로딩 완료")
     return whisper_model
 
 def process_audio_with_whisper(audio_file, language='ko'):
-    """오픈소스 Whisper 모델을 사용하여 오디오를 텍스트로 변환"""
+    """Faster-Whisper를 사용하여 오디오를 텍스트로 변환"""
     try:
-        logger.info(f"🔄 Whisper STT 처리 시작: {audio_file.name}")
+        logger.info(f"🔄 Faster-Whisper STT 처리 시작: {audio_file.name}")
         
         # 임시 파일로 저장
         with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(audio_file.name)[1]) as temp_file:
@@ -39,17 +39,23 @@ def process_audio_with_whisper(audio_file, language='ko'):
             temp_file_path = temp_file.name
         
         try:
-            # Whisper 모델 가져오기
+            # Faster-Whisper 모델 가져오기
             model = get_whisper_model()
             
-            # 음성 인식 수행
-            result = model.transcribe(
+            # 음성 인식 수행 (Faster-Whisper API)
+            segments, info = model.transcribe(
                 temp_file_path,
-                language=language if language != 'ko' else 'korean'
+                language=language if language != 'ko' else 'ko',
+                beam_size=1,  # 빠른 처리
+                temperature=0.0,  # 일관된 결과
+                condition_on_previous_text=False,  # 긴 오디오 최적화
+                vad_filter=True,  # 음성 구간 자동 감지
+                vad_parameters=dict(min_silence_duration_ms=500)  # 무음 구간 처리
             )
             
-            transcription_text = result["text"].strip()
-            logger.info(f"✅ Whisper STT 처리 완료: {transcription_text[:50]}...")
+            # 세그먼트 결합하여 전체 텍스트 생성
+            transcription_text = " ".join([segment.text for segment in segments]).strip()
+            logger.info(f"✅ Faster-Whisper STT 처리 완료: {transcription_text[:50]}...")
             
             return transcription_text
             
