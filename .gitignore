@@ -90,6 +90,10 @@ coverage.xml
 keys/
 secrets/
 
+# Firebase Service Account Keys
+firebase-admin-key.json
+*firebase-adminsdk*.json
+
 # 임시 파일
 *.tmp
 *.temp

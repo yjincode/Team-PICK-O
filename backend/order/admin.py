@@ -1,21 +1,17 @@
 from django.contrib import admin
-from .models import Order, OrderItem, Business, FishType
-
-@admin.register(Business)
-class BusinessAdmin(admin.ModelAdmin):
-    list_display = ['business_name', 'phone_number', 'address']
-    search_fields = ['business_name', 'phone_number']
+from .models import Order, OrderItem
+from fish_registry.models import FishType
 
 @admin.register(FishType)
 class FishTypeAdmin(admin.ModelAdmin):
-    list_display = ['fish_name', 'unit']
+    list_display = ['name', 'unit']
     list_filter = ['unit']
-    search_fields = ['fish_name']
+    search_fields = ['name']
 
 @admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
-    list_display = ['id', 'business', 'total_price', 'source_type', 'status', 'order_datetime']
-    list_filter = ['status', 'source_type']
+    list_display = ['id', 'business', 'total_price', 'source_type', 'order_status', 'order_datetime']
+    list_filter = ['order_status', 'source_type']
     search_fields = ['business__business_name', 'memo']
     readonly_fields = ['order_datetime']
 
@@ -23,4 +19,4 @@ class OrderAdmin(admin.ModelAdmin):
 class OrderItemAdmin(admin.ModelAdmin):
     list_display = ['id', 'order', 'fish_type', 'quantity', 'unit_price', 'unit']
     list_filter = ['fish_type__unit']
-    search_fields = ['order__id', 'fish_type__fish_name']
+    search_fields = ['order__id', 'fish_type__name']

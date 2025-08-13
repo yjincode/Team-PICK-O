@@ -102,7 +102,8 @@ ssh -i ~/.ssh/my-key.pem ec2-user@<EC2_PUBLIC_IP>
 
 # Docker 설치 확인
 docker --version
-docker-compose --version
+docker compose version
+docker-compose --version  # 하위 호환성 확인
 ```
 
 ## GitHub Actions 연동

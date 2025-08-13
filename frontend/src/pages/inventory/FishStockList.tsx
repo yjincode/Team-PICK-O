@@ -2,80 +2,97 @@
  * 어종 재고 목록 페이지
  * 어류 재고 현황을 조회하고 관리하는 페이지입니다
  */
-import React from "react"
+import React, { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card"
 import { Button } from "../../components/ui/button"
 import { Badge } from "../../components/ui/badge"
-import { Package, AlertTriangle, Plus } from "lucide-react"
+import { Package, AlertTriangle, Plus, RefreshCw } from "lucide-react"
+import AddInventoryModal from "../../components/modals/AddInventoryModal"
+import toast from 'react-hot-toast'
+import { inventoryApi } from '../../lib/api'
 
-// 어종 재고 데이터 타입 정의
+// 어종 재고 데이터 타입 정의 (백엔드 API에 맞춰 수정)
 interface FishStock {
   id: number;
-  name: string;
-  type: string;
-  quantity: number;
+  fish_type_name: string;
+  stock_quantity: number;
   unit: string;
-  price: number;
   status: string;
-  lastUpdated: string;
+  updated_at: string;
 }
 
-// 목업 데이터 (실제로는 API에서 가져올 예정)
-const mockFishStocks: FishStock[] = [
-  {
-    id: 1,
-    name: "고등어",
-    type: "생선",
-    quantity: 150,
-    unit: "박스",
-    price: 48000,
-    status: "충분",
-    lastUpdated: "2024-01-30",
-  },
-  {
-    id: 2,
-    name: "갈치",
-    type: "생선",
-    quantity: 80,
-    unit: "박스",
-    price: 65000,
-    status: "보통",
-    lastUpdated: "2024-01-30",
-  },
-  {
-    id: 3,
-    name: "오징어",
-    type: "어류",
-    quantity: 25,
-    unit: "박스",
-    price: 85000,
-    status: "부족",
-    lastUpdated: "2024-01-29",
-  },
-  {
-    id: 4,
-    name: "명태",
-    type: "생선",
-    quantity: 200,
-    unit: "박스",
-    price: 35000,
-    status: "충분",
-    lastUpdated: "2024-01-30",
-  },
-]
+// 상태 매핑 함수
+const getStatusText = (status: string): string => {
+  const statusMap: Record<string, string> = {
+    'registered': '등록됨',
+    'normal': '정상',
+    'low': '부족',
+    'abnormal': '이상'
+  }
+  return statusMap[status] || status
+}
+
+// 상태에 따른 배지 variant 매핑
+const getStatusVariant = (status: string) => {
+  const variantMap: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
+    'registered': 'outline',
+    'normal': 'default',
+    'low': 'destructive', 
+    'abnormal': 'secondary'
+  }
+  return variantMap[status] || 'outline'
+}
 
 const FishStockList: React.FC = () => {
-  // 금액 포맷팅 함수
-  const formatCurrency = (amount: number): string => `₩${amount.toLocaleString()}`
+  const [inventories, setInventories] = useState<FishStock[]>([])
+  const [loading, setLoading] = useState(false)
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false)
+
+  // 재고 목록 불러오기
+  const loadInventories = async () => {
+    setLoading(true)
+    try {
+      const data = await inventoryApi.getAll()
+      console.log('📦 재고 API 응답:', data)
+      
+      // pagination 응답 처리 (어종과 동일)
+      let inventoryData: FishStock[] = []
+      
+      if (Array.isArray(data)) {
+        // 직접 배열인 경우
+        inventoryData = data
+      } else if (data && typeof data === 'object' && 'results' in data && Array.isArray(data.results)) {
+        // Django pagination 구조: {count, results, next, previous}
+        inventoryData = data.results
+        console.log('📄 전체 재고 수:', data.count)
+      }
+      
+      console.log('📊 로드된 재고 개수:', inventoryData.length)
+      setInventories(inventoryData)
+    } catch (error: any) {
+      console.error('재고 목록 로딩 에러:', error)
+      setInventories([])
+      toast.error('재고 목록을 불러오는데 실패했습니다')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // 컴포넌트 마운트 시 데이터 로드
+  useEffect(() => {
+    loadInventories()
+  }, [])
+
+  // 날짜 포맷팅 함수
+  const formatDate = (dateString: string): string => {
+    return new Date(dateString).toLocaleDateString('ko-KR')
+  }
 
   // 재고 상태에 따른 배지 색상 결정
   const getStatusBadge = (status: string) => {
-    const variants = {
-      "충분": "default",
-      "보통": "secondary",
-      "부족": "destructive",
-    } as const
-    return <Badge variant={variants[status as keyof typeof variants] || "outline"}>{status}</Badge>
+    const statusText = getStatusText(status)
+    const variant = getStatusVariant(status)
+    return <Badge variant={variant}>{statusText}</Badge>
   }
 
   return (
@@ -86,41 +103,61 @@ const FishStockList: React.FC = () => {
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">어종 재고</h1>
           <p className="text-sm sm:text-base text-gray-600 mt-1">재고 현황 및 관리</p>
         </div>
-        <Button className="bg-accent-blue hover:bg-accent-blue/90 w-full sm:w-auto">
-          <Plus className="h-4 w-4 mr-2" />재고 추가
-        </Button>
+        <div className="flex gap-2">
+          <Button 
+            onClick={() => loadInventories()}
+            variant="outline"
+            size="sm"
+            disabled={loading}
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+            새로고침
+          </Button>
+          <Button 
+            className="bg-accent-blue hover:bg-accent-blue/90 w-full sm:w-auto"
+            onClick={() => setIsAddModalOpen(true)}
+          >
+            <Plus className="h-4 w-4 mr-2" />재고 추가
+          </Button>
+        </div>
       </div>
 
       {/* 재고 카드 그리드 */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-        {mockFishStocks.map((stock) => (
+        {loading ? (
+          <div className="col-span-full flex justify-center items-center py-8">
+            <RefreshCw className="h-6 w-6 animate-spin mr-2" />
+            재고 목록 로딩 중...
+          </div>
+        ) : !Array.isArray(inventories) || inventories.length === 0 ? (
+          <div className="col-span-full text-center py-8 text-gray-500">
+            {!Array.isArray(inventories) ? '데이터 로딩 중 문제가 발생했습니다.' : '등록된 재고가 없습니다. 재고를 추가해보세요.'}
+          </div>
+        ) : (
+          inventories.map((stock) => (
           <Card key={stock.id} className="shadow-sm hover:shadow-md transition-shadow">
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-2">
                   <Package className="h-5 w-5 text-blue-500" />
-                  <CardTitle className="text-lg sm:text-xl">{stock.name}</CardTitle>
+                  <CardTitle className="text-lg sm:text-xl">{stock.fish_type_name}</CardTitle>
                 </div>
                 {getStatusBadge(stock.status)}
               </div>
             </CardHeader>
             <CardContent className="space-y-3">
               {/* 재고 상세 정보 */}
-              <div className="grid grid-cols-2 gap-2 text-sm">
+              <div className="grid grid-cols-1 gap-2 text-sm">
                 <div>
-                  <span className="text-gray-500">수량:</span>
-                  <div className="font-semibold">{stock.quantity} {stock.unit}</div>
-                </div>
-                <div>
-                  <span className="text-gray-500">단가:</span>
-                  <div className="font-semibold">{formatCurrency(stock.price)}</div>
+                  <span className="text-gray-500">재고 수량:</span>
+                  <div className="font-semibold text-lg">{stock.stock_quantity} {stock.unit}</div>
                 </div>
               </div>
               <div className="text-sm text-gray-600">
-                <p>종류: {stock.type}</p>
-                <p>최근 업데이트: {stock.lastUpdated}</p>
+                <p>상태: {getStatusText(stock.status)}</p>
+                <p>최근 업데이트: {formatDate(stock.updated_at)}</p>
               </div>
-              {stock.status === "부족" && (
+              {stock.status === "low" && (
                 <div className="flex items-center space-x-2 text-orange-600 text-sm">
                   <AlertTriangle className="h-4 w-4" />
                   <span>발주 필요</span>
@@ -136,8 +173,16 @@ const FishStockList: React.FC = () => {
               </div>
             </CardContent>
           </Card>
-        ))}
+        ))
+        )}
       </div>
+
+      {/* 재고 추가 모달 */}
+      <AddInventoryModal
+        open={isAddModalOpen}
+        onOpenChange={setIsAddModalOpen}
+        onSuccess={loadInventories}
+      />
     </div>
   )
 }

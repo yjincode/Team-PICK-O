@@ -16,22 +16,14 @@ export interface UserRegistrationData {
   owner_name: string;
   phone_number: string;
   address: string;
-  business_registration_number: string;
-  subscription_plan: SubscriptionPlan;
 }
 
 // 사용자 정보 응답 데이터
 export interface UserData {
-  id: number;
+  user_id: number;
   business_name: string;
-  owner_name: string;
-  phone_number: string;
-  address: string;
-  business_registration_number: string;
-  firebase_uid: string;
-  subscription_plan: SubscriptionPlan;
-  status: UserStatus;
-  created_at: string;
+  status?: UserStatus; // 승인 상태 추가
+  firebase_uid?: string; // Firebase UID 추가
 }
 
 // API 응답 타입
@@ -67,8 +59,6 @@ export interface LoginFormData {
   businessName: string;
   ownerName: string;
   address: string;
-  businessRegistrationNumber: string;
-  subscriptionPlan: SubscriptionPlan;
 }
 
 // 에러 상태

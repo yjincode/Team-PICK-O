@@ -24,7 +24,12 @@ def api_root(request):
             "api": "/api/v1/",
             "docs": "/api/docs/",
             "redoc": "/api/redoc/",
-            "fish_analysis": "/api/v1/fish/",
+            "business": "/api/v1/business/",
+            "accounts": "/api/v1/accounts/",
+            "dashboard": "/api/v1/dashboard/",
+            "order": "/api/v1/order/",
+            "inventory": "/api/v1/inventory/",
+            "fish_registry": "/api/v1/fish-registry/",
         }
     })
 
@@ -32,20 +37,45 @@ def health_check(request):
     """헬스 체크 엔드포인트"""
     return JsonResponse({"status": "healthy"})
 
+def test_jwt(request):
+    """JWT 검증 테스트 엔드포인트"""
+    auth_header = request.headers.get('Authorization')
+    if auth_header and auth_header.startswith('Bearer '):
+        token = auth_header.split(' ')[1]
+        return JsonResponse({
+            "message": "JWT 토큰 수신됨",
+            "token_preview": token[:20] + "..." if len(token) > 20 else token,
+            "has_user_id": hasattr(request, 'user_id'),
+            "user_id": getattr(request, 'user_id', None),
+            "user_status": getattr(request, 'user_status', None)
+        })
+    else:
+        return JsonResponse({
+            "message": "JWT 토큰 없음",
+            "auth_header": auth_header
+        })
+
+
+
 urlpatterns = [
     # Root endpoints
     path('', api_root, name='api-root'),
     path('health/', health_check, name='health-check'),
+    path('test-jwt/', test_jwt, name='test-jwt'),
     
     # Admin panel
     path('admin/', admin.site.urls),
     
     # API endpoints
-    path('api/v1/', include('business.urls')),
+    path('api/v1/business/', include('business.urls')),
     path('api/v1/accounts/', include('accounts.urls')),
     path('api/v1/dashboard/', include('dashboard.urls')),
-    path('api/v1/fish/', include('fish_analysis.urls')),
-
+    # path('api/v1/fish/', include('fish_analysis.urls')),  # PyTorch 의존성으로 임시 비활성화
+    path('api/v1/order/', include('order.urls')),
+    path('api/v1/payment/', include('payment.urls')),
+    path('api/v1/inventory/', include('inventory.urls')),
+    path('api/v1/fish-registry/', include('fish_registry.urls')),
+    path('api/v1/transcription/', include('transcription.urls')),
     
     # API Documentation
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),

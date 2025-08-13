@@ -11,14 +11,18 @@ export interface Business {
   business_name: string;
   phone_number: string;
   address?: string;
+  memo?: string;
 }
 
 // 2. 어종 테이블
 export interface FishType {
   id: number;
-  fish_name: string;
-  aliases?: string[];  // 동의어 배열
-  embedding?: number[]; // 벡터 검색용 (선택사항)
+  name: string;  // fish_name에서 name으로 변경
+  aliases?: string;  // 배열에서 문자열로 변경 (백엔드 모델과 일치)
+  scientific_name?: string;
+  unit?: string;
+  notes?: string;
+  created_at?: string;
 }
 
 // 3. 재고 테이블
@@ -62,32 +66,7 @@ export interface OrderItem {
   fish_type?: FishType;
 }
 
-// 6. SMS 추천 테이블
-export interface SmsRecommendation {
-  id: number;
-  business_id: number;
-  recommended_text: string;
-  fish_type: string;
-  price_trend: '상승' | '하락' | '유지';
-  created_at: string;
-  is_sent: boolean;
-  sent_at?: string;
-  // 조인된 데이터
-  business?: Business;
-}
-
-// 7. 시장 시세 데이터 테이블
-export interface PriceData {
-  id: number;
-  fish_type: string;
-  market_name: string;
-  date: string;
-  min_price: number;
-  max_price: number;
-  avg_price: number;
-}
-
-// 8. 결제 이력 테이블
+// 7. 결제 이력 테이블
 export interface Payment {
   id: number;
   order_id: number;
@@ -111,11 +90,26 @@ export interface ApiResponse<T> {
 }
 
 export interface PaginatedResponse<T> {
-  data: T[];
-  total: number;
-  page: number;
-  per_page: number;
-  total_pages: number;
+  count: number;
+  next?: string | null;
+  previous?: string | null;
+  results: T[];
+}
+
+// OrderListItem interface for list views (matches OrderListSerializer)
+export interface OrderListItem {
+  id: number;
+  business: {
+    id: number;
+    business_name: string;
+    phone_number: string;
+  };
+  total_price: number;
+  order_datetime: string;
+  delivery_datetime?: string;
+  order_status: 'placed' | 'ready' | 'delivered' | 'cancelled';
+  is_urgent: boolean;
+  items_summary: string;
 }
 
 // ==================== 폼 데이터 관련 타입 ====================
