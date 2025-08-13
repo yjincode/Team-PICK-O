@@ -1,36 +1,36 @@
-import io
-import torch
-import torchaudio
 import logging
+import os
+import tempfile
+from faster_whisper import WhisperModel
 from django.conf import settings
 from django.db import transaction
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes, authentication_classes
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
-from transformers import AutoProcessor, AutoModelForSpeechSeq2Seq
 from .models import AudioTranscription
 from .serializers import AudioTranscriptionSerializer
 from .services.order_service import OrderCreationService
 
 logger = logging.getLogger(__name__)
 
-# Load model and processor once at startup
-processor = AutoProcessor.from_pretrained("openai/whisper-large-v3")
-model = AutoModelForSpeechSeq2Seq.from_pretrained("openai/whisper-large-v3")
-model.eval()
+# Faster-Whisper 모델 로드 (한 번만 로드)
+whisper_model = None
 
-# Use GPU if available
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-model.to(device)
+def get_whisper_model():
+    """Faster-Whisper 모델을 로드하고 캐싱"""
+    global whisper_model
+    if whisper_model is None:
+        logger.info("🔄 Faster-Whisper 모델 로딩 중...")
+        # 'small' 모델 사용, CPU 최적화
+        whisper_model = WhisperModel("small", device="cpu", compute_type="int8")
+        logger.info("✅ Faster-Whisper 모델 로딩 완료")
+    return whisper_model
 
-def process_audio_directly(audio_file, language='ko'):
-    """직접 오디오 파일을 처리하여 텍스트로 변환"""
-    import tempfile
-    import os
-    
+def process_audio_with_whisper(audio_file, language='ko'):
+    """Faster-Whisper를 사용하여 오디오를 텍스트로 변환"""
     try:
-        logger.info(f"🔄 STT 처리 시작: {audio_file.name}")
+        logger.info(f"🔄 Faster-Whisper STT 처리 시작: {audio_file.name}")
         
         # 임시 파일로 저장
         with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(audio_file.name)[1]) as temp_file:
@@ -39,37 +39,23 @@ def process_audio_directly(audio_file, language='ko'):
             temp_file_path = temp_file.name
         
         try:
-            # torchaudio로 파일 로드
-            audio_tensor, sample_rate = torchaudio.load(temp_file_path)
+            # Faster-Whisper 모델 가져오기
+            model = get_whisper_model()
             
-            # Convert to 16kHz if needed
-            if sample_rate != 16000:
-                resampler = torchaudio.transforms.Resample(orig_freq=sample_rate, new_freq=16000)
-                audio_tensor = resampler(audio_tensor)
-            
-            logger.info(f"🔧 Whisper 모델 처리 시작... (샘플레이트: {sample_rate} -> 16000)")
-            
-            # Preprocess
-            inputs = processor(
-                audio_tensor.squeeze().numpy(),
-                sampling_rate=16000,
-                return_tensors="pt"
+            # 음성 인식 수행 (Faster-Whisper API)
+            segments, info = model.transcribe(
+                temp_file_path,
+                language=language if language != 'ko' else 'ko',
+                beam_size=1,  # 빠른 처리
+                temperature=0.0,  # 일관된 결과
+                condition_on_previous_text=False,  # 긴 오디오 최적화
+                vad_filter=True,  # 음성 구간 자동 감지
+                vad_parameters=dict(min_silence_duration_ms=500)  # 무음 구간 처리
             )
-            inputs = {k: v.to(device) for k, v in inputs.items()}
             
-            # Generate transcription
-            with torch.no_grad():
-                generated_ids = model.generate(
-                    inputs["input_features"],
-                    forced_decoder_ids=processor.get_decoder_prompt_ids(
-                        language=language,
-                        task="transcribe"
-                    )
-                )
-            
-            # Decode and return result
-            transcription_text = processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
-            logger.info(f"✅ STT 처리 완료: {transcription_text[:50]}...")
+            # 세그먼트 결합하여 전체 텍스트 생성
+            transcription_text = " ".join([segment.text for segment in segments]).strip()
+            logger.info(f"✅ Faster-Whisper STT 처리 완료: {transcription_text[:50]}...")
             
             return transcription_text
             
@@ -104,8 +90,8 @@ def transcribe_audio(request):
         )
     
     try:
-        # 직접 음성을 텍스트로 변환 (실시간 처리)
-        transcription_text = process_audio_directly(audio_file, language)
+        # 오픈소스 Whisper 모델을 사용하여 음성을 텍스트로 변환
+        transcription_text = process_audio_with_whisper(audio_file, language)
         
         return Response(
             {
