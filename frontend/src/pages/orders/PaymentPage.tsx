@@ -35,6 +35,7 @@ const PaymentPage: React.FC = () => {
   const [order, setOrder] = useState<any>(null)
   const [method, setMethod] = useState<PaymentMethod>('cash')
   const [amount, setAmount] = useState<number>(0)
+  const [processingPayment, setProcessingPayment] = useState(false) // 결제 진행 중 상태 추가
 
   // 현금영수증
   const [cashReceiptRequested, setCashReceiptRequested] = useState(false)
@@ -64,6 +65,48 @@ const PaymentPage: React.FC = () => {
     fetchOrder()
   }, [id])
 
+  // 토스 결제 성공 콜백 처리
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const paymentKey = params.get('paymentKey')
+    const orderId = params.get('orderId')
+    const amount = params.get('amount')
+    const fail = params.get('fail') || params.get('code') || params.get('message')
+
+    if (fail) {
+      const code = params.get('code')
+      const message = params.get('message')
+      alert(`결제 실패: ${message || '알 수 없는 오류'}${code ? ` (코드: ${code})` : ''}`)
+      return
+    }
+
+    if (paymentKey && orderId && amount) {
+      // 토스 결제 승인 API 호출
+      const confirmPayment = async () => {
+        try {
+          setProcessingPayment(true)
+          const response = await paymentsApi.confirmToss({
+            paymentKey,
+            orderId,
+            amount: Number(amount)
+          })
+          
+          console.log('토스 결제 승인 완료:', response)
+          alert('카드 결제가 완료되었습니다.')
+          navigate('/orders')
+        } catch (error: unknown) {
+          console.error('토스 결제 승인 실패:', error)
+          const errorMessage = error instanceof Error ? error.message : '알 수 없는 오류'
+          alert('결제 승인 처리 실패: ' + errorMessage)
+        } finally {
+          setProcessingPayment(false)
+        }
+      }
+      
+      confirmPayment()
+    }
+  }, [id, navigate])
+
   const badge = useMemo(() => {
     const status = order?.payment?.payment_status || 'pending'
     if (status === 'paid') return { text: '결제 완료', color: 'bg-blue-100 text-blue-800' }
@@ -72,19 +115,25 @@ const PaymentPage: React.FC = () => {
   }, [order])
 
   const submitCashOrBank = async () => {
-    if (!id) return
+    if (!id || processingPayment) return
+    
     try {
-      await orderApi.updateStatus(Number(id), 'placed')
+      setProcessingPayment(true)
+      await orderApi.updateStatus(Number(id), 'pending') // linter 에러 수정
       alert('결제 정보가 저장되었습니다. 결제 완료는 주문상세에서 수동으로 처리하세요.')
       navigate('/orders')
     } catch (e) {
       alert('결제 정보 저장 실패')
+    } finally {
+      setProcessingPayment(false)
     }
   }
 
   const submitCard = async () => {
-    if (!id) return
+    if (!id || processingPayment) return
+    
     try {
+      setProcessingPayment(true)
       await loadTossScript()
       const clientKey = import.meta.env.VITE_TOSS_CLIENT_KEY
       if (!clientKey) throw new Error('TOSS CLIENT KEY가 설정되지 않았습니다.')
@@ -99,144 +148,209 @@ const PaymentPage: React.FC = () => {
         failUrl: window.location.origin + `/orders/${id}/payment?fail=1`,
       })
     } catch (e) {
-      alert('카드 결제창 호출 실패')
+      alert('카드 결제 요청 실패')
+    } finally {
+      setProcessingPayment(false)
     }
   }
 
-  // 결제 성공 콜백 처리 (토스 리다이렉트 파라미터: paymentKey, orderId, amount)
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
-    const paymentKey = params.get('paymentKey')
-    const tossOrderId = params.get('orderId')
-    const tossAmount = params.get('amount')
-    const fail = params.get('fail') || params.get('code') || params.get('message')
-
-    if (fail) {
-      const code = params.get('code')
-      const message = params.get('message')
-      alert(`결제 실패: ${message || '알 수 없는 오류'}${code ? ` (코드: ${code})` : ''}`)
-      return
+  const handleMethodChange = (newMethod: PaymentMethod) => {
+    setMethod(newMethod)
+    // 결제 수단 변경 시 관련 상태 초기화
+    if (newMethod === 'cash') {
+      setTaxInvoiceRequested(false)
+    } else if (newMethod === 'bank_transfer') {
+      setCashReceiptRequested(false)
     }
+  }
 
-    if (paymentKey && tossOrderId && tossAmount) {
-      // 토스 결제 승인 API 호출
-      paymentsApi.confirmToss({
-        paymentKey,
-        orderId: tossOrderId,
-        amount: Number(tossAmount)
-      })
-        .then((response) => {
-          console.log('토스 결제 승인 완료:', response)
-          alert('카드 결제가 완료되었습니다.')
-          navigate('/orders')
-        })
-        .catch((error) => {
-          console.error('토스 결제 승인 실패:', error)
-          alert('결제 승인 처리 실패: ' + (error.response?.data?.error || error.message))
-        })
-    }
-  }, [id])
-
-  if (loading) return <div className="p-6">로딩 중...</div>
-  if (!order) return null
+  if (loading) {
+    return (
+      <div className="container mx-auto p-6">
+        <div className="text-center">로딩 중...</div>
+      </div>
+    )
+  }
 
   return (
-    <div className="p-6">
-      <Card>
+    <div className="container mx-auto p-6 max-w-4xl">
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold mb-2">결제 페이지</h1>
+        <p className="text-gray-600">주문 #{id}의 결제를 진행합니다.</p>
+      </div>
+
+      {/* 주문 정보 요약 */}
+      <Card className="mb-6">
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-sm text-gray-500">주문 결제</div>
-              <CardTitle className="text-2xl">주문 #{id} 결제</CardTitle>
-            </div>
-            <Badge className={`${badge.color}`}>{badge.text}</Badge>
-          </div>
+          <CardTitle>주문 정보</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-              <h3 className="text-lg font-semibold mb-3 text-blue-900">결제 수단</h3>
-              <div className="space-y-3">
-                <Label>수단 선택</Label>
-                <Select value={method} onValueChange={(v: PaymentMethod) => setMethod(v)}>
-                  <SelectTrigger className="bg-white">
-                    <SelectValue placeholder="결제 수단 선택" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="cash">현금</SelectItem>
-                    <SelectItem value="bank_transfer">계좌이체</SelectItem>
-                    <SelectItem value="card">카드</SelectItem>
-                  </SelectContent>
-                </Select>
-
-                <div className="space-y-2">
-                  <Label>결제 금액</Label>
-                  <Input type="number" value={amount} onChange={(e) => setAmount(parseInt(e.target.value || '0'))} />
-                </div>
-
-                {method === 'cash' && (
-                  <div className="space-y-3">
-                    <Label>현금영수증</Label>
-                    <div className="flex items-center gap-3">
-                      <Button type="button" variant={cashReceiptRequested ? 'default' : 'outline'} onClick={() => setCashReceiptRequested((v) => !v)}>
-                        {cashReceiptRequested ? '신청 취소' : '신청'}
-                      </Button>
-                      {cashReceiptRequested && (
-                        <Select value={cashReceiptType} onValueChange={(v: 'personal' | 'business') => setCashReceiptType(v)}>
-                          <SelectTrigger className="w-40">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="personal">개인</SelectItem>
-                            <SelectItem value="business">사업자</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      )}
-                    </div>
-                    {cashReceiptRequested && (
-                      <div className="space-y-2">
-                        <Label>{cashReceiptType === 'personal' ? '휴대폰 번호' : '사업자등록번호'}</Label>
-                        <Input value={cashReceiptNumber} onChange={(e) => setCashReceiptNumber(e.target.value)} placeholder={cashReceiptType === 'personal' ? '010-0000-0000' : '000-00-00000'} />
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {method === 'bank_transfer' && (
-                  <div className="space-y-3">
-                    <Label>세금계산서</Label>
-                    <div className="flex items-center gap-3">
-                      <Button type="button" variant={taxInvoiceRequested ? 'default' : 'outline'} onClick={() => setTaxInvoiceRequested((v) => !v)}>
-                        {taxInvoiceRequested ? '신청 취소' : '신청'}
-                      </Button>
-                    </div>
-                  </div>
-                )}
-
-                <div className="pt-2">
-                  {method === 'card' ? (
-                    <Button className="bg-blue-600 hover:bg-blue-700" onClick={submitCard}>카드 결제 진행</Button>
-                  ) : (
-                    <Button onClick={submitCashOrBank}>결제 정보 저장</Button>
-                  )}
-                </div>
-              </div>
+        <CardContent>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label className="text-sm font-medium">주문 금액</Label>
+              <p className="text-lg font-semibold">{amount?.toLocaleString()}원</p>
             </div>
-
-            <div className="space-y-3">
-              <h3 className="text-lg font-semibold">주문 요약</h3>
-              <div className="grid grid-cols-2 gap-2 text-sm">
-                <div className="text-gray-600">거래처</div>
-                <div className="font-medium">{order.business_name}</div>
-                <div className="text-gray-600">총 금액</div>
-                <div className="font-medium">{(order.total_price || 0).toLocaleString()}원</div>
-                <div className="text-gray-600">주문 상태</div>
-                <div className="font-medium">{order.order_status}</div>
-              </div>
+            <div>
+              <Label className="text-sm font-medium">결제 상태</Label>
+              <Badge className={badge.color}>{badge.text}</Badge>
             </div>
           </div>
         </CardContent>
       </Card>
+
+      {/* 결제 수단 선택 */}
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle>결제 수단 선택</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <div className="flex space-x-4">
+              <label className="flex items-center space-x-2">
+                <input
+                  type="radio"
+                  value="cash"
+                  checked={method === 'cash'}
+                  onChange={() => handleMethodChange('cash')}
+                  className="text-blue-600"
+                />
+                <span>현금</span>
+              </label>
+              <label className="flex items-center space-x-2">
+                <input
+                  type="radio"
+                  value="bank_transfer"
+                  checked={method === 'bank_transfer'}
+                  onChange={() => handleMethodChange('bank_transfer')}
+                  className="text-blue-600"
+                />
+                <span>계좌이체</span>
+              </label>
+              <label className="flex items-center space-x-2">
+                <input
+                  type="radio"
+                  value="card"
+                  checked={method === 'card'}
+                  onChange={() => handleMethodChange('card')}
+                  className="text-blue-600"
+                />
+                <span>카드</span>
+              </label>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* 현금/계좌이체 폼 */}
+      {(method === 'cash' || method === 'bank_transfer') && (
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle>{method === 'cash' ? '현금 결제' : '계좌이체 결제'}</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* 현금영수증 신청 */}
+            {method === 'cash' && (
+              <div className="space-y-3">
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="cashReceipt"
+                    checked={cashReceiptRequested}
+                    onChange={(e) => setCashReceiptRequested(e.target.checked)}
+                    className="text-blue-600"
+                  />
+                  <Label htmlFor="cashReceipt">현금영수증 신청</Label>
+                </div>
+                
+                {cashReceiptRequested && (
+                  <div className="ml-6 space-y-3">
+                    <div>
+                      <Label>현금영수증 유형</Label>
+                      <Select value={cashReceiptType} onValueChange={(value: 'personal' | 'business') => setCashReceiptType(value)}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="personal">개인</SelectItem>
+                          <SelectItem value="business">사업자</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    
+                    <div>
+                      <Label>
+                        {cashReceiptType === 'personal' ? '휴대폰 번호' : '사업자 등록번호'}
+                      </Label>
+                      <Input
+                        placeholder={cashReceiptType === 'personal' ? '010-1234-5678' : '123-45-67890'}
+                        value={cashReceiptNumber}
+                        onChange={(e) => setCashReceiptNumber(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 세금계산서 신청 */}
+            {method === 'bank_transfer' && (
+              <div className="space-y-3">
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="taxInvoice"
+                    checked={taxInvoiceRequested}
+                    onChange={(e) => setTaxInvoiceRequested(e.target.checked)}
+                    className="text-blue-600"
+                  />
+                  <Label htmlFor="taxInvoice">세금계산서 신청</Label>
+                </div>
+                
+                {taxInvoiceRequested && (
+                  <div className="ml-6">
+                    <Label>사업자 등록번호</Label>
+                    <Input
+                      placeholder="123-45-67890"
+                      className="mt-1"
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+
+            <Button 
+              onClick={submitCashOrBank}
+              className="w-full bg-blue-600 hover:bg-blue-700"
+              disabled={processingPayment}
+            >
+              {processingPayment ? '처리 중...' : '결제 정보 저장'}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* 카드 결제 폼 */}
+      {method === 'card' && (
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle>카드 결제</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <p className="text-gray-600">
+                토스페이먼츠를 통해 안전하게 결제를 진행합니다.
+              </p>
+              <Button 
+                onClick={submitCard}
+                className="w-full bg-green-600 hover:bg-green-700"
+                disabled={processingPayment}
+              >
+                {processingPayment ? '처리 중...' : '카드로 결제하기'}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }

@@ -30,281 +30,17 @@ import { OrderListItem } from "../../types"
 import { orderApi } from "../../lib/api"
 import toast from 'react-hot-toast'
 import OrderForm from "./OrderForm"
+import { OrderStatusBadge, PaymentStatusBadge } from "../../components/common/StatusBadges"
+import { getLabel } from "../../lib/labels"
 
 // 주문 데이터 타입 정의 (OrderListSerializer 반영)
-interface Order extends OrderListItem {
-  // OrderListItem에서 확장하여 필요한 필드 추가
-  memo?: string;
-  source_type?: 'manual' | 'voice' | 'text';
-  transcribed_text?: string;
-  last_updated_at?: string;
-}
+type Order = OrderListItem;
 
-// 목업 데이터 (OrderListSerializer 구조 반영)
-// const mockOrders: Order[] = [
-//   {
-//     id: 1,
-//     business_id: 1,
-//     total_price: 2400000,
-//     order_datetime: "2024-01-15T10:30:00",
-//     delivery_datetime: "2024-01-17T09:00:00",
-//     memo: "급한 주문입니다",
-//     source_type: "voice",
-//     transcribed_text: "고등어 50박스, 갈치 30박스 주문해주세요",
-//     order_status: "ready",
-//     is_urgent: true,
-//     last_updated_at: "2024-01-15T10:30:00",
-//     business: {
-//       id: 1,
-//       business_name: "해양수산 마트",
-//       phone_number: "010-1234-5678",
-//     },
-//     items: [
-//       {
-//         id: 1,
-//         fish_type_id: 1,
-//         item_name_snapshot: "고등어",
-//         quantity: 50,
-//         unit_price: 48000,
-//         unit: "박스",
-//       },
-//       {
-//         id: 2,
-//         fish_type_id: 2,
-//         item_name_snapshot: "갈치",
-//         quantity: 30,
-//         unit_price: 65000,
-//         unit: "박스",
-//       },
-//     ],
-//     payment: {
-//       id: 1,
-//       payment_status: "paid",
-//       amount: 2400000,
-//       method: "bank_transfer",
-//       paid_at: "2024-01-15T11:00:00",
-//     },
-//   },
-//   {
-//     id: 2,
-//     business_id: 2,
-//     total_price: 1200000,
-//     order_datetime: "2024-01-15T14:15:00",
-//     delivery_datetime: "2024-01-16T09:00:00",
-//     memo: "정기 주문",
-//     source_type: "text",
-//     transcribed_text: "오징어 25박스 주문",
-//     order_status: "delivered",
-//     is_urgent: false,
-//     last_updated_at: "2024-01-16T09:00:00",
-//     business: {
-//       id: 2,
-//       business_name: "바다횟집",
-//       phone_number: "010-2345-6789",
-//     },
-//     items: [
-//       {
-//         id: 3,
-//         fish_type_id: 3,
-//         item_name_snapshot: "오징어",
-//         quantity: 25,
-//         unit_price: 48000,
-//         unit: "박스",
-//       },
-//     ],
-//     payment: {
-//       id: 2,
-//       payment_status: "paid",
-//       amount: 1200000,
-//       method: "card",
-//       paid_at: "2024-01-15T14:30:00",
-//     },
-//   },
-//   {
-//     id: 3,
-//     business_id: 3,
-//     total_price: 1800000,
-//     order_datetime: "2024-01-14T09:00:00",
-//     delivery_datetime: "2024-01-18T09:00:00",
-//     memo: "신규 거래처",
-//     source_type: "voice",
-//     transcribed_text: "명태 40박스, 고등어 20박스 주문",
-//     order_status: "placed",
-//     is_urgent: false,
-//     last_updated_at: "2024-01-14T09:00:00",
-//     business: {
-//       id: 3,
-//       business_name: "신선마켓",
-//       phone_number: "010-3456-7890",
-//     },
-//     items: [
-//       {
-//         id: 4,
-//         fish_type_id: 4,
-//         item_name_snapshot: "명태",
-//         quantity: 40,
-//         unit_price: 45000,
-//         unit: "박스",
-//       },
-//       {
-//         id: 5,
-//         fish_type_id: 1,
-//         item_name_snapshot: "고등어",
-//         quantity: 20,
-//         unit_price: 48000,
-//         unit: "박스",
-//       },
-//     ],
-//     payment: {
-//       id: 3,
-//       payment_status: "pending",
-//       amount: 1800000,
-//       method: "cash",
-//     },
-//   },
-//   {
-//     id: 4,
-//     business_id: 4,
-//     total_price: 1500000,
-//     order_datetime: "2024-01-14T11:00:00",
-//     delivery_datetime: "2024-01-16T09:00:00",
-//     memo: "신선도 중요",
-//     source_type: "manual",
-//     transcribed_text: "연어 3kg, 새우 2kg 주문",
-//     order_status: "delivered",
-//     is_urgent: false,
-//     last_updated_at: "2024-01-16T09:00:00",
-//     business: {
-//       id: 4,
-//       business_name: "오션푸드",
-//       phone_number: "010-4567-8901",
-//     },
-//     items: [
-//       {
-//         id: 6,
-//         fish_type_id: 5,
-//         item_name_snapshot: "연어",
-//         quantity: 3,
-//         unit_price: 500000,
-//         unit: "kg",
-//       },
-//       {
-//         id: 7,
-//         fish_type_id: 6,
-//         item_name_snapshot: "새우",
-//         quantity: 2,
-//         unit_price: 75000,
-//         unit: "kg",
-//       },
-//     ],
-//     payment: {
-//       id: 4,
-//       payment_status: "paid",
-//       amount: 1500000,
-//       method: "bank_transfer",
-//       paid_at: "2024-01-14T12:00:00",
-//     },
-//   },
-//   {
-//     id: 5,
-//     business_id: 5,
-//     total_price: 800000,
-//     order_datetime: "2024-01-13T16:00:00",
-//     delivery_datetime: "2024-01-15T09:00:00",
-//     memo: "소량 주문",
-//     source_type: "voice",
-//     transcribed_text: "문어 1kg, 오징어 3kg 주문",
-//     order_status: "cancelled",
-//     is_urgent: false,
-//     last_updated_at: "2024-01-14T10:00:00",
-//     business: {
-//       id: 5,
-//       business_name: "프레시마트",
-//       phone_number: "010-5678-9012",
-//     },
-//     items: [
-//       {
-//         id: 8,
-//         fish_type_id: 7,
-//         item_name_snapshot: "문어",
-//         quantity: 1,
-//         unit_price: 300000,
-//         unit: "kg",
-//       },
-//       {
-//         id: 9,
-//         fish_type_id: 8,
-//         item_name_snapshot: "오징어",
-//         quantity: 3,
-//         unit_price: 166667,
-//         unit: "kg",
-//       },
-//     ],
-//     payment: {
-//       id: 5,
-//       payment_status: "refunded",
-//       amount: 800000,
-//       method: "card",
-//       paid_at: "2024-01-13T16:30:00",
-//     },
-//   },
-// ]
 
-// 상태별 배지 컴포넌트
-const OrderStatusBadge: React.FC<{ status: string }> = ({ status }) => {
-  const getStatusConfig = (status: string) => {
-    switch (status) {
-      case "placed":
-        return { text: "등록", color: "bg-gray-100 text-gray-800" }
-      case "ready":
-        return { text: "출고 준비", color: "bg-yellow-100 text-yellow-800" }
-      case "delivered":
-        return { text: "완료", color: "bg-green-100 text-green-800" }
-      case "cancelled":
-        return { text: "취소", color: "bg-red-100 text-red-800" }
-      default:
-        return { text: "등록", color: "bg-gray-100 text-gray-800" }
-    }
-  }
 
-  const config = getStatusConfig(status)
-  return (
-    <Badge className={`${config.color} font-medium`}>
-      {config.text}
-    </Badge>
-  )
-}
 
-const PaymentStatusBadge: React.FC<{ status: string }> = ({ status }) => {
-  const getStatusConfig = (status: string) => {
-    switch (status) {
-      case "paid":
-        return { text: "결제 완료", color: "bg-blue-100 text-blue-800" }
-      case "pending":
-        return { text: "미결제", color: "bg-red-100 text-red-800" }
-      case "refunded":
-        return { text: "환불됨", color: "bg-orange-100 text-orange-800" }
-      default:
-        return { text: "미결제", color: "bg-red-100 text-red-800" }
-    }
-  }
 
-  const config = getStatusConfig(status)
-  return (
-    <Badge className={`${config.color} font-medium`}>
-      {config.text}
-    </Badge>
-  )
-}
 
-// 주문 아이템을 문자열로 변환
-const getItemsSummary = (items?: Array<{ item_name_snapshot: string; quantity: number; unit?: string }>) => {
-  if (!items || items.length === 0) return "품목 없음"
-  
-  return items.map(item => {
-    return `${item.item_name_snapshot} ${item.quantity}${item.unit || "개"}`
-  }).join(", ")
-}
 
 // 금액 포맷팅
 const formatPrice = (price: number) => {
@@ -330,15 +66,9 @@ const OrderList: React.FC = () => {
       try {
         setLoading(true)
         const response = await orderApi.getAll()
-        console.log('전체 응답 객체:', response)
-        console.log('response.data:', response.data)
-        console.log('response 자체:', response)
         
         // API 응답 구조에 따라 적절한 데이터 추출
         const ordersData = response.data || response || []
-        console.log('처리된 주문 데이터:', ordersData)
-        console.log('첫 번째 주문 데이터:', ordersData?.[0])
-        console.log('첫 번째 주문 ID:', ordersData?.[0]?.id, typeof ordersData?.[0]?.id)
         setOrders(Array.isArray(ordersData) ? ordersData : [])
       } catch (error) {
         console.error('주문 목록 가져오기 실패:', error)
@@ -403,8 +133,6 @@ const OrderList: React.FC = () => {
 
   // 새 주문 처리
   const handleNewOrder = (orderData: any) => {
-    console.log('받은 주문 데이터:', orderData)
-    
     // PostgreSQL에서 자동 생성된 ID를 우선 사용
     if (!orderData.id && !orderData.order_id) {
       console.error('❌ 주문 데이터에 ID가 없습니다:', orderData)
@@ -417,7 +145,6 @@ const OrderList: React.FC = () => {
       try {
         const response = await orderApi.getAll()
         const ordersData = response.data || response || []
-        console.log('주문 목록 새로고침:', ordersData)
         setOrders(Array.isArray(ordersData) ? ordersData : [])
         setShowOrderForm(false)
         toast.success('주문이 성공적으로 등록되었습니다!')
@@ -428,30 +155,6 @@ const OrderList: React.FC = () => {
     }
     
     refreshOrders()
-    return
-    
-    // 아래는 백업용 로컬 추가 로직 (사용하지 않음)
-    const newOrder: OrderListItem = {
-      id: orderData.id || orderData.order_id,
-      business: orderData.business || { 
-        id: orderData.business_id || 0,
-        business_name: '거래처명 없음',
-        phone_number: '연락처 없음'
-      },
-      total_price: orderData.total_price || 0,
-      order_datetime: orderData.order_datetime || new Date().toISOString(),
-      delivery_datetime: orderData.delivery_datetime || '',
-      order_status: 'placed',
-      is_urgent: orderData.is_urgent || false,
-      items_summary: orderData.order_items?.map((item: any) => `${item.item_name_snapshot || '품목명 없음'} ${item.quantity}${item.unit}`).join(', ') || '주문 항목 없음',
-      memo: orderData.memo || '',
-      source_type: orderData.source_type || 'manual',
-      transcribed_text: orderData.transcribed_text || '',
-      last_updated_at: new Date().toISOString()
-    }
-    
-    setOrders(prev => [newOrder, ...prev])
-    setShowOrderForm(false)
   }
 
   // 결제 처리 (OrderListSerializer에는 payment 정보가 없으므로 주문 상태만 변경)
@@ -461,7 +164,6 @@ const OrderList: React.FC = () => {
 
   // 상세보기 처리
   const handleViewDetail = (orderId: number) => {
-    console.log('상세보기 클릭:', orderId, typeof orderId)
     if (!orderId || orderId === undefined || isNaN(orderId)) {
       console.error('잘못된 주문 ID:', orderId)
       toast.error('주문 ID가 올바르지 않습니다.')
@@ -511,10 +213,10 @@ const OrderList: React.FC = () => {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">전체</SelectItem>
-                    <SelectItem value="placed">등록</SelectItem>
-                    <SelectItem value="ready">출고 준비</SelectItem>
-                    <SelectItem value="delivered">완료</SelectItem>
-                    <SelectItem value="cancelled">취소</SelectItem>
+                    <SelectItem value="placed">{getLabel('orderStatus', 'placed')}</SelectItem>
+                    <SelectItem value="ready">{getLabel('orderStatus', 'ready')}</SelectItem>
+                    <SelectItem value="delivered">{getLabel('orderStatus', 'delivered')}</SelectItem>
+                    <SelectItem value="cancelled">{getLabel('orderStatus', 'cancelled')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -530,9 +232,9 @@ const OrderList: React.FC = () => {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">전체</SelectItem>
-                    <SelectItem value="paid">결제 완료</SelectItem>
-                    <SelectItem value="pending">미결제</SelectItem>
-                    <SelectItem value="refunded">환불됨</SelectItem>
+                    <SelectItem value="paid">{getLabel('paymentStatus', 'paid')}</SelectItem>
+                    <SelectItem value="pending">{getLabel('paymentStatus', 'pending')}</SelectItem>
+                    <SelectItem value="refunded">{getLabel('paymentStatus', 'refunded')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -619,12 +321,7 @@ const OrderList: React.FC = () => {
                       </TableCell>
                     </TableRow>
                   ) : (
-                    currentOrders.map((order, index) => {
-                      // 디버깅용 로그
-                      if (index === 0) {
-                        console.log('첫 번째 주문 렌더링:', { id: order.id, order })
-                      }
-                      return (
+                    currentOrders.map((order, index) => (
                       <TableRow key={order.id} className="hover:bg-gray-50 transition-colors">
                         <TableCell className="font-medium text-gray-900">
                           {startIndex + index + 1}
@@ -650,7 +347,11 @@ const OrderList: React.FC = () => {
                           {formatPrice(order.total_price)}원
                         </TableCell>
                         <TableCell>
-                          {/* OrderListSerializer에는 payment_status가 없으므로 필터링 제거 */}
+                          {/* 결제 상태 표시 */}
+                          <PaymentStatusBadge status={order.payment?.payment_status || 'pending'} />
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {/* 주문 상태 표시 */}
                           <OrderStatusBadge status={order.order_status} />
                         </TableCell>
                         <TableCell className="text-center">
@@ -658,17 +359,13 @@ const OrderList: React.FC = () => {
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => {
-                                console.log('버튼 클릭 시 주문 객체:', order)
-                                console.log('버튼 클릭 시 order.id:', order.id, typeof order.id)
-                                handleViewDetail(order.id)
-                              }}
+                              onClick={() => handleViewDetail(order.id)}
                               className="border-blue-600 text-blue-600 hover:bg-blue-50"
                             >
                               <Eye className="h-4 w-4 mr-1" />
                               상세
                             </Button>
-                            {/* OrderListSerializer에는 payment_status가 없으므로 필터링 제거 */}
+                            {/* 결제 버튼 노출 조건 */}
                             {(order.order_status === 'placed' || order.order_status === 'ready') && (
                               <Button
                                 variant="outline"
@@ -683,8 +380,7 @@ const OrderList: React.FC = () => {
                           </div>
                         </TableCell>
                       </TableRow>
-                      )
-                    })
+                    ))
                   )}
                 </TableBody>
               </Table>

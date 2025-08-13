@@ -71,8 +71,8 @@ urlpatterns = [
     path('api/v1/accounts/', include('accounts.urls')),
     path('api/v1/dashboard/', include('dashboard.urls')),
     # path('api/v1/fish/', include('fish_analysis.urls')),  # PyTorch 의존성으로 임시 비활성화
-    path('api/v1/order/', include('order.urls')),
-    path('api/v1/payment/', include('payment.urls')),
+    path('api/v1/orders/', include('order.urls')),  # 복수형으로 수정
+    path('api/v1/payments/', include('payment.urls')),  # 복수형으로 수정
     path('api/v1/inventory/', include('inventory.urls')),
     path('api/v1/fish-registry/', include('fish_registry.urls')),
     path('api/v1/transcription/', include('transcription.urls')),

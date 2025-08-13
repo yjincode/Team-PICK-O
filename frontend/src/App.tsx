@@ -17,10 +17,9 @@ import PaymentPage from './pages/orders/PaymentPage';
 import AiLogList from './pages/orders/AiLogList';
 import FishStockList from './pages/inventory/FishStockList';
 import FishItemForm from './pages/inventory/FishItemForm';
-import SalesList from './pages/sales/SalesList';
-import SalesChart from './pages/sales/SalesChart';
 import AuctionPredictionChart from './pages/sales/AuctionPredictionChart';
 import LoginPage from './pages/login/LoginPage';
+import SalesChart from './pages/sales/SalesChart';
 
 const App: React.FC = () => {
   return (
@@ -143,16 +142,7 @@ const App: React.FC = () => {
           } 
         />
         
-        <Route 
-          path="/sales" 
-          element={
-            <PrivateRoute>
-              <MainLayout>
-                <SalesList />
-              </MainLayout>
-            </PrivateRoute>
-          } 
-        />
+
         <Route 
           path="/sales/chart" 
           element={
