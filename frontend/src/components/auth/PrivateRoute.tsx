@@ -1,4 +1,4 @@
-import React, { ReactNode } from 'react';
+import { ReactNode } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -7,7 +7,7 @@ interface PrivateRouteProps {
   requireApproval?: boolean;
 }
 
-export function PrivateRoute({ children, requireApproval = true }: PrivateRouteProps): JSX.Element {
+export function PrivateRoute({ children }: PrivateRouteProps): JSX.Element {
   const { user, loading, isAuthenticated } = useAuth();
   const location = useLocation();
 
