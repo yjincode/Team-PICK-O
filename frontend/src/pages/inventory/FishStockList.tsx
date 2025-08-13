@@ -64,7 +64,10 @@ const FishStockList: React.FC = () => {
       } else if (data && typeof data === 'object' && 'results' in data && Array.isArray(data.results)) {
         // Django pagination 구조: {count, results, next, previous}
         inventoryData = data.results
-        console.log('📄 전체 재고 수:', data.count)
+        // count 속성이 있는 경우에만 출력
+        if ('count' in data && typeof data.count === 'number') {
+          console.log('📄 전체 재고 수:', data.count)
+        }
       }
       
       console.log('📊 로드된 재고 개수:', inventoryData.length)

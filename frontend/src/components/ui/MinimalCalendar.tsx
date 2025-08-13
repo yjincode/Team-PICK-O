@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { ChevronLeft, ChevronRight, Calendar } from 'lucide-react'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { Button } from "./button"
 import { cn } from "../../lib/utils"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./select"
@@ -19,7 +19,6 @@ interface MinimalCalendarProps {
 export default function MinimalCalendar({
   value,
   onChange,
-  placeholder = "날짜를 선택하세요",
   className = "",
   maxDate,
   minDate,

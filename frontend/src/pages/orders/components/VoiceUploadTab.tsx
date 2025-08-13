@@ -2,14 +2,14 @@
  * 음성 업로드 탭 컴포넌트
  * 음성 파일을 업로드하여 주문을 등록하는 탭입니다.
  */
-import React, { useRef, useState, useEffect } from "react"
+import { useRef, useState, useEffect } from "react"
 import { Button } from "../../../components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../../components/ui/select"
 import { Input } from "../../../components/ui/input"
 import { Label } from "../../../components/ui/label"
-import { Mic, Upload, Play, Pause, Trash2, AlertCircle, CalendarDays } from "lucide-react"
+import { Mic, Upload, Play, Pause, Trash2, AlertCircle } from "lucide-react"
 import { sttApi, businessApi } from "../../../lib/api"
-import { parseVoiceOrder, validateAndCompleteOrder, parseVoiceOrderWithBusiness } from "../../../utils/orderParser"
+import { validateAndCompleteOrder, parseVoiceOrderWithBusiness } from "../../../utils/orderParser"
 import type { Business, FishType } from "../../../types"
 import { fishTypeApi } from "../../../lib/api"
 
@@ -66,8 +66,8 @@ const VoiceUploadTab: React.FC<VoiceUploadTabProps> = ({
         
         if (response && Array.isArray(response)) {
           businessData = response
-        } else if (response && response.results && Array.isArray(response.results)) {
-          businessData = response.results
+        } else if (response && response.data && Array.isArray(response.data.results)) {
+          businessData = response.data.results
         } else if (response && response.data && Array.isArray(response.data)) {
           businessData = response.data
         }
@@ -91,8 +91,6 @@ const VoiceUploadTab: React.FC<VoiceUploadTabProps> = ({
         
         if (response && Array.isArray(response)) {
           fishData = response
-        } else if (response && response.results && Array.isArray(response.results)) {
-          fishData = response.results
         } else if (response && response.data && Array.isArray(response.data)) {
           fishData = response.data
         }
@@ -159,7 +157,7 @@ const VoiceUploadTab: React.FC<VoiceUploadTabProps> = ({
           console.log('🎯 파싱된 주문 데이터:', validatedOrderData)
           console.log('🏢 매칭된 거래처:', fullOrderData.business)
           
-          setParsedOrder({ ...validatedOrderData, business: fullOrderData.business })
+          setParsedOrder(validatedOrderData)
           
           // 거래처가 매칭된 경우 자동 선택
           if (fullOrderData.business) {

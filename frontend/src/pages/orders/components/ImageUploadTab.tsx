@@ -2,15 +2,15 @@
  * 이미지 업로드 탭 컴포넌트
  * 이미지 파일을 업로드하여 주문을 등록하는 탭입니다.
  */
-import React, { useRef, useState, useEffect } from "react"
+import { useRef, useState, useEffect } from "react"
 import { Button } from "../../../components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../../components/ui/select"
 import { Input } from "../../../components/ui/input"
 import { Label } from "../../../components/ui/label"
 import { Camera, Upload, Trash2, Eye, AlertCircle } from "lucide-react"
-import { businessApi, fishTypeApi } from "../../../lib/api"
-import { parseVoiceOrderWithAPI, validateAndCompleteOrder } from "../../../utils/orderParser"
-import type { Business, FishType } from "../../../types"
+import { businessApi } from "../../../lib/api"
+import { parseVoiceOrder, validateAndCompleteOrder } from "../../../utils/orderParser"
+import type { Business } from "../../../types"
 
 interface ParsedOrderData {
   business_name?: string;
@@ -43,7 +43,7 @@ interface ImageUploadTabProps {
 const ImageUploadTab: React.FC<ImageUploadTabProps> = ({
   onFileUpload,
   isProcessing,
-  transcribed_text,
+  transcribed_text: _transcribed_text,
   uploadedFile,
   onRemoveFile,
   selectedBusinessId,
@@ -56,9 +56,9 @@ const ImageUploadTab: React.FC<ImageUploadTabProps> = ({
   const imageInputRef = useRef<HTMLInputElement>(null)
   const [showFullImage, setShowFullImage] = useState(false)
   const [businesses, setBusinesses] = useState<Business[]>([])
-  const [fishTypes, setFishTypes] = useState<FishType[]>([])
+  // const [fishTypes, setFishTypes] = useState<FishType[]>([])
   const [localUploadedFile, setLocalUploadedFile] = useState<File | null>(null)
-  const [localTranscribedText, setLocalTranscribedText] = useState<string>('')
+  // const [localTranscribedText, setLocalTranscribedText] = useState<string>('')
   const [parsedOrder, setParsedOrder] = useState<ParsedOrderData | null>(null)
   const [localIsProcessing, setLocalIsProcessing] = useState<boolean>(false)
   const [error, setError] = useState<string>('')
@@ -72,8 +72,8 @@ const ImageUploadTab: React.FC<ImageUploadTabProps> = ({
         
         if (response && Array.isArray(response)) {
           businessData = response
-        } else if (response && response.results && Array.isArray(response.results)) {
-          businessData = response.results
+        } else if (response && response.data && Array.isArray(response.data.results)) {
+          businessData = response.data.results
         } else if (response && response.data && Array.isArray(response.data)) {
           businessData = response.data
         }
@@ -89,29 +89,27 @@ const ImageUploadTab: React.FC<ImageUploadTabProps> = ({
   }, [])
 
   // 어종 목록 로드
-  useEffect(() => {
-    const fetchFishTypes = async () => {
-      try {
-        const response = await fishTypeApi.getAll()
-        let fishData: FishType[] = []
+  // useEffect(() => {
+  //   const fetchFishTypes = async () => {
+  //     try {
+  //       const response = await fishTypeApi.getAll()
+  //       let fishData: FishType[] = []
         
-        if (response && Array.isArray(response)) {
-          fishData = response
-        } else if (response && response.results && Array.isArray(response.results)) {
-          fishData = response.results
-        } else if (response && response.data && Array.isArray(response.data)) {
-          fishData = response.data
-        }
+  //       if (response && Array.isArray(response)) {
+  //         fishData = response
+  //       } else if (response && response.data && Array.isArray(response.data)) {
+  //         fishData = response.data
+  //       }
         
-        setFishTypes(fishData)
-      } catch (error) {
-        console.error('어종 목록 가져오기 실패:', error)
-        setFishTypes([])
-      }
-    }
+  //       setFishTypes(fishData)
+  //     } catch (error) {
+  //       console.error('어종 목록 가져오기 실패:', error)
+  //       setFishTypes([])
+  //     }
+  //   }
 
-    fetchFishTypes()
-  }, [])
+  //   fetchFishTypes()
+  // }, [])
 
   const formatFileSize = (bytes: number) => {
     if (bytes === 0) return '0 Bytes'
@@ -122,7 +120,7 @@ const ImageUploadTab: React.FC<ImageUploadTabProps> = ({
   }
 
   // OCR 처리 함수
-  const extractTextFromImage = async (file: File): Promise<string> => {
+  const extractTextFromImage = async (_file: File): Promise<string> => {
     return new Promise((resolve) => {
       setTimeout(() => {
         resolve("바다수산에 도미 10kg, 방어 5마리 주문합니다. 납품은 1월 25일 오전 중으로 부탁드립니다.")
@@ -151,7 +149,7 @@ const ImageUploadTab: React.FC<ImageUploadTabProps> = ({
 
     setLocalUploadedFile(file)
     setError('')
-    setLocalTranscribedText('')
+    // setLocalTranscribedText('')
     setParsedOrder(null)
     
     // OCR 처리 시작
@@ -167,7 +165,7 @@ const ImageUploadTab: React.FC<ImageUploadTabProps> = ({
       const extractedText = await extractTextFromImage(file)
       
       console.log('✅ OCR 처리 완료:', extractedText)
-      setLocalTranscribedText(extractedText)
+      // setLocalTranscribedText(extractedText)
       
       // 추출된 텍스트를 주문 데이터로 파싱
       try {
@@ -201,14 +199,14 @@ const ImageUploadTab: React.FC<ImageUploadTabProps> = ({
 
   const handleRemoveLocalFile = () => {
     setLocalUploadedFile(null)
-    setLocalTranscribedText('')
+    // setLocalTranscribedText('')
     setParsedOrder(null)
     setError('')
     onRemoveFile?.()
   }
 
   const currentFile = uploadedFile || localUploadedFile
-  const currentTranscribedText = transcribed_text || localTranscribedText
+  // const currentTranscribedText = transcribed_text || localTranscribedText
   const currentIsProcessing = isProcessing || localIsProcessing
 
   return (

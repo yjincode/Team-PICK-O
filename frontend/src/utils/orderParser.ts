@@ -30,10 +30,6 @@ const fishTypeMapping: { [key: string]: { id: number; name: string; default_pric
   '전어': { id: 204, name: '전어', default_price: 25000 },
   '꽁치': { id: 205, name: '꽁치', default_price: 18000 },
   '청어': { id: 206, name: '청어', default_price: 22000 },
-  '고등어': { id: 1, name: '고등어', default_price: 48000 },
-  '갈치': { id: 2, name: '갈치', default_price: 65000 },
-  '오징어': { id: 3, name: '오징어', default_price: 48000 },
-  '명태': { id: 4, name: '명태', default_price: 45000 },
 }
 
 // 단위 매핑

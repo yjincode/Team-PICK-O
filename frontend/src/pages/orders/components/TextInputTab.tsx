@@ -2,7 +2,7 @@
  * 텍스트 입력 탭 컴포넌트
  * 텍스트를 입력하여 주문을 등록하는 탭입니다.
  */
-import React, { useState, useEffect } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "../../../components/ui/button"
 import { Label } from "../../../components/ui/label"
 import { Textarea } from "../../../components/ui/textarea"
@@ -29,7 +29,7 @@ interface ParsedOrderData {
 interface TextInputTabProps {
   textInput: string
   setTextInput: (text: string) => void
-  onParse: () => void
+  onParse?: () => void
   isProcessing: boolean
   transcribedText?: string
   selectedBusinessId?: number | null
@@ -42,9 +42,9 @@ interface TextInputTabProps {
 const TextInputTab: React.FC<TextInputTabProps> = ({
   textInput,
   setTextInput,
-  onParse,
+  onParse: _onParse,
   isProcessing,
-  transcribedText,
+  transcribedText: _transcribedText,
   selectedBusinessId,
   onBusinessChange,
   deliveryDate,
@@ -65,8 +65,8 @@ const TextInputTab: React.FC<TextInputTabProps> = ({
         
         if (response && Array.isArray(response)) {
           businessData = response
-        } else if (response && response.results && Array.isArray(response.results)) {
-          businessData = response.results
+        } else if (response && response.data && Array.isArray(response.data.results)) {
+          businessData = response.data.results
         } else if (response && response.data && Array.isArray(response.data)) {
           businessData = response.data
         }
@@ -90,8 +90,6 @@ const TextInputTab: React.FC<TextInputTabProps> = ({
         
         if (response && Array.isArray(response)) {
           fishData = response
-        } else if (response && response.results && Array.isArray(response.results)) {
-          fishData = response.results
         } else if (response && response.data && Array.isArray(response.data)) {
           fishData = response.data
         }

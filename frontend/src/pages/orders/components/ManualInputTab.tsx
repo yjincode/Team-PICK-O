@@ -2,7 +2,7 @@
  * 수동 입력 탭 컴포넌트
  * 주문 항목을 수동으로 입력하는 탭입니다.
  */
-import React from "react"
+import type { FC } from "react"
 import { Button } from "../../../components/ui/button"
 import { Input } from "../../../components/ui/input"
 import { Label } from "../../../components/ui/label"
@@ -29,7 +29,7 @@ interface ManualInputTabProps {
   fishTypes: FishType[]
 }
 
-const ManualInputTab: React.FC<ManualInputTabProps> = ({
+const ManualInputTab: FC<ManualInputTabProps> = ({
   currentItem,
   setCurrentItem,
   onAddItem,

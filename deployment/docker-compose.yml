@@ -10,6 +10,8 @@ services:
     environment:
       - NODE_ENV=${NODE_ENV:-production}
       - REACT_APP_API_URL=${REACT_APP_API_URL:-http://localhost:8000}
+      # 토스 결제 설정 (Secrets에서 주입)
+      - VITE_TOSS_CLIENT_KEY=${VITE_TOSS_CLIENT_KEY:-test_ck_default}
     depends_on:
       backend:
         condition: service_healthy
@@ -28,26 +30,36 @@ services:
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     environment:
-      # 데이터베이스 설정 (Secrets에서 주입)
-      - DATABASE_URL=${DATABASE_URL:-postgresql://postgres:password@database:5432/teamPicko}
+      # 데이터베이스 설정 (컨테이너 간 통신)
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-password}@database:5432/${POSTGRES_DB:-teamPicko}
       - POSTGRES_DB=${POSTGRES_DB:-teamPicko}
       - POSTGRES_USER=${POSTGRES_USER:-postgres}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-password}
       
-      # 애플리케이션 설정 (Secrets에서 주입)
-      - SECRET_KEY=${SECRET_KEY:-django-insecure-default-key-change-in-production}
+      # 애플리케이션 설정 (Secrets에서 주입)  
       - DEBUG=${DEBUG:-False}
-      - ALLOWED_HOSTS=${ALLOWED_HOSTS:-localhost,127.0.0.1}
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS:-badaejangbu.store,www.badaejangbu.store,backend,teamPicko-backend,localhost,127.0.0.1}
+      
+      # JWT 인증 설정 (Secrets에서 주입)
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - JWT_REFRESH_SECRET_KEY=${JWT_REFRESH_SECRET_KEY}
       - PROJECT_NAME=${PROJECT_NAME:-Team-PICK-O Backend}
       
       # CORS 설정
-      - BACKEND_CORS_ORIGINS=${BACKEND_CORS_ORIGINS:-["http://localhost:3000","http://127.0.0.1:3000"]}
+      - BACKEND_CORS_ORIGINS=${BACKEND_CORS_ORIGINS:-["https://badaejangbu.store","http://localhost:3000"]}
       
       # AWS 설정 (Secrets에서 주입)
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
       - AWS_S3_BUCKET_NAME=${AWS_S3_BUCKET_NAME:-}
       - AWS_REGION=${AWS_REGION:-ap-northeast-2}
+      
+      # 외부 서비스 설정 (Secrets에서 주입)
+      - TOSS_SECRET_KEY=${TOSS_SECRET_KEY:-test_sk_default}
+      - DISCORD_WEBHOOK_URL=${DISCORD_WEBHOOK_URL:-}
+      
+      # Firebase Admin SDK 설정 (Secrets에서 주입)
+      - FIREBASE_ADMIN_CREDENTIALS_JSON=${FIREBASE_ADMIN_CREDENTIALS_JSON:-}
     depends_on:
       database:
         condition: service_healthy
@@ -93,8 +105,10 @@ services:
     ports:
       - "${HTTP_PORT:-80}:80"
       - "${HTTPS_PORT:-443}:443"
+    environment:
+      - SERVER_NAME=${SERVER_NAME:-localhost}
     volumes:
-      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
       - backend-static:/var/www/static:ro
       - ./ssl:/etc/nginx/ssl:ro
       - nginx-logs:/var/log/nginx
