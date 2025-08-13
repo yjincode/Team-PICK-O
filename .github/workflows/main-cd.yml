@@ -19,8 +19,10 @@ jobs:
     
     - name: Validate deployment configuration
       run: |
+        echo "🔍 배포 설정 검증 중..."
         cd deployment
-        docker-compose config
+        # Docker Compose v2 사용 (docker compose)
+        docker compose config
         echo "✅ Docker Compose configuration is valid"
 
   deploy:
@@ -29,6 +31,7 @@ jobs:
     
     steps:
     - uses: actions/checkout@v4
+    
     
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v4
@@ -218,19 +221,19 @@ jobs:
           aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin $ECR_REGISTRY
           
           # Stop existing containers (using production compose)
-          docker-compose --env-file ~/.env down || true
+          docker compose --env-file ~/.env down || true
           
           # Pull latest images
-          docker-compose --env-file ~/.env pull
+          docker compose --env-file ~/.env pull
           
           # Start new containers in production mode
-          docker-compose --env-file ~/.env up -d
+          docker compose --env-file ~/.env up -d
           
           # Wait for services to be healthy
           sleep 60
           
           # Check if services are running
-          docker-compose --env-file ~/.env ps
+          docker compose --env-file ~/.env ps
           
           # Verify services are accessible
           echo "🔍 서비스 상태 확인 중..."
@@ -286,14 +289,14 @@ jobs:
         
         ssh -i ec2_key.pem -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST << EOF
           # Stop current deployment
-          docker-compose --env-file ~/.env down
+          docker compose --env-file ~/.env down
           
           # Pull and start last known good images
-          docker-compose --env-file ~/.env pull
-          docker-compose --env-file ~/.env up -d
+          docker compose --env-file ~/.env pull
+          docker compose --env-file ~/.env up -d
           
           echo "🔄 롤백된 서비스 상태:"
-          docker-compose --env-file ~/.env ps
+          docker compose --env-file ~/.env ps
         EOF
         
         rm ec2_key.pem

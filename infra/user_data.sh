@@ -13,12 +13,17 @@ systemctl enable docker
 # ec2-user를 docker 그룹에 추가
 usermod -a -G docker ec2-user
 
-# Docker Compose 설치
-curl -L "https://github.com/docker/compose/releases/download/v2.21.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-chmod +x /usr/local/bin/docker-compose
+# Docker Compose Plugin 설치 (v2)
+mkdir -p ~/.docker/cli-plugins/
+curl -SL "https://github.com/docker/compose/releases/download/v2.21.0/docker-compose-linux-x86_64" -o ~/.docker/cli-plugins/docker-compose
+chmod +x ~/.docker/cli-plugins/docker-compose
 
-# Docker Compose 심볼릭 링크 생성
-ln -s /usr/local/bin/docker-compose /usr/bin/docker-compose
+# 전역 설치를 위해 /usr/local/lib/docker/cli-plugins/ 디렉토리도 생성
+mkdir -p /usr/local/lib/docker/cli-plugins/
+cp ~/.docker/cli-plugins/docker-compose /usr/local/lib/docker/cli-plugins/docker-compose
+
+# 하위 호환성을 위한 심볼릭 링크 (docker-compose 명령어도 지원)
+ln -sf /usr/local/lib/docker/cli-plugins/docker-compose /usr/local/bin/docker-compose
 
 # Git 설치
 yum install -y git
@@ -42,7 +47,8 @@ chown ec2-user:ec2-user /home/ec2-user/app
 # 시스템 정보 로그
 echo "=== System Setup Complete ===" >> /var/log/user-data.log
 echo "Docker version: $(docker --version)" >> /var/log/user-data.log
-echo "Docker Compose version: $(docker-compose --version)" >> /var/log/user-data.log
+echo "Docker Compose v2 version: $(docker compose version)" >> /var/log/user-data.log
+echo "Docker Compose v1 version: $(docker-compose --version)" >> /var/log/user-data.log
 echo "AWS CLI version: $(aws --version)" >> /var/log/user-data.log
 echo "Node.js version: $(node --version)" >> /var/log/user-data.log
 echo "Setup completed at: $(date)" >> /var/log/user-data.log
