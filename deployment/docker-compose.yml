@@ -1,4 +1,4 @@
-version: '3.8'
+# Docker Compose 설정 (v3.8 삭제)
 
 services:
   # Frontend (React + Nginx)
@@ -28,25 +28,22 @@ services:
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     environment:
-      # 데이터베이스 설정
-      - DATABASE_URL=${DATABASE_URL}
-      - POSTGRES_DB=${POSTGRES_DB}
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      # 데이터베이스 설정 (Secrets에서 주입)
+      - DATABASE_URL=${DATABASE_URL:-postgresql://postgres:password@database:5432/teamPicko}
+      - POSTGRES_DB=${POSTGRES_DB:-teamPicko}
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-password}
       
-      # 애플리케이션 설정
-      - SECRET_KEY=${SECRET_KEY}
+      # 애플리케이션 설정 (Secrets에서 주입)
+      - SECRET_KEY=${SECRET_KEY:-django-insecure-default-key-change-in-production}
       - DEBUG=${DEBUG:-False}
-      - ALLOWED_HOSTS=${ALLOWED_HOSTS:-localhost}
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS:-localhost,127.0.0.1}
       - PROJECT_NAME=${PROJECT_NAME:-Team-PICK-O Backend}
       
       # CORS 설정
-      - BACKEND_CORS_ORIGINS=${BACKEND_CORS_ORIGINS:-["http://localhost:3000"]}
+      - BACKEND_CORS_ORIGINS=${BACKEND_CORS_ORIGINS:-["http://localhost:3000","http://127.0.0.1:3000"]}
       
-      # Redis 설정 (선택사항)
-      - REDIS_URL=${REDIS_URL:-redis://redis:6379}
-      
-      # 외부 서비스 설정
+      # AWS 설정 (Secrets에서 주입)
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
       - AWS_S3_BUCKET_NAME=${AWS_S3_BUCKET_NAME:-}
@@ -70,9 +67,9 @@ services:
     image: postgres:15-alpine
     container_name: teamPicko-database
     environment:
-      - POSTGRES_DB=${POSTGRES_DB}
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB:-teamPicko}
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-password}
       - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --locale=C
     volumes:
       - postgres-data:/var/lib/postgresql/data
@@ -88,21 +85,6 @@ services:
       retries: 5
       start_period: 30s
 
-  # Redis (캐시 및 세션 저장소)
-  # redis:
-  #   image: redis:7-alpine
-  #   container_name: teamPicko-redis
-  #   ports:
-  #     - "${REDIS_PORT:-6379}:6379"
-  #   volumes:
-  #     - redis-data:/data
-  #   restart: unless-stopped
-  #   healthcheck:
-  #     test: ["CMD", "redis-cli", "ping"]
-  #     interval: 10s
-  #     timeout: 5s
-  #     retries: 5
-  #   command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-}
 
   # Nginx (Reverse Proxy) - 선택사항
   nginx:
@@ -129,8 +111,6 @@ services:
 volumes:
   postgres-data:
     name: teamPicko-postgres-data
-  redis-data:
-    name: teamPicko-redis-data
   backend-static:
     name: teamPicko-backend-static
   backend-logs:

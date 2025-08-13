@@ -18,6 +18,16 @@ jobs:
     - uses: actions/checkout@v4
     
     - name: Validate deployment configuration
+      env:
+        # 테스트용 기본값 설정 (경고 제거)
+        DATABASE_URL: "postgresql://postgres:password@database:5432/teamPicko"
+        POSTGRES_DB: "teamPicko"
+        POSTGRES_USER: "postgres"
+        POSTGRES_PASSWORD: "password"
+        SECRET_KEY: "test-secret-key"
+        ALLOWED_HOSTS: "localhost,127.0.0.1"
+        BACKEND_CORS_ORIGINS: '["http://localhost:3000"]'
+        AWS_REGION: "ap-northeast-2"
       run: |
         echo "🔍 배포 설정 검증 중..."
         cd deployment
@@ -198,12 +208,7 @@ jobs:
         FRONTEND_PORT=3000
         BACKEND_PORT=8000
         DB_PORT=5432
-        REDIS_PORT=6379
         HTTP_PORT=80
-        
-        # Redis Configuration
-        REDIS_URL="redis://redis:6379"
-        REDIS_PASSWORD="${{ secrets.REDIS_PASSWORD }}"
         
         # AWS Configuration
         AWS_ACCESS_KEY_ID="${{ secrets.AWS_ACCESS_KEY_ID }}"
