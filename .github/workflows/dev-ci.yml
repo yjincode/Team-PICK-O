@@ -26,12 +26,12 @@ jobs:
         cd deployment
         
         # 설정 파일 유효성 검사
-        docker-compose config
+        docker compose config
         echo "✅ Docker Compose 설정 유효"
         
         # 개발용 빌드 테스트
         if [ -f "docker-compose.dev.yml" ]; then
-          docker-compose -f docker-compose.dev.yml build
+          docker compose -f docker-compose.dev.yml build
           echo "✅ 개발용 이미지 빌드 성공"
         fi
     
