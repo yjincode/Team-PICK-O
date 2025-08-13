@@ -35,34 +35,38 @@ jobs:
           cd frontend && docker build --dry-run . && cd ..
         fi
     
-    - name: 자동 PR 생성
-      uses: peter-evans/create-pull-request@v5
+    - name: 자동 PR 생성 (feature → dev)
+      uses: repo-sync/pull-request@v2
       with:
-        token: ${{ secrets.GITHUB_TOKEN }}
-        commit-message: "feat: ${{ github.ref_name }} 작업 완료"
-        title: "🚀 [자동생성] ${{ github.ref_name }} → dev"
-        body: |
+        source_branch: ${{ github.ref_name }}
+        destination_branch: "dev"
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        pr_title: "🚀 [자동생성] ${{ github.ref_name }} → dev"
+        pr_body: |
           ## 📋 변경사항
           - Feature 브랜치: `${{ github.ref_name }}`
           - 커밋 해시: `${{ github.sha }}`
           - 작성자: ${{ github.actor }}
+          - 푸시 시간: ${{ github.event.head_commit.timestamp }}
           
           ## 🔍 체크리스트
-          - [x] Docker 빌드 가능
+          - [x] Docker 빌드 가능 확인
           - [ ] 코드 리뷰 필요
-          - [ ] 테스트 확인 필요
+          - [ ] 기능 테스트 필요
+          - [ ] 충돌 해결 확인
           
           ## 🤖 자동 생성된 PR
-          이 PR은 feature 브랜치 푸시 시 자동으로 생성되었습니다.
+          이 PR은 `${{ github.ref_name }}` 브랜치 푸시 시 자동으로 생성되었습니다.
           
-          **병합 전 확인사항:**
-          1. 코드 리뷰 완료
-          2. 기능 테스트 완료
-          3. 충돌 해결 완료
-        base: dev
-        branch: auto-pr/${{ github.ref_name }}
-        delete-branch: true
-        draft: false
+          **⚠️ 병합 전 확인사항:**
+          1. ✅ 코드 리뷰 완료
+          2. ✅ 기능 테스트 완료  
+          3. ✅ 충돌 해결 완료
+          4. ✅ CI 체크 통과
+          
+          **📝 변경된 파일들:**
+          - 자동으로 감지된 변경사항들이 포함됩니다
+        pr_draft: false
         
     - name: PR 생성 결과
       run: |
