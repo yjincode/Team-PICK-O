@@ -20,7 +20,7 @@ export interface FishType {
   name: string;  // fish_name에서 name으로 변경
   aliases?: string;  // 배열에서 문자열로 변경 (백엔드 모델과 일치)
   scientific_name?: string;
-  unit?: string;
+  unit: string;
   notes?: string;
   created_at?: string;
 }
@@ -48,7 +48,7 @@ export interface Order {
   raw_input_path?: string;
   transcribed_text?: string;
   delivery_date?: string;
-  status: 'success' | 'failed' | 'pending';
+  status: 'success' | 'failed' | 'pending' | 'placed' | 'ready' | 'delivered' | 'cancelled';
   // 조인된 데이터
   business?: Business;
   items?: OrderItem[];

@@ -188,21 +188,20 @@ jobs:
         BACKEND_IMAGE=$ECR_REGISTRY/${{ secrets.ECR_REPOSITORY_BACKEND }}:$IMAGE_TAG
         FRONTEND_IMAGE=$ECR_REGISTRY/${{ secrets.ECR_REPOSITORY_FRONTEND }}:$IMAGE_TAG
         
-        # Database Configuration
-        DATABASE_URL="${{ secrets.DATABASE_URL }}"
+        # Database Configuration (컨테이너 간 통신)
         POSTGRES_DB="${{ secrets.POSTGRES_DB }}"
         POSTGRES_USER="${{ secrets.POSTGRES_USER }}"
         POSTGRES_PASSWORD="${{ secrets.POSTGRES_PASSWORD }}"
         
         # Application Configuration
-        SECRET_KEY="${{ secrets.SECRET_KEY }}"
         DEBUG=False
         ALLOWED_HOSTS="${{ secrets.ALLOWED_HOSTS }}"
         PROJECT_NAME="Team-PICK-O Backend (Demo)"
         
         # Network Configuration
-        REACT_APP_API_URL="http://${{ secrets.EC2_HOST }}:8000"
-        BACKEND_CORS_ORIGINS=["http://${{ secrets.EC2_HOST }}:3000","http://localhost:3000"]
+        REACT_APP_API_URL="https://badaejangbu.store/api"
+        VITE_API_URL="https://badaejangbu.store/api"
+        BACKEND_CORS_ORIGINS=["https://badaejangbu.store","http://localhost:3000"]
         
         # Ports (데모용)
         FRONTEND_PORT=3000
@@ -210,11 +209,23 @@ jobs:
         DB_PORT=5432
         HTTP_PORT=80
         
-        # AWS Configuration
+        # AWS Configuration (infra에서 생성된 리소스 연결)
         AWS_ACCESS_KEY_ID="${{ secrets.AWS_ACCESS_KEY_ID }}"
         AWS_SECRET_ACCESS_KEY="${{ secrets.AWS_SECRET_ACCESS_KEY }}"
         AWS_S3_BUCKET_NAME="${{ secrets.AWS_S3_BUCKET_NAME }}"
         AWS_REGION="${{ secrets.AWS_REGION }}"
+        
+        # JWT 인증 설정 (Secrets에서 주입)
+        JWT_SECRET_KEY="${{ secrets.JWT_SECRET_KEY }}"
+        JWT_REFRESH_SECRET_KEY="${{ secrets.JWT_REFRESH_SECRET_KEY }}"
+        
+        # Firebase Admin SDK 설정 (Secrets에서 주입)
+        FIREBASE_ADMIN_CREDENTIALS_JSON='${{ secrets.FIREBASE_ADMIN_CREDENTIALS_JSON }}'
+        
+        # 외부 서비스 설정
+        TOSS_SECRET_KEY="${{ secrets.TOSS_SECRET_KEY }}"
+        VITE_TOSS_CLIENT_KEY="${{ secrets.VITE_TOSS_CLIENT_KEY }}"
+        DISCORD_WEBHOOK_URL="${{ secrets.DISCORD_WEBHOOK_URL }}"
         EOL
         
         # Copy env file to EC2

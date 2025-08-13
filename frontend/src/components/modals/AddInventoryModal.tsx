@@ -75,7 +75,7 @@ const AddInventoryModal: React.FC<AddInventoryModalProps> = ({
       } else if (data && typeof data === 'object' && 'results' in data && Array.isArray(data.results)) {
         // Django pagination 구조: {count, results, next, previous}
         fishTypeData = data.results
-        console.log('📄 전체 어종 수:', data.count)
+        console.log('📄 전체 어종 수:', 'count' in data ? data.count : 'N/A')
       }
       
       console.log('📊 로드된 어종 개수:', fishTypeData.length)
@@ -133,7 +133,14 @@ const AddInventoryModal: React.FC<AddInventoryModalProps> = ({
     setLoading(true)
 
     try {
-      const response = await inventoryApi.create(formData)
+      const submitData = {
+        fish_type_id: formData.fish_type_id!,
+        stock_quantity: formData.stock_quantity,
+        unit: formData.unit,
+        status: formData.status,
+        ...(formData.aquarium_photo_path && { aquarium_photo_path: formData.aquarium_photo_path })
+      }
+      const response = await inventoryApi.create(submitData)
       console.log('✅ 재고 추가 성공:', response)
       toast.success('재고가 성공적으로 추가되었습니다')
       
@@ -203,7 +210,6 @@ const AddInventoryModal: React.FC<AddInventoryModalProps> = ({
                   <SelectValue placeholder="어종을 선택하세요" />
                 </SelectTrigger>
                 <SelectContent>
-                  {console.log('📄 렌더링하는 어종 목록:', fishTypes)}
                   {fishTypes.map((fishType) => {
                     console.log('🐟 렌더링 어종:', fishType)
                     return (

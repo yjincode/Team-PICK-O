@@ -18,7 +18,7 @@ interface UseKakaoPostcodeProps {
 export const useKakaoPostcode = ({
   onComplete,
   onClose,
-  autoClose = true,
+  autoClose: _autoClose = true,
 }: UseKakaoPostcodeProps = {}): UseKakaoPostcodeResult => {
   const [isScriptLoaded, setIsScriptLoaded] = useState(false);
   const [selectedAddress, setSelectedAddress] = useState('');

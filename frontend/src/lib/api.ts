@@ -40,7 +40,7 @@ import { TokenManager } from './tokenManager'
 
 // 토큰 갱신 중인지 추적
 let isRefreshing = false
-let refreshPromise: Promise<string> | null = null
+let refreshPromise: Promise<string | null> | null = null
 
 // 액세스 토큰 자동 갱신 함수
 const refreshAccessToken = async (): Promise<string | null> => {
@@ -49,12 +49,12 @@ const refreshAccessToken = async (): Promise<string | null> => {
   }
   
   isRefreshing = true
-  refreshPromise = new Promise(async (resolve, reject) => {
+  refreshPromise = new Promise(async (resolve) => {
     try {
       const refreshToken = TokenManager.getRefreshToken()
       
       if (!refreshToken) {
-        resolve(null as any)
+        resolve(null)
         return
       }
       
@@ -81,12 +81,12 @@ const refreshAccessToken = async (): Promise<string | null> => {
       } else {
         console.log('❌ 토큰 갱신 실패 - 리로그인 필요')
         TokenManager.removeTokens()
-        resolve(null as any)
+        resolve(null)
       }
     } catch (error) {
       console.error('❌ 토큰 갱신 오류:', error)
       TokenManager.removeTokens()
-      resolve(null as any)
+      resolve(null)
     }
   })
   

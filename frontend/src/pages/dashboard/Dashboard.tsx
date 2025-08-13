@@ -16,15 +16,15 @@ interface RecentOrder {
   business: string;  // 거래처명으로 변경
   item: string;      // 어종명
   amount: string;    // 수량
-  status: string;    // 주문 상태
+  status: 'placed' | 'ready' | 'delivered' | 'cancelled';    // 주문 상태
 }
 
 // 목업 데이터 (실제로는 API에서 가져올 예정)
 const recentOrders: RecentOrder[] = [
-  { business: "동해수산", item: "고등어", amount: "50박스", status: "처리중" },
-  { business: "바다마트", item: "갈치", amount: "30박스", status: "완료" },
-  { business: "해양식품", item: "오징어", amount: "25박스", status: "대기" },
-  { business: "신선수산", item: "명태", amount: "40박스", status: "완료" },
+  { business: "동해수산", item: "고등어", amount: "50박스", status: "ready" },
+  { business: "바다마트", item: "갈치", amount: "30박스", status: "delivered" },
+  { business: "해양식품", item: "오징어", amount: "25박스", status: "placed" },
+  { business: "신선수산", item: "명태", amount: "40박스", status: "delivered" },
 ]
 
 const Dashboard: React.FC = () => {
