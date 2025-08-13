@@ -42,6 +42,14 @@ jobs:
         REPO: ${{ github.repository }}
       run: |
         echo "🔄 GitHub CLI로 PR 생성 중..."
+        echo "현재 브랜치: ${BRANCH_NAME}"
+        echo "대상 브랜치: dev"
+        
+        # feature 브랜치인지 확인
+        if [[ "${BRANCH_NAME}" != feature/* ]]; then
+          echo "❌ feature 브랜치가 아닙니다. PR 생성을 건너뜁니다."
+          exit 0
+        fi
         
         # PR 제목과 본문 설정
         PR_TITLE="🚀 [자동생성] ${BRANCH_NAME} → dev"
@@ -66,24 +74,33 @@ jobs:
         3. ✅ 충돌 해결 완료
         4. ✅ CI 체크 통과"
         
-        # 기존 PR 확인
-        EXISTING_PR=$(gh pr list --head "${BRANCH_NAME}" --base "dev" --state open --json number --jq '.[0].number' || echo "")
+        # 기존 PR 확인 (정확한 head-base 매칭)
+        echo "🔍 기존 PR 확인 중..."
+        EXISTING_PR=$(gh pr list --head "${BRANCH_NAME}" --base "dev" --state open --json number --jq '.[0].number' 2>/dev/null || echo "")
         
-        if [ -n "$EXISTING_PR" ] && [ "$EXISTING_PR" != "null" ]; then
+        if [ -n "$EXISTING_PR" ] && [ "$EXISTING_PR" != "null" ] && [ "$EXISTING_PR" != "" ]; then
           echo "⚠️ 기존 PR #${EXISTING_PR}이 이미 존재합니다"
           echo "🔗 PR URL: https://github.com/${REPO}/pull/${EXISTING_PR}"
         else
           # 새 PR 생성
           echo "📝 새로운 PR 생성 중..."
+          echo "HEAD: ${BRANCH_NAME}"
+          echo "BASE: dev"
+          
           PR_URL=$(gh pr create \
             --title "$PR_TITLE" \
             --body "$PR_BODY" \
             --base "dev" \
             --head "${BRANCH_NAME}" \
-            --repo "$REPO")
+            --repo "$REPO" 2>&1)
           
-          echo "✅ PR 생성 완료!"
-          echo "🔗 PR URL: $PR_URL"
+          if [ $? -eq 0 ]; then
+            echo "✅ PR 생성 완료!"
+            echo "🔗 PR URL: $PR_URL"
+          else
+            echo "❌ PR 생성 실패: $PR_URL"
+            exit 1
+          fi
         fi
         
     - name: PR 생성 결과
