@@ -19,9 +19,10 @@ RUN npm run build
 # Production stage with nginx
 FROM nginx:alpine
 
-# 보안을 위한 non-root 사용자 생성
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S nextjs -u 1001
+# curl 설치 (헬스체크용)
+RUN apk add --no-cache curl
+
+# non-root 사용자는 생성하지만 nginx 사용자 사용
 
 # nginx 설정 파일 복사
 COPY --from=builder /app/nginx.conf /etc/nginx/conf.d/default.conf

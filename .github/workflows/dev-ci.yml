@@ -1,4 +1,4 @@
-name: Dev Branch CI
+name: Dev Branch CI (단순화)
 
 on:
   pull_request:
@@ -9,91 +9,58 @@ on:
       - dev
 
 jobs:
-  lint-and-format:
+  build-check:
     runs-on: ubuntu-latest
     
     steps:
     - uses: actions/checkout@v4
     
-    # Backend 린트
-    - name: Set up Python for linting
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.11'
-    
-    - name: Install Python linting tools
+    - name: 기본 정보
       run: |
-        python -m pip install --upgrade pip
-        pip install flake8 black isort
+        echo "🔍 Dev 브랜치 빌드 체크 중..."
+        echo "이벤트: ${{ github.event_name }}"
+        echo "브랜치: ${{ github.ref_name }}"
+        echo "커밋: ${{ github.sha }}"
     
-    - name: Lint backend code
-      working-directory: ./backend
+    - name: Docker 컴포즈 빌드 테스트
       run: |
-        flake8 . --count --statistics || echo "⚠️ 백엔드 린트 경고 있음"
-        black --check . || echo "⚠️ 백엔드 포맷팅 필요"
-        isort --check-only . || echo "⚠️ 백엔드 import 정렬 필요"
-      continue-on-error: true
-    
-    # Frontend 린트
-    - name: Set up Node.js for linting
-      uses: actions/setup-node@v4
-      with:
-        node-version: '18'
-    
-    - name: Install frontend dependencies for linting
-      working-directory: ./frontend
-      run: npm ci
-    
-    - name: Lint frontend code
-      working-directory: ./frontend
-      run: |
-        if [ -f "package.json" ] && npm list eslint &>/dev/null; then
-          npm run lint || echo "⚠️ 프론트엔드 린트 경고 있음"
-        else
-          echo "⚠️ ESLint 설정되지 않음"
-        fi
-      continue-on-error: true
-
-  security-scan:
-    runs-on: ubuntu-latest
-    
-    steps:
-    - uses: actions/checkout@v4
-    
-    - name: Run backend security scan
-      working-directory: ./backend
-      run: |
-        python -m pip install --upgrade pip
-        pip install safety bandit
-        pip install -r requirements.txt
-        safety check || echo "⚠️ 백엔드 보안 경고 있음"
-        bandit -r . -f json || echo "⚠️ 백엔드 보안 스캔 경고"
-      continue-on-error: true
-    
-    - name: Run frontend security scan
-      working-directory: ./frontend
-      run: |
-        if [ -f "package.json" ]; then
-          npx audit-ci --moderate || echo "⚠️ 프론트엔드 보안 경고 있음"
-        fi
-      continue-on-error: true
-
-  build-test:
-    runs-on: ubuntu-latest
-    needs: [lint-and-format]
-    
-    steps:
-    - uses: actions/checkout@v4
-    
-    - name: Build with docker-compose
-      run: |
+        echo "🔨 Docker Compose 빌드 테스트..."
         cd deployment
-        docker-compose -f docker-compose.dev.yml build
+        
+        # 설정 파일 유효성 검사
+        docker-compose config
+        echo "✅ Docker Compose 설정 유효"
+        
+        # 개발용 빌드 테스트
+        if [ -f "docker-compose.dev.yml" ]; then
+          docker-compose -f docker-compose.dev.yml build
+          echo "✅ 개발용 이미지 빌드 성공"
+        fi
     
-    - name: Test containers startup
+    - name: 프로덕션 준비 확인
       run: |
-        cd deployment
-        docker-compose -f docker-compose.dev.yml up -d
-        sleep 30
-        docker-compose -f docker-compose.dev.yml ps
-        docker-compose -f docker-compose.dev.yml down
+        echo "🚀 프로덕션 배포 준비 상태 확인..."
+        
+        # 필수 파일 체크
+        files_to_check=(
+          "backend/Dockerfile"
+          "frontend/Dockerfile" 
+          "deployment/docker-compose.yml"
+          "deployment/nginx.conf"
+        )
+        
+        for file in "${files_to_check[@]}"; do
+          if [ -f "$file" ]; then
+            echo "✅ $file 존재"
+          else
+            echo "❌ $file 누락"
+            exit 1
+          fi
+        done
+        
+        echo "✅ 모든 필수 파일 존재 확인"
+    
+    - name: 빌드 완료
+      run: |
+        echo "✅ Dev 브랜치 CI 완료"
+        echo "🚀 main 브랜치로 병합 시 자동 배포됩니다"

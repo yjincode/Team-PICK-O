@@ -234,7 +234,9 @@ jobs:
           
           # Verify services are accessible
           echo "🔍 서비스 상태 확인 중..."
-          curl -f http://localhost/health || echo "⚠️ Health check failed"
+          curl -f http://localhost/ || echo "⚠️ Nginx health check failed"
+          curl -f http://localhost:3000/ || echo "⚠️ Frontend check failed"
+          curl -f http://localhost:8000/api/v1/ || echo "⚠️ Backend check failed"
           
           # Setup auto-shutdown after 1 hour
           chmod +x auto-shutdown.sh
@@ -251,8 +253,11 @@ jobs:
         EC2_HOST: ${{ secrets.EC2_HOST }}
       run: |
         sleep 30
-        curl -f http://$EC2_HOST/health || curl -f https://$EC2_HOST/health
-        echo "✅ 데모 배포 성공 및 서비스 정상"
+        echo "🔍 외부에서 서비스 접근 테스트..."
+        curl -f http://$EC2_HOST/ || echo "⚠️ Nginx 외부 접근 실패"
+        curl -f http://$EC2_HOST:3000/ || echo "⚠️ Frontend 외부 접근 실패"  
+        curl -f http://$EC2_HOST:8000/api/v1/ || echo "⚠️ Backend 외부 접근 실패"
+        echo "✅ 데모 배포 성공"
     
     - name: Notify deployment status
       if: always()

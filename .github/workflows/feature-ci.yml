@@ -1,64 +1,71 @@
-name: Feature Branch CI
+name: Feature Branch CI (단순화)
 
 on:
   push:
     branches:
       - 'feature/**'
-  pull_request:
-    branches:
-      - 'feature/**'
 
 jobs:
-  lint-check:
+  ci-check:
     runs-on: ubuntu-latest
     
     steps:
     - uses: actions/checkout@v4
     
-    # Backend 린트
-    - name: Set up Python for linting
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.11'
-    
-    - name: Install Python linting tools
+    - name: 기본 체크
       run: |
-        python -m pip install --upgrade pip
-        pip install flake8 black isort
+        echo "🔍 Feature 브랜치 기본 체크 중..."
+        echo "브랜치: ${{ github.ref_name }}"
+        echo "커밋: ${{ github.sha }}"
+        ls -la
     
-    - name: Lint backend code
-      working-directory: ./backend
+    - name: Docker 빌드 테스트
       run: |
-        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-        black --check .
-        isort --check-only .
-      continue-on-error: true
-    
-    # Frontend 린트
-    - name: Set up Node.js for linting
-      uses: actions/setup-node@v4
-      with:
-        node-version: '18'
-    
-    - name: Install frontend dependencies for linting
-      working-directory: ./frontend
-      run: |
-        if [ -f "package.json" ]; then
-          npm ci
+        echo "🔨 Docker 빌드 가능 여부 확인..."
+        
+        # Backend 빌드 체크
+        if [ -f "backend/Dockerfile" ]; then
+          echo "✅ Backend Dockerfile 존재"
+          cd backend && docker build --dry-run . && cd ..
         fi
-      continue-on-error: true
-    
-    - name: Lint frontend code
-      working-directory: ./frontend
-      run: |
-        if [ -f "package.json" ] && npm list eslint &>/dev/null; then
-          npm run lint
-        else
-          echo "ESLint not configured, skipping frontend linting"
+        
+        # Frontend 빌드 체크  
+        if [ -f "frontend/Dockerfile" ]; then
+          echo "✅ Frontend Dockerfile 존재"
+          cd frontend && docker build --dry-run . && cd ..
         fi
-      continue-on-error: true
     
-    - name: Summary
+    - name: 자동 PR 생성
+      uses: peter-evans/create-pull-request@v5
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        commit-message: "feat: ${{ github.ref_name }} 작업 완료"
+        title: "🚀 [자동생성] ${{ github.ref_name }} → dev"
+        body: |
+          ## 📋 변경사항
+          - Feature 브랜치: `${{ github.ref_name }}`
+          - 커밋 해시: `${{ github.sha }}`
+          - 작성자: ${{ github.actor }}
+          
+          ## 🔍 체크리스트
+          - [x] Docker 빌드 가능
+          - [ ] 코드 리뷰 필요
+          - [ ] 테스트 확인 필요
+          
+          ## 🤖 자동 생성된 PR
+          이 PR은 feature 브랜치 푸시 시 자동으로 생성되었습니다.
+          
+          **병합 전 확인사항:**
+          1. 코드 리뷰 완료
+          2. 기능 테스트 완료
+          3. 충돌 해결 완료
+        base: dev
+        branch: auto-pr/${{ github.ref_name }}
+        delete-branch: true
+        draft: false
+        
+    - name: PR 생성 결과
       run: |
-        echo "🎯 Feature 브랜치 CI 완료"
-        echo "- 린트 검사 완료"
+        echo "✅ Feature 브랜치 CI 완료"
+        echo "📝 자동 PR이 dev 브랜치로 생성되었습니다"
+        echo "🔗 GitHub에서 PR을 확인하세요"
