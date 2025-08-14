@@ -356,15 +356,16 @@ jobs:
           echo "🔧 Firebase Admin SDK 키 파일 생성 중..."
           echo "🔍 환경변수 확인: FIREBASE_ADMIN_CREDENTIALS_JSON 길이: \${#FIREBASE_ADMIN_CREDENTIALS_JSON}"
           
-          if [ ! -z "\$FIREBASE_ADMIN_CREDENTIALS_JSON" ]; then
-            echo "\$FIREBASE_ADMIN_CREDENTIALS_JSON" > firebase-admin-key.json
+          # Check if Firebase credentials are available from GitHub Secrets
+          if [ ! -z '${{ secrets.FIREBASE_ADMIN_CREDENTIALS_JSON }}' ]; then
+            echo '${{ secrets.FIREBASE_ADMIN_CREDENTIALS_JSON }}' > firebase-admin-key.json
             echo "✅ Firebase Admin SDK 키 파일 생성 완료"
             ls -la firebase-admin-key.json
             # Verify file content (first line only for security)
             echo "🔍 파일 내용 검증 (첫 줄):"
             head -1 firebase-admin-key.json
           else
-            echo "⚠️ FIREBASE_ADMIN_CREDENTIALS_JSON 환경변수가 비어 있습니다"
+            echo "⚠️ GitHub Secrets FIREBASE_ADMIN_CREDENTIALS_JSON이 비어 있습니다"
             echo "🔍 현재 설정된 환경변수들:"
             env | grep FIREBASE || echo "Firebase 관련 환경변수 없음"
             # Create empty file to prevent directory creation
@@ -383,8 +384,68 @@ jobs:
           # Pull latest images
           docker compose --env-file ~/.env pull
           
+          # Check SSL certificate files and create appropriate nginx config
+          echo "🔍 SSL 인증서 파일 확인 중..."
+          if [ -f "/etc/letsencrypt/live/badaejangbu.store/fullchain.pem" ] && [ -f "/etc/letsencrypt/live/badaejangbu.store/privkey.pem" ]; then
+            echo "✅ SSL 인증서 파일 존재 확인"
+            ls -la /etc/letsencrypt/live/badaejangbu.store/
+            echo "🔧 HTTPS 활성화된 nginx 설정 사용"
+          else
+            echo "⚠️ SSL 인증서 파일이 없습니다. HTTP만 활성화합니다."
+            # Create HTTP-only nginx config
+            cat > nginx.conf << 'NGINX_EOF'
+events {
+    worker_connections 1024;
+}
+
+http {
+    upstream frontend {
+        server frontend:3000;
+    }
+
+    upstream backend {
+        server backend:8000;
+    }
+
+    server {
+        listen 80;
+        server_name badaejangbu.store www.badaejangbu.store;
+
+        # Frontend
+        location / {
+            proxy_pass http://frontend;
+            proxy_set_header Host \$host;
+            proxy_set_header X-Real-IP \$remote_addr;
+            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto \$scheme;
+        }
+
+        # Backend API
+        location /api/ {
+            proxy_pass http://backend/;
+            proxy_set_header Host \$host;
+            proxy_set_header X-Real-IP \$remote_addr;
+            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto \$scheme;
+        }
+    }
+}
+NGINX_EOF
+            echo "🔧 HTTP-only nginx 설정 생성 완료"
+          fi
+          
           # Start new containers in production mode
-          docker compose --env-file ~/.env up -d
+          if [ -f "/etc/letsencrypt/live/badaejangbu.store/fullchain.pem" ]; then
+            # SSL 인증서가 있는 경우 - 볼륨 마운트 추가
+            echo "🔧 SSL 인증서와 함께 컨테이너 시작"
+            docker compose --env-file ~/.env up -d
+            docker compose --env-file ~/.env exec -T nginx sh -c "mkdir -p /etc/letsencrypt" || true
+            docker cp /etc/letsencrypt nginx:/etc/ || true
+          else
+            # SSL 인증서가 없는 경우 - HTTP만
+            echo "🔧 HTTP만으로 컨테이너 시작"
+            docker compose --env-file ~/.env up -d
+          fi
           
           # Copy Firebase Admin SDK key to backend container
           echo "🔧 Firebase Admin SDK 키 파일을 백엔드 컨테이너에 복사 중..."
