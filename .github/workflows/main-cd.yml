@@ -267,13 +267,13 @@ jobs:
         # Application Configuration
         DEBUG=False
         SECRET_KEY="${{ secrets.SECRET_KEY }}"
-        ALLOWED_HOSTS="${{ secrets.ALLOWED_HOSTS }}"
+        ALLOWED_HOSTS="${{ secrets.ALLOWED_HOSTS }},badaejangbu.store,${{ secrets.EC2_HOST }}"
         PROJECT_NAME="Team-PICK-O Backend (Demo)"
         
-        # Network Configuration
+        # Network Configuration (HTTPS 활성화)
         REACT_APP_API_URL="https://badaejangbu.store/api"
         VITE_API_URL="https://badaejangbu.store/api"
-        BACKEND_CORS_ORIGINS=["https://badaejangbu.store","http://localhost:3000"]
+        BACKEND_CORS_ORIGINS='["https://badaejangbu.store","https://www.badaejangbu.store","http://localhost:3000","http://localhost:5173","http://127.0.0.1:3000","http://127.0.0.1:5173","https://localhost:3000"]'
         
         # Ports (데모용)
         FRONTEND_PORT=3000
@@ -354,15 +354,19 @@ jobs:
           
           # Create Firebase Admin SDK key file from environment variable
           echo "🔧 Firebase Admin SDK 키 파일 생성 중..."
-          if [ ! -z "$FIREBASE_ADMIN_CREDENTIALS_JSON" ]; then
-            echo "$FIREBASE_ADMIN_CREDENTIALS_JSON" > firebase-admin-key.json
+          echo "🔍 환경변수 확인: FIREBASE_ADMIN_CREDENTIALS_JSON 길이: \${#FIREBASE_ADMIN_CREDENTIALS_JSON}"
+          
+          if [ ! -z "\$FIREBASE_ADMIN_CREDENTIALS_JSON" ]; then
+            echo "\$FIREBASE_ADMIN_CREDENTIALS_JSON" > firebase-admin-key.json
             echo "✅ Firebase Admin SDK 키 파일 생성 완료"
             ls -la firebase-admin-key.json
-            # Verify file content
-            echo "🔍 파일 내용 검증:"
-            head -3 firebase-admin-key.json
+            # Verify file content (first line only for security)
+            echo "🔍 파일 내용 검증 (첫 줄):"
+            head -1 firebase-admin-key.json
           else
             echo "⚠️ FIREBASE_ADMIN_CREDENTIALS_JSON 환경변수가 비어 있습니다"
+            echo "🔍 현재 설정된 환경변수들:"
+            env | grep FIREBASE || echo "Firebase 관련 환경변수 없음"
             # Create empty file to prevent directory creation
             touch firebase-admin-key.json
           fi
