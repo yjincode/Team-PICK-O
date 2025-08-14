@@ -73,7 +73,7 @@ services:
         condition: service_healthy
     volumes:
       - backend-logs:/app/logs
-      - ./firebase-admin-key.json:/app/firebase-admin-key.json:ro
+      # Firebase Admin SDK 파일은 docker cp로 별도 복사
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health/"]
