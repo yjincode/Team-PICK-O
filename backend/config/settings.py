@@ -26,7 +26,7 @@ FILE_UPLOAD_PERMISSIONS = 0o644
 FILE_UPLOAD_DIRECTORY_PERMISSIONS = 0o755
 
 # Django SECRET_KEY (필수)
-SECRET_KEY = 'django-insecure-change-me-in-production'
+SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-change-me-in-production')
 
 # JWT Settings for fast authentication (replacing Firebase token verification)
 JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY')

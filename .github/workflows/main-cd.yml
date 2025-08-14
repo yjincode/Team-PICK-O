@@ -253,9 +253,18 @@ jobs:
         POSTGRES_DB="${{ secrets.POSTGRES_DB }}"
         POSTGRES_USER="${{ secrets.POSTGRES_USER }}"
         POSTGRES_PASSWORD="${{ secrets.POSTGRES_PASSWORD }}"
+        DATABASE_URL="postgresql://${{ secrets.POSTGRES_USER }}:${{ secrets.POSTGRES_PASSWORD }}@database:5432/${{ secrets.POSTGRES_DB }}"
+        
+        # Database Connection Details for Django
+        DB_HOST="database"
+        DB_PORT="5432"
+        DB_NAME="${{ secrets.POSTGRES_DB }}"
+        DB_USER="${{ secrets.POSTGRES_USER }}"
+        DB_PASSWORD="${{ secrets.POSTGRES_PASSWORD }}"
         
         # Application Configuration
         DEBUG=False
+        SECRET_KEY="${{ secrets.SECRET_KEY }}"
         ALLOWED_HOSTS="${{ secrets.ALLOWED_HOSTS }}"
         PROJECT_NAME="Team-PICK-O Backend (Demo)"
         
