@@ -211,21 +211,37 @@ SPECTACULAR_SETTINGS = {
 }
 
 # CORS settings
-CORS_ALLOWED_ORIGINS = [
+# 기본 개발 환경 Origins
+DEFAULT_CORS_ORIGINS = [
     "http://localhost:3000",
     "http://localhost:8080", 
     "http://127.0.0.1:3000",
     "http://127.0.0.1:8080",
     "http://localhost:5173",  # Vite default port
     "http://127.0.0.1:5173",
+    "https://localhost:3000",  # HTTPS 개발환경
 ]
+
+# 환경변수에서 CORS origins 가져오기 (배포 환경용)
+BACKEND_CORS_ORIGINS = os.getenv('BACKEND_CORS_ORIGINS', '[]')
+try:
+    import ast
+    EXTRA_CORS_ORIGINS = ast.literal_eval(BACKEND_CORS_ORIGINS) if BACKEND_CORS_ORIGINS != '[]' else []
+except (ValueError, SyntaxError):
+    EXTRA_CORS_ORIGINS = []
+    print(f"⚠️ CORS 환경변수 파싱 실패: {BACKEND_CORS_ORIGINS}")
+
+# 기본 Origins + 환경변수 Origins 합치기
+CORS_ALLOWED_ORIGINS = DEFAULT_CORS_ORIGINS + EXTRA_CORS_ORIGINS
 
 CORS_ALLOW_CREDENTIALS = True
 
 # 개발 환경에서는 모든 Origin 허용
 if DEBUG:
     CORS_ALLOW_ALL_ORIGINS = True
-    CORS_ALLOWED_ORIGINS = []
+    print(f"🔧 DEBUG 모드: 모든 CORS Origin 허용")
+else:
+    print(f"🔧 CORS 허용 Origins: {CORS_ALLOWED_ORIGINS}")
 
 # CORS 헤더 설정
 CORS_ALLOW_HEADERS = [
