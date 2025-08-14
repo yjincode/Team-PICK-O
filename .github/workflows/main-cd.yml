@@ -391,97 +391,132 @@ jobs:
           # Pull latest images
           docker compose --env-file ~/.env pull
           
-          # Check SSL certificate files
+          # Always start with HTTP-only nginx configuration first
           echo "🔍 SSL 인증서 파일 확인 중..."
-          echo "🔍 Let's Encrypt 디렉토리 구조:"
-          sudo ls -la /etc/letsencrypt/ || echo "❌ /etc/letsencrypt 없음"
-          sudo ls -la /etc/letsencrypt/live/ || echo "❌ /etc/letsencrypt/live 없음"
-          sudo ls -la /etc/letsencrypt/live/badaejangbu.store/ || echo "❌ 도메인 디렉토리 없음"
-          
-          if sudo test -f "/etc/letsencrypt/live/badaejangbu.store/fullchain.pem" && sudo test -f "/etc/letsencrypt/live/badaejangbu.store/privkey.pem"; then
-            echo "✅ SSL 인증서 파일 존재 확인"
-            sudo ls -la /etc/letsencrypt/live/badaejangbu.store/
-            echo "🔧 HTTPS 활성화된 nginx 설정 사용"
-          else
-            echo "⚠️ SSL 인증서 파일이 없습니다. HTTP만 활성화합니다."
-            echo "🔧 HTTP-only nginx 설정 생성 중..."
-            echo "events {" > nginx.conf
-            echo "    worker_connections 1024;" >> nginx.conf
-            echo "}" >> nginx.conf
-            echo "" >> nginx.conf
-            echo "http {" >> nginx.conf
-            echo "    upstream frontend {" >> nginx.conf
-            echo "        server frontend:3000;" >> nginx.conf
-            echo "    }" >> nginx.conf
-            echo "" >> nginx.conf
-            echo "    upstream backend {" >> nginx.conf
-            echo "        server backend:8000;" >> nginx.conf
-            echo "    }" >> nginx.conf
-            echo "" >> nginx.conf
-            echo "    server {" >> nginx.conf
-            echo "        listen 80;" >> nginx.conf
-            echo "        server_name badaejangbu.store www.badaejangbu.store;" >> nginx.conf
-            echo "" >> nginx.conf
-            echo "        location / {" >> nginx.conf
-            echo "            proxy_pass http://frontend;" >> nginx.conf
-            echo "            proxy_set_header Host \$host;" >> nginx.conf
-            echo "            proxy_set_header X-Real-IP \$remote_addr;" >> nginx.conf
-            echo "            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;" >> nginx.conf
-            echo "            proxy_set_header X-Forwarded-Proto \$scheme;" >> nginx.conf
-            echo "        }" >> nginx.conf
-            echo "" >> nginx.conf
-            echo "        location /api/ {" >> nginx.conf
-            echo "            proxy_pass http://backend/;" >> nginx.conf
-            echo "            proxy_set_header Host \$host;" >> nginx.conf
-            echo "            proxy_set_header X-Real-IP \$remote_addr;" >> nginx.conf
-            echo "            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;" >> nginx.conf
-            echo "            proxy_set_header X-Forwarded-Proto \$scheme;" >> nginx.conf
-            echo "        }" >> nginx.conf
-            echo "    }" >> nginx.conf
-            echo "}" >> nginx.conf
-            echo "🔧 HTTP-only nginx 설정 생성 완료"
-          fi
+          echo "🔧 임시 HTTP-only nginx 설정 생성 중..."
+          echo "events {" > nginx.conf
+          echo "    worker_connections 1024;" >> nginx.conf
+          echo "}" >> nginx.conf
+          echo "" >> nginx.conf
+          echo "http {" >> nginx.conf
+          echo "    upstream frontend {" >> nginx.conf
+          echo "        server frontend:3000;" >> nginx.conf
+          echo "    }" >> nginx.conf
+          echo "" >> nginx.conf
+          echo "    upstream backend {" >> nginx.conf
+          echo "        server backend:8000;" >> nginx.conf
+          echo "    }" >> nginx.conf
+          echo "" >> nginx.conf
+          echo "    server {" >> nginx.conf
+          echo "        listen 80;" >> nginx.conf
+          echo "        server_name badaejangbu.store www.badaejangbu.store;" >> nginx.conf
+          echo "" >> nginx.conf
+          echo "        location / {" >> nginx.conf
+          echo "            proxy_pass http://frontend;" >> nginx.conf
+          echo "            proxy_set_header Host \$host;" >> nginx.conf
+          echo "            proxy_set_header X-Real-IP \$remote_addr;" >> nginx.conf
+          echo "            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;" >> nginx.conf
+          echo "            proxy_set_header X-Forwarded-Proto \$scheme;" >> nginx.conf
+          echo "        }" >> nginx.conf
+          echo "" >> nginx.conf
+          echo "        location /api/ {" >> nginx.conf
+          echo "            proxy_pass http://backend/;" >> nginx.conf
+          echo "            proxy_set_header Host \$host;" >> nginx.conf
+          echo "            proxy_set_header X-Real-IP \$remote_addr;" >> nginx.conf
+          echo "            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;" >> nginx.conf
+          echo "            proxy_set_header X-Forwarded-Proto \$scheme;" >> nginx.conf
+          echo "        }" >> nginx.conf
+          echo "    }" >> nginx.conf
+          echo "}" >> nginx.conf
+          echo "🔧 HTTP-only nginx 설정 생성 완료"
           
           # Start new containers in production mode
           echo "🔧 컨테이너 시작 중..."
           docker compose --env-file ~/.env up -d
           
-          # Copy SSL certificates to nginx container if they exist
-          if sudo test -f "/etc/letsencrypt/live/badaejangbu.store/fullchain.pem"; then
-            echo "🔧 SSL 인증서를 nginx 컨테이너로 복사 중..."
+          # Wait for nginx container to be healthy first
+          echo "⏳ nginx 컨테이너 헬스체크 대기 중..."
+          sleep 10
+          
+          # Check if SSL certificates exist and upgrade to HTTPS
+          if sudo test -f "/etc/letsencrypt/live/badaejangbu.store/fullchain.pem" && sudo test -f "/etc/letsencrypt/live/badaejangbu.store/privkey.pem"; then
+            echo "✅ SSL 인증서 파일 발견! HTTPS로 업그레이드 중..."
             
-            # Wait for nginx container to be fully running
-            echo "⏳ nginx 컨테이너 안정화 대기 중..."
-            for i in {1..30}; do
-              if docker compose --env-file ~/.env exec -T nginx sh -c "echo 'nginx ready'" 2>/dev/null; then
-                echo "✅ nginx 컨테이너 준비 완료"
+            # Wait for nginx to be fully ready
+            echo "⏳ nginx 컨테이너 준비 확인 중..."
+            for i in {1..15}; do
+              if docker compose --env-file ~/.env exec -T nginx sh -c "nginx -t" 2>/dev/null; then
+                echo "✅ nginx 설정 검증 완료"
                 break
               fi
-              echo "🔄 대기 중... ($i/30)"
+              echo "🔄 대기 중... ($i/15)"
               sleep 2
             done
             
-            # Create SSL directory in container
+            # Create SSL directory and copy certificates
             docker compose --env-file ~/.env exec -T nginx sh -c "mkdir -p /etc/letsencrypt/live/badaejangbu.store" || true
+            sudo docker cp /etc/letsencrypt/live/badaejangbu.store/fullchain.pem teamPicko-nginx:/etc/letsencrypt/live/badaejangbu.store/fullchain.pem
+            sudo docker cp /etc/letsencrypt/live/badaejangbu.store/privkey.pem teamPicko-nginx:/etc/letsencrypt/live/badaejangbu.store/privkey.pem
             
-            # Copy SSL certificates
-            echo "📋 SSL 인증서 파일 복사 중..."
-            sudo docker cp /etc/letsencrypt/live/badaejangbu.store/fullchain.pem teamPicko-nginx:/etc/letsencrypt/live/badaejangbu.store/fullchain.pem || echo "⚠️ fullchain.pem 복사 실패"
-            sudo docker cp /etc/letsencrypt/live/badaejangbu.store/privkey.pem teamPicko-nginx:/etc/letsencrypt/live/badaejangbu.store/privkey.pem || echo "⚠️ privkey.pem 복사 실패"
+            # Create HTTPS nginx configuration
+            echo "🔧 HTTPS nginx 설정 생성 중..."
+            docker compose --env-file ~/.env exec -T nginx sh -c "cat > /etc/nginx/nginx.conf << 'EOF'
+events {
+    worker_connections 1024;
+}
+
+http {
+    upstream frontend {
+        server frontend:3000;
+    }
+
+    upstream backend {
+        server backend:8000;
+    }
+
+    # HTTP to HTTPS redirect
+    server {
+        listen 80;
+        server_name badaejangbu.store www.badaejangbu.store;
+        return 301 https://\\\$server_name\\\$request_uri;
+    }
+
+    # HTTPS server
+    server {
+        listen 443 ssl http2;
+        server_name badaejangbu.store www.badaejangbu.store;
+
+        ssl_certificate /etc/letsencrypt/live/badaejangbu.store/fullchain.pem;
+        ssl_certificate_key /etc/letsencrypt/live/badaejangbu.store/privkey.pem;
+        ssl_protocols TLSv1.2 TLSv1.3;
+        ssl_ciphers HIGH:!aNULL:!MD5;
+
+        location / {
+            proxy_pass http://frontend;
+            proxy_set_header Host \\\$host;
+            proxy_set_header X-Real-IP \\\$remote_addr;
+            proxy_set_header X-Forwarded-For \\\$proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto \\\$scheme;
+        }
+
+        location /api/ {
+            proxy_pass http://backend/;
+            proxy_set_header Host \\\$host;
+            proxy_set_header X-Real-IP \\\$remote_addr;
+            proxy_set_header X-Forwarded-For \\\$proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto \\\$scheme;
+        }
+    }
+}
+EOF"
             
-            # Verify files in container
-            echo "🔍 컨테이너 내 SSL 파일 확인:"
-            docker compose --env-file ~/.env exec -T nginx ls -la /etc/letsencrypt/live/badaejangbu.store/ || echo "⚠️ SSL 디렉토리 확인 실패"
-            
-            # Restart nginx to apply SSL configuration
-            echo "🔄 nginx 컨테이너 재시작 (SSL 적용)"
-            docker compose --env-file ~/.env restart nginx
-            
-            # Wait for restart
-            sleep 5
+            # Test and reload nginx configuration
+            echo "🔧 nginx 설정 테스트 중..."
+            docker compose --env-file ~/.env exec -T nginx nginx -t
+            docker compose --env-file ~/.env exec -T nginx nginx -s reload
             echo "✅ HTTPS 설정 완료"
           else
-            echo "🔧 HTTP 전용 모드로 실행"
+            echo "⚠️ SSL 인증서가 없습니다. HTTP 모드로 계속 진행합니다."
           fi
           
           # Copy Firebase Admin SDK key to backend container
