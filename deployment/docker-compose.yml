@@ -36,8 +36,16 @@ services:
       - POSTGRES_USER=${POSTGRES_USER:-postgres}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-password}
       
+      # Database Connection Details for Django
+      - DB_HOST=${DB_HOST:-database}
+      - DB_PORT=${DB_PORT:-5432}
+      - DB_NAME=${DB_NAME:-${POSTGRES_DB:-teamPicko}}
+      - DB_USER=${DB_USER:-${POSTGRES_USER:-postgres}}
+      - DB_PASSWORD=${DB_PASSWORD:-${POSTGRES_PASSWORD:-password}}
+      
       # 애플리케이션 설정 (Secrets에서 주입)  
       - DEBUG=${DEBUG:-False}
+      - SECRET_KEY=${SECRET_KEY}
       - ALLOWED_HOSTS=${ALLOWED_HOSTS:-badaejangbu.store,www.badaejangbu.store,backend,teamPicko-backend,localhost,127.0.0.1}
       
       # JWT 인증 설정 (Secrets에서 주입)
