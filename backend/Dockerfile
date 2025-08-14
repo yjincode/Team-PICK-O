@@ -20,7 +20,7 @@ WORKDIR /app
 # 경량화된 requirements.txt 생성
 COPY requirements.txt .
 
-# 최소한의 의존성만 설치
+# 필수 의존성 설치
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir \
     Django==4.2.7 \
@@ -30,7 +30,10 @@ RUN pip install --no-cache-dir --upgrade pip && \
     psycopg2-binary==2.9.9 \
     drf-spectacular==0.26.5 \
     djangorestframework-simplejwt==5.3.0 \
+    firebase-admin==6.2.0 \
+    PyJWT==2.8.0 \
     httpx==0.25.2 \
+    requests==2.31.0 \
     gunicorn==21.2.0 \
     whitenoise==6.6.0
 
