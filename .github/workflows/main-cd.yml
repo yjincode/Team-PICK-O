@@ -357,18 +357,21 @@ jobs:
           echo "🔍 환경변수 확인: FIREBASE_ADMIN_CREDENTIALS_JSON 길이: \$${#FIREBASE_ADMIN_CREDENTIALS_JSON}"
           
           # Check if Firebase credentials are available from GitHub Secrets
-          FIREBASE_JSON='${{ secrets.FIREBASE_ADMIN_CREDENTIALS_JSON }}'
-          if [ ! -z "\$FIREBASE_JSON" ] && [ "\$FIREBASE_JSON" != "" ]; then
-            echo "\$FIREBASE_JSON" > firebase-admin-key.json
-            echo "✅ Firebase Admin SDK 키 파일 생성 완료"
-            ls -la firebase-admin-key.json
-            # Verify file content (first line only for security)
-            echo "🔍 파일 내용 검증 (첫 줄):"
-            head -1 firebase-admin-key.json
+          echo "🔍 GitHub Secrets 확인 중..."
+          if [ ! -z '${{ secrets.FIREBASE_ADMIN_CREDENTIALS_JSON }}' ]; then
+            echo "✅ Firebase Admin SDK 시크릿 발견"
+            echo '${{ secrets.FIREBASE_ADMIN_CREDENTIALS_JSON }}' > firebase-admin-key.json
+            if [ -f firebase-admin-key.json ] && [ -s firebase-admin-key.json ]; then
+              echo "✅ Firebase Admin SDK 키 파일 생성 완료"
+              ls -la firebase-admin-key.json
+              echo "🔍 파일 내용 검증 (첫 줄):"
+              head -1 firebase-admin-key.json | cut -c1-50
+            else
+              echo "❌ Firebase Admin SDK 키 파일 생성 실패"
+              touch firebase-admin-key.json
+            fi
           else
-            echo "⚠️ GitHub Secrets FIREBASE_ADMIN_CREDENTIALS_JSON이 비어 있습니다"
-            echo "🔍 Firebase JSON 길이: \${#FIREBASE_JSON}"
-            # Create empty file to prevent directory creation
+            echo "⚠️ GitHub Secrets FIREBASE_ADMIN_CREDENTIALS_JSON이 설정되지 않았습니다"
             touch firebase-admin-key.json
           fi
           
@@ -384,65 +387,162 @@ jobs:
           # Pull latest images
           docker compose --env-file ~/.env pull
           
-          # Check SSL certificate files and create appropriate nginx config
-          echo "🔍 SSL 인증서 파일 확인 중..."
+          # Install SSL certificate using Let's Encrypt
+          echo "🔍 SSL 인증서 설치 중..."
+          
+          # Install certbot if not exists
+          if ! command -v certbot &> /dev/null; then
+            echo "📦 Certbot 설치 중..."
+            sudo apt update
+            sudo apt install -y certbot python3-certbot-nginx
+          else
+            echo "✅ Certbot 이미 설치됨"
+          fi
+          
+          # Check if SSL certificate already exists
           if [ -f "/etc/letsencrypt/live/badaejangbu.store/fullchain.pem" ] && [ -f "/etc/letsencrypt/live/badaejangbu.store/privkey.pem" ]; then
             echo "✅ SSL 인증서 파일 존재 확인"
             ls -la /etc/letsencrypt/live/badaejangbu.store/
             echo "🔧 HTTPS 활성화된 nginx 설정 사용"
           else
-            echo "⚠️ SSL 인증서 파일이 없습니다. HTTP만 활성화합니다."
-            # Create HTTP-only nginx config using echo
-            echo "events {" > nginx.conf
-            echo "    worker_connections 1024;" >> nginx.conf
-            echo "}" >> nginx.conf
-            echo "" >> nginx.conf
-            echo "http {" >> nginx.conf
-            echo "    upstream frontend {" >> nginx.conf
-            echo "        server frontend:3000;" >> nginx.conf
-            echo "    }" >> nginx.conf
-            echo "" >> nginx.conf
-            echo "    upstream backend {" >> nginx.conf
-            echo "        server backend:8000;" >> nginx.conf
-            echo "    }" >> nginx.conf
-            echo "" >> nginx.conf
-            echo "    server {" >> nginx.conf
-            echo "        listen 80;" >> nginx.conf
-            echo "        server_name badaejangbu.store www.badaejangbu.store;" >> nginx.conf
-            echo "" >> nginx.conf
-            echo "        # Frontend" >> nginx.conf
-            echo "        location / {" >> nginx.conf
-            echo "            proxy_pass http://frontend;" >> nginx.conf
-            echo "            proxy_set_header Host \$host;" >> nginx.conf
-            echo "            proxy_set_header X-Real-IP \$remote_addr;" >> nginx.conf
-            echo "            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;" >> nginx.conf
-            echo "            proxy_set_header X-Forwarded-Proto \$scheme;" >> nginx.conf
-            echo "        }" >> nginx.conf
-            echo "" >> nginx.conf
-            echo "        # Backend API" >> nginx.conf
-            echo "        location /api/ {" >> nginx.conf
-            echo "            proxy_pass http://backend/;" >> nginx.conf
-            echo "            proxy_set_header Host \$host;" >> nginx.conf
-            echo "            proxy_set_header X-Real-IP \$remote_addr;" >> nginx.conf
-            echo "            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;" >> nginx.conf
-            echo "            proxy_set_header X-Forwarded-Proto \$scheme;" >> nginx.conf
-            echo "        }" >> nginx.conf
-            echo "    }" >> nginx.conf
-            echo "}" >> nginx.conf
-            echo "🔧 HTTP-only nginx 설정 생성 완료"
+            echo "🔧 SSL 인증서 발급 중..."
+            # Stop nginx to free port 80 for certbot
+            docker compose --env-file ~/.env stop nginx || true
+            
+            # Issue SSL certificate
+            sudo certbot certonly --standalone \
+              --non-interactive \
+              --agree-tos \
+              --email admin@badaejangbu.store \
+              -d badaejangbu.store \
+              -d www.badaejangbu.store \
+              --cert-name badaejangbu.store
+            
+            if [ $? -eq 0 ]; then
+              echo "✅ SSL 인증서 발급 완료"
+              ls -la /etc/letsencrypt/live/badaejangbu.store/
+              
+              # Enable auto-renewal
+              sudo systemctl enable certbot.timer || true
+              
+              # Create HTTPS nginx configuration
+              echo "🔧 HTTPS nginx 설정 생성 중..."
+              cat > nginx.conf << 'HTTPS_NGINX_EOF'
+events {
+    worker_connections 1024;
+}
+
+http {
+    upstream frontend {
+        server frontend:3000;
+    }
+
+    upstream backend {
+        server backend:8000;
+    }
+
+    # HTTP to HTTPS redirect
+    server {
+        listen 80;
+        server_name badaejangbu.store www.badaejangbu.store;
+        return 301 https://\$server_name\$request_uri;
+    }
+
+    # HTTPS server
+    server {
+        listen 443 ssl http2;
+        server_name badaejangbu.store www.badaejangbu.store;
+
+        # SSL Configuration
+        ssl_certificate /etc/letsencrypt/live/badaejangbu.store/fullchain.pem;
+        ssl_certificate_key /etc/letsencrypt/live/badaejangbu.store/privkey.pem;
+        ssl_protocols TLSv1.2 TLSv1.3;
+        ssl_ciphers HIGH:!aNULL:!MD5;
+
+        # Frontend
+        location / {
+            proxy_pass http://frontend;
+            proxy_set_header Host \$host;
+            proxy_set_header X-Real-IP \$remote_addr;
+            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto \$scheme;
+        }
+
+        # Backend API
+        location /api/ {
+            proxy_pass http://backend/;
+            proxy_set_header Host \$host;
+            proxy_set_header X-Real-IP \$remote_addr;
+            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto \$scheme;
+        }
+    }
+}
+HTTPS_NGINX_EOF
+            else
+              echo "❌ SSL 인증서 발급 실패. HTTP만 사용합니다."
+              # Create HTTP-only nginx config
+              cat > nginx.conf << 'HTTP_NGINX_EOF'
+events {
+    worker_connections 1024;
+}
+
+http {
+    upstream frontend {
+        server frontend:3000;
+    }
+
+    upstream backend {
+        server backend:8000;
+    }
+
+    server {
+        listen 80;
+        server_name badaejangbu.store www.badaejangbu.store;
+
+        # Frontend
+        location / {
+            proxy_pass http://frontend;
+            proxy_set_header Host \$host;
+            proxy_set_header X-Real-IP \$remote_addr;
+            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto \$scheme;
+        }
+
+        # Backend API
+        location /api/ {
+            proxy_pass http://backend/;
+            proxy_set_header Host \$host;
+            proxy_set_header X-Real-IP \$remote_addr;
+            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto \$scheme;
+        }
+    }
+}
+HTTP_NGINX_EOF
+              echo "🔧 HTTP-only nginx 설정 생성 완료"
+            fi
           fi
           
           # Start new containers in production mode
+          echo "🔧 컨테이너 시작 중..."
+          docker compose --env-file ~/.env up -d
+          
+          # Copy SSL certificates to nginx container if they exist
           if [ -f "/etc/letsencrypt/live/badaejangbu.store/fullchain.pem" ]; then
-            # SSL 인증서가 있는 경우 - 볼륨 마운트 추가
-            echo "🔧 SSL 인증서와 함께 컨테이너 시작"
-            docker compose --env-file ~/.env up -d
-            docker compose --env-file ~/.env exec -T nginx sh -c "mkdir -p /etc/letsencrypt" || true
-            docker cp /etc/letsencrypt nginx:/etc/ || true
+            echo "🔧 SSL 인증서를 nginx 컨테이너로 복사 중..."
+            # Wait for nginx container to be ready
+            sleep 5
+            docker compose --env-file ~/.env exec -T nginx sh -c "mkdir -p /etc/letsencrypt/live/badaejangbu.store" || true
+            docker cp /etc/letsencrypt/live/badaejangbu.store/fullchain.pem teamPicko-nginx:/etc/letsencrypt/live/badaejangbu.store/ || true
+            docker cp /etc/letsencrypt/live/badaejangbu.store/privkey.pem teamPicko-nginx:/etc/letsencrypt/live/badaejangbu.store/ || true
+            
+            # Restart nginx to apply SSL configuration
+            echo "🔄 nginx 컨테이너 재시작 (SSL 적용)"
+            docker compose --env-file ~/.env restart nginx
+            echo "✅ HTTPS 설정 완료"
           else
-            # SSL 인증서가 없는 경우 - HTTP만
-            echo "🔧 HTTP만으로 컨테이너 시작"
-            docker compose --env-file ~/.env up -d
+            echo "🔧 HTTP 전용 모드로 실행"
           fi
           
           # Copy Firebase Admin SDK key to backend container
