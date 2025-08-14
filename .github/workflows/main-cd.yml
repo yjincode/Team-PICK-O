@@ -349,18 +349,23 @@ jobs:
           echo "🔍 배포 전 디스크 공간 확인:"
           df -h
           
+          # Stop existing containers (using production compose)
+          docker compose --env-file ~/.env down || true
+          
           # Create Firebase Admin SDK key file from environment variable
           echo "🔧 Firebase Admin SDK 키 파일 생성 중..."
           if [ ! -z "$FIREBASE_ADMIN_CREDENTIALS_JSON" ]; then
             echo "$FIREBASE_ADMIN_CREDENTIALS_JSON" > firebase-admin-key.json
             echo "✅ Firebase Admin SDK 키 파일 생성 완료"
             ls -la firebase-admin-key.json
+            # Verify file content
+            echo "🔍 파일 내용 검증:"
+            head -3 firebase-admin-key.json
           else
             echo "⚠️ FIREBASE_ADMIN_CREDENTIALS_JSON 환경변수가 비어 있습니다"
+            # Create empty file to prevent directory creation
+            touch firebase-admin-key.json
           fi
-          
-          # Stop existing containers (using production compose)
-          docker compose --env-file ~/.env down || true
           
           # Clean up Docker resources to free space
           echo "🧹 Docker 리소스 정리 중..."
@@ -377,8 +382,26 @@ jobs:
           # Start new containers in production mode
           docker compose --env-file ~/.env up -d
           
+          # Copy Firebase Admin SDK key to backend container
+          echo "🔧 Firebase Admin SDK 키 파일을 백엔드 컨테이너에 복사 중..."
+          if [ -f "firebase-admin-key.json" ]; then
+            # Wait for backend container to be ready
+            sleep 10
+            docker cp firebase-admin-key.json teamPicko-backend:/app/firebase-admin-key.json
+            echo "✅ Firebase Admin SDK 키 파일 복사 완료"
+            
+            # Verify the file in container
+            docker exec teamPicko-backend ls -la /app/firebase-admin-key.json || echo "⚠️ 파일 복사 확인 실패"
+            
+            # Restart backend container to reload Firebase SDK
+            echo "🔄 백엔드 컨테이너 재시작 중..."
+            docker compose --env-file ~/.env restart backend
+          else
+            echo "⚠️ firebase-admin-key.json 파일이 없습니다"
+          fi
+          
           # Wait for services to be healthy
-          sleep 60
+          sleep 50
           
           # Check if services are running
           docker compose --env-file ~/.env ps
