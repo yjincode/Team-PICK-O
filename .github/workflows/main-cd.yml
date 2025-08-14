@@ -392,45 +392,43 @@ jobs:
             echo "🔧 HTTPS 활성화된 nginx 설정 사용"
           else
             echo "⚠️ SSL 인증서 파일이 없습니다. HTTP만 활성화합니다."
-            # Create HTTP-only nginx config
-            cat > nginx.conf << 'NGINX_EOF'
-            events {
-                worker_connections 1024;
-            }
-            
-            http {
-                upstream frontend {
-                    server frontend:3000;
-                }
-            
-                upstream backend {
-                    server backend:8000;
-                }
-            
-                server {
-                    listen 80;
-                    server_name badaejangbu.store www.badaejangbu.store;
-            
-                    # Frontend
-                    location / {
-                        proxy_pass http://frontend;
-                        proxy_set_header Host \$host;
-                        proxy_set_header X-Real-IP \$remote_addr;
-                        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-                        proxy_set_header X-Forwarded-Proto \$scheme;
-                    }
-            
-                    # Backend API
-                    location /api/ {
-                        proxy_pass http://backend/;
-                        proxy_set_header Host \$host;
-                        proxy_set_header X-Real-IP \$remote_addr;
-                        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-                        proxy_set_header X-Forwarded-Proto \$scheme;
-                    }
-                }
-            }
-            NGINX_EOF
+            # Create HTTP-only nginx config using echo
+            echo "events {" > nginx.conf
+            echo "    worker_connections 1024;" >> nginx.conf
+            echo "}" >> nginx.conf
+            echo "" >> nginx.conf
+            echo "http {" >> nginx.conf
+            echo "    upstream frontend {" >> nginx.conf
+            echo "        server frontend:3000;" >> nginx.conf
+            echo "    }" >> nginx.conf
+            echo "" >> nginx.conf
+            echo "    upstream backend {" >> nginx.conf
+            echo "        server backend:8000;" >> nginx.conf
+            echo "    }" >> nginx.conf
+            echo "" >> nginx.conf
+            echo "    server {" >> nginx.conf
+            echo "        listen 80;" >> nginx.conf
+            echo "        server_name badaejangbu.store www.badaejangbu.store;" >> nginx.conf
+            echo "" >> nginx.conf
+            echo "        # Frontend" >> nginx.conf
+            echo "        location / {" >> nginx.conf
+            echo "            proxy_pass http://frontend;" >> nginx.conf
+            echo "            proxy_set_header Host \$host;" >> nginx.conf
+            echo "            proxy_set_header X-Real-IP \$remote_addr;" >> nginx.conf
+            echo "            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;" >> nginx.conf
+            echo "            proxy_set_header X-Forwarded-Proto \$scheme;" >> nginx.conf
+            echo "        }" >> nginx.conf
+            echo "" >> nginx.conf
+            echo "        # Backend API" >> nginx.conf
+            echo "        location /api/ {" >> nginx.conf
+            echo "            proxy_pass http://backend/;" >> nginx.conf
+            echo "            proxy_set_header Host \$host;" >> nginx.conf
+            echo "            proxy_set_header X-Real-IP \$remote_addr;" >> nginx.conf
+            echo "            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;" >> nginx.conf
+            echo "            proxy_set_header X-Forwarded-Proto \$scheme;" >> nginx.conf
+            echo "        }" >> nginx.conf
+            echo "    }" >> nginx.conf
+            echo "}" >> nginx.conf
             echo "🔧 HTTP-only nginx 설정 생성 완료"
           fi
           
