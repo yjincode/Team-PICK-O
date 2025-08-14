@@ -449,15 +449,36 @@ jobs:
           # Copy SSL certificates to nginx container if they exist
           if sudo test -f "/etc/letsencrypt/live/badaejangbu.store/fullchain.pem"; then
             echo "🔧 SSL 인증서를 nginx 컨테이너로 복사 중..."
-            # Wait for nginx container to be ready
-            sleep 5
+            
+            # Wait for nginx container to be fully running
+            echo "⏳ nginx 컨테이너 안정화 대기 중..."
+            for i in {1..30}; do
+              if docker compose --env-file ~/.env exec -T nginx sh -c "echo 'nginx ready'" 2>/dev/null; then
+                echo "✅ nginx 컨테이너 준비 완료"
+                break
+              fi
+              echo "🔄 대기 중... ($i/30)"
+              sleep 2
+            done
+            
+            # Create SSL directory in container
             docker compose --env-file ~/.env exec -T nginx sh -c "mkdir -p /etc/letsencrypt/live/badaejangbu.store" || true
-            sudo docker cp /etc/letsencrypt/live/badaejangbu.store/fullchain.pem teamPicko-nginx:/etc/letsencrypt/live/badaejangbu.store/ || true
-            sudo docker cp /etc/letsencrypt/live/badaejangbu.store/privkey.pem teamPicko-nginx:/etc/letsencrypt/live/badaejangbu.store/ || true
+            
+            # Copy SSL certificates
+            echo "📋 SSL 인증서 파일 복사 중..."
+            sudo docker cp /etc/letsencrypt/live/badaejangbu.store/fullchain.pem teamPicko-nginx:/etc/letsencrypt/live/badaejangbu.store/fullchain.pem || echo "⚠️ fullchain.pem 복사 실패"
+            sudo docker cp /etc/letsencrypt/live/badaejangbu.store/privkey.pem teamPicko-nginx:/etc/letsencrypt/live/badaejangbu.store/privkey.pem || echo "⚠️ privkey.pem 복사 실패"
+            
+            # Verify files in container
+            echo "🔍 컨테이너 내 SSL 파일 확인:"
+            docker compose --env-file ~/.env exec -T nginx ls -la /etc/letsencrypt/live/badaejangbu.store/ || echo "⚠️ SSL 디렉토리 확인 실패"
             
             # Restart nginx to apply SSL configuration
             echo "🔄 nginx 컨테이너 재시작 (SSL 적용)"
             docker compose --env-file ~/.env restart nginx
+            
+            # Wait for restart
+            sleep 5
             echo "✅ HTTPS 설정 완료"
           else
             echo "🔧 HTTP 전용 모드로 실행"
