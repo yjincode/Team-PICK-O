@@ -122,13 +122,14 @@ jobs:
           cd backend
           ls -la
           
-          # Backend 이미지 빌드 및 푸시
+          # Backend 이미지 빌드 및 푸시 (Ubuntu 기반, faster-whisper 포함)
           docker buildx build \
             --platform linux/amd64 \
             --tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
             --tag $ECR_REGISTRY/$ECR_REPOSITORY:latest \
             --push \
             --progress=plain \
+            -f Dockerfile \
             .
           
           echo "✅ Backend 이미지 빌드 및 푸시 완료"
@@ -167,13 +168,14 @@ jobs:
           cd frontend
           ls -la
           
-          # Frontend 이미지 빌드 및 푸시
+          # Frontend 이미지 빌드 및 푸시 (권한 문제 해결됨)
           docker buildx build \
             --platform linux/amd64 \
             --tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
             --tag $ECR_REGISTRY/$ECR_REPOSITORY:latest \
             --push \
             --progress=plain \
+            -f Dockerfile \
             .
           
           echo "✅ Frontend 이미지 빌드 및 푸시 완료"

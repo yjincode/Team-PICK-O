@@ -41,8 +41,8 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=2 \
     CMD curl -f http://localhost:3000/health || exit 1
 
-# nginx 사용자로 실행
-USER nginx
+# root로 실행 (권한 문제 해결)
+# USER nginx
 
 # nginx 실행
 CMD ["nginx", "-g", "daemon off;"]
