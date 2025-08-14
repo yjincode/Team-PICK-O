@@ -7,8 +7,10 @@ RUN addgroup -g 1000 appgroup && adduser -D -s /bin/sh -u 1000 -G appgroup appus
 # 필수 시스템 패키지만 설치 (Alpine 패키지)
 RUN apk add --no-cache \
     postgresql-dev \
+    postgresql-client \
     gcc \
     musl-dev \
+    libffi-dev \
     curl \
     && rm -rf /var/cache/apk/*
 
@@ -43,8 +45,8 @@ RUN mkdir -p /app/static /app/logs && \
 EXPOSE 8000
 
 # 간단한 헬스체크
-HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=2 \
-    CMD curl -f http://localhost:8000/api/v1/health/ || exit 1
+HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost:8000/health/ || exit 1
 
 # non-root 사용자로 전환
 USER appuser
