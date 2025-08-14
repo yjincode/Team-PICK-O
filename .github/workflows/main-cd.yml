@@ -368,11 +368,25 @@ jobs:
           # Check if services are running
           docker compose --env-file ~/.env ps
           
+          # Check backend logs if unhealthy
+          echo "🔍 백엔드 컨테이너 로그 확인:"
+          docker logs teamPicko-backend --tail 50 || true
+          
+          echo "🔍 데이터베이스 컨테이너 로그 확인:"
+          docker logs teamPicko-database --tail 20 || true
+          
           # Verify services are accessible
           echo "🔍 서비스 상태 확인 중..."
           curl -f http://localhost/ || echo "⚠️ Nginx health check failed"
           curl -f http://localhost:3000/ || echo "⚠️ Frontend check failed"
-          curl -f http://localhost:8000/api/v1/ || echo "⚠️ Backend check failed"
+          curl -f http://localhost:8000/health/ || echo "⚠️ Backend check failed"
+          
+          # Additional debugging if backend fails
+          if ! curl -f http://localhost:8000/health/ 2>/dev/null; then
+            echo "🔍 백엔드 디버깅 정보:"
+            docker exec teamPicko-backend ps aux || true
+            docker exec teamPicko-backend netstat -tlnp || echo "netstat not available"
+          fi
           
           # Setup auto-shutdown after 1 hour
           chmod +x auto-shutdown.sh
