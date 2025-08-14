@@ -358,6 +358,10 @@ jobs:
           
           # Check if Firebase credentials are available from GitHub Secrets
           echo "🔍 GitHub Secrets 확인 중..."
+          
+          # Remove any existing firebase-admin-key.json (directory or file)
+          rm -rf firebase-admin-key.json
+          
           if [ ! -z '${{ secrets.FIREBASE_ADMIN_CREDENTIALS_JSON }}' ]; then
             echo "✅ Firebase Admin SDK 시크릿 발견"
             echo '${{ secrets.FIREBASE_ADMIN_CREDENTIALS_JSON }}' > firebase-admin-key.json
