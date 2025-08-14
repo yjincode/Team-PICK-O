@@ -4,14 +4,17 @@ FROM python:3.11-alpine
 # 보안을 위한 non-root 사용자 생성
 RUN addgroup -g 1000 appgroup && adduser -D -s /bin/sh -u 1000 -G appgroup appuser
 
-# 필수 시스템 패키지만 설치 (Alpine 패키지)
+# 필수 시스템 패키지 설치 (Alpine 패키지 + OCR)
 RUN apk add --no-cache \
     postgresql-dev \
     postgresql-client \
     gcc \
+    g++ \
     musl-dev \
     libffi-dev \
     curl \
+    tesseract-ocr \
+    tesseract-ocr-data-kor \
     && rm -rf /var/cache/apk/*
 
 # 작업 디렉토리 설정
@@ -20,7 +23,7 @@ WORKDIR /app
 # 경량화된 requirements.txt 생성
 COPY requirements.txt .
 
-# 필수 의존성 설치
+# 필수 의존성 설치 (활성화된 기능만)
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir \
     Django==4.2.7 \
@@ -34,6 +37,10 @@ RUN pip install --no-cache-dir --upgrade pip && \
     PyJWT==2.8.0 \
     httpx==0.25.2 \
     requests==2.31.0 \
+    pytesseract==0.3.10 \
+    Pillow==10.1.0 \
+    python-dateutil==2.8.2 \
+    celery==5.3.0 \
     gunicorn==21.2.0 \
     whitenoise==6.6.0
 
