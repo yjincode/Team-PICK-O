@@ -304,7 +304,7 @@ jobs:
         scp -i ec2_key.pem -o StrictHostKeyChecking=no deployment.env $EC2_USER@$EC2_HOST:~/.env
         
         # Deploy on EC2
-        ssh -i ec2_key.pem -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST << 'EOF'
+        ssh -i ec2_key.pem -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST << EOF
           # Emergency Docker cleanup first
           echo "🚨 긴급 Docker 정리 시작..."
           docker stop $(docker ps -aq) 2>/dev/null || true
@@ -320,6 +320,9 @@ jobs:
           export AWS_ACCESS_KEY_ID="${{ secrets.AWS_ACCESS_KEY_ID }}"
           export AWS_SECRET_ACCESS_KEY="${{ secrets.AWS_SECRET_ACCESS_KEY }}"
           export AWS_DEFAULT_REGION="${{ secrets.AWS_REGION }}"
+          
+          # Set Firebase Admin SDK JSON for file creation
+          export FIREBASE_ADMIN_CREDENTIALS_JSON='${{ secrets.FIREBASE_ADMIN_CREDENTIALS_JSON }}'
           
           echo "🔍 AWS 자격증명 확인:"
           aws sts get-caller-identity || {
@@ -345,6 +348,16 @@ jobs:
           # Check disk space before deployment
           echo "🔍 배포 전 디스크 공간 확인:"
           df -h
+          
+          # Create Firebase Admin SDK key file from environment variable
+          echo "🔧 Firebase Admin SDK 키 파일 생성 중..."
+          if [ ! -z "$FIREBASE_ADMIN_CREDENTIALS_JSON" ]; then
+            echo "$FIREBASE_ADMIN_CREDENTIALS_JSON" > firebase-admin-key.json
+            echo "✅ Firebase Admin SDK 키 파일 생성 완료"
+            ls -la firebase-admin-key.json
+          else
+            echo "⚠️ FIREBASE_ADMIN_CREDENTIALS_JSON 환경변수가 비어 있습니다"
+          fi
           
           # Stop existing containers (using production compose)
           docker compose --env-file ~/.env down || true
