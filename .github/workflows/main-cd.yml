@@ -393,9 +393,14 @@ jobs:
           
           # Check SSL certificate files
           echo "🔍 SSL 인증서 파일 확인 중..."
-          if [ -f "/etc/letsencrypt/live/badaejangbu.store/fullchain.pem" ] && [ -f "/etc/letsencrypt/live/badaejangbu.store/privkey.pem" ]; then
+          echo "🔍 Let's Encrypt 디렉토리 구조:"
+          sudo ls -la /etc/letsencrypt/ || echo "❌ /etc/letsencrypt 없음"
+          sudo ls -la /etc/letsencrypt/live/ || echo "❌ /etc/letsencrypt/live 없음"
+          sudo ls -la /etc/letsencrypt/live/badaejangbu.store/ || echo "❌ 도메인 디렉토리 없음"
+          
+          if sudo test -f "/etc/letsencrypt/live/badaejangbu.store/fullchain.pem" && sudo test -f "/etc/letsencrypt/live/badaejangbu.store/privkey.pem"; then
             echo "✅ SSL 인증서 파일 존재 확인"
-            ls -la /etc/letsencrypt/live/badaejangbu.store/
+            sudo ls -la /etc/letsencrypt/live/badaejangbu.store/
             echo "🔧 HTTPS 활성화된 nginx 설정 사용"
           else
             echo "⚠️ SSL 인증서 파일이 없습니다. HTTP만 활성화합니다."
@@ -442,13 +447,13 @@ jobs:
           docker compose --env-file ~/.env up -d
           
           # Copy SSL certificates to nginx container if they exist
-          if [ -f "/etc/letsencrypt/live/badaejangbu.store/fullchain.pem" ]; then
+          if sudo test -f "/etc/letsencrypt/live/badaejangbu.store/fullchain.pem"; then
             echo "🔧 SSL 인증서를 nginx 컨테이너로 복사 중..."
             # Wait for nginx container to be ready
             sleep 5
             docker compose --env-file ~/.env exec -T nginx sh -c "mkdir -p /etc/letsencrypt/live/badaejangbu.store" || true
-            docker cp /etc/letsencrypt/live/badaejangbu.store/fullchain.pem teamPicko-nginx:/etc/letsencrypt/live/badaejangbu.store/ || true
-            docker cp /etc/letsencrypt/live/badaejangbu.store/privkey.pem teamPicko-nginx:/etc/letsencrypt/live/badaejangbu.store/ || true
+            sudo docker cp /etc/letsencrypt/live/badaejangbu.store/fullchain.pem teamPicko-nginx:/etc/letsencrypt/live/badaejangbu.store/ || true
+            sudo docker cp /etc/letsencrypt/live/badaejangbu.store/privkey.pem teamPicko-nginx:/etc/letsencrypt/live/badaejangbu.store/ || true
             
             # Restart nginx to apply SSL configuration
             echo "🔄 nginx 컨테이너 재시작 (SSL 적용)"
