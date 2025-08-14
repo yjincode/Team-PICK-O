@@ -357,8 +357,9 @@ jobs:
           echo "🔍 환경변수 확인: FIREBASE_ADMIN_CREDENTIALS_JSON 길이: \$${#FIREBASE_ADMIN_CREDENTIALS_JSON}"
           
           # Check if Firebase credentials are available from GitHub Secrets
-          if [ ! -z '${{ secrets.FIREBASE_ADMIN_CREDENTIALS_JSON }}' ]; then
-            echo '${{ secrets.FIREBASE_ADMIN_CREDENTIALS_JSON }}' > firebase-admin-key.json
+          FIREBASE_JSON='${{ secrets.FIREBASE_ADMIN_CREDENTIALS_JSON }}'
+          if [ ! -z "\$FIREBASE_JSON" ] && [ "\$FIREBASE_JSON" != "" ]; then
+            echo "\$FIREBASE_JSON" > firebase-admin-key.json
             echo "✅ Firebase Admin SDK 키 파일 생성 완료"
             ls -la firebase-admin-key.json
             # Verify file content (first line only for security)
@@ -366,8 +367,7 @@ jobs:
             head -1 firebase-admin-key.json
           else
             echo "⚠️ GitHub Secrets FIREBASE_ADMIN_CREDENTIALS_JSON이 비어 있습니다"
-            echo "🔍 현재 설정된 환경변수들:"
-            env | grep FIREBASE || echo "Firebase 관련 환경변수 없음"
+            echo "🔍 Firebase JSON 길이: \${#FIREBASE_JSON}"
             # Create empty file to prevent directory creation
             touch firebase-admin-key.json
           fi
