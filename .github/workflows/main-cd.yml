@@ -305,8 +305,20 @@ jobs:
             exit 1
           }
           
+          # ECR 레지스트리 URL 설정
+          ECR_REGISTRY="522814725827.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com"
+          echo "🔍 ECR 레지스트리: $ECR_REGISTRY"
+          
           # Login to ECR
+          echo "🔍 ECR 로그인 시도..."
           aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin $ECR_REGISTRY
+          
+          if [ $? -eq 0 ]; then
+            echo "✅ ECR 로그인 성공"
+          else
+            echo "❌ ECR 로그인 실패"
+            exit 1
+          fi
           
           # Stop existing containers (using production compose)
           docker compose --env-file ~/.env down || true
