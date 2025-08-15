@@ -241,7 +241,6 @@ jobs:
         # Copy deployment files to EC2
         scp -i ec2_key.pem -o StrictHostKeyChecking=no \
           deployment/docker-compose.yml \
-          deployment/nginx.conf \
           deployment/auto-shutdown.sh \
           $EC2_USER@$EC2_HOST:~/
         
