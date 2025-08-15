@@ -12,7 +12,7 @@ export interface Business {
   phone_number: string;
   address?: string;
   memo?: string;
-  outstanding_balance: number; // 미수금 필드 추가
+  outstanding_balance?: number; // 미수금 필드는 동적으로 계산되므로 optional
 }
 
 // 2. 어종 테이블
@@ -94,6 +94,7 @@ export interface OrderListItem {
   source_type: 'manual' | 'voice' | 'text';
   transcribed_text?: string;
   last_updated_at: string;
+  has_stock_issues?: boolean;  // 재고 부족 여부 추가
   payment?: {
     id: number;
     payment_status: 'pending' | 'paid' | 'refunded';

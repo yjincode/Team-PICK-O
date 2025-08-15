@@ -115,10 +115,10 @@ const BusinessList: React.FC = () => {
         unpaid[Number(bizId)] = sums.orders || 0;
       });
 
-      setUnpaidByBusinessId(unpaid);
+      // setUnpaidByBusinessId(unpaid);
     } catch (e) {
       console.warn('미수금 계산 실패 (주문/결제 로드 실패):', e);
-      setUnpaidByBusinessId({});
+      // setUnpaidByBusinessId({});
     }
   };
 

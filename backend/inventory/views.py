@@ -302,12 +302,25 @@ class StockCheckView(View):
                 continue
                 
             try:
-                # 어종별 총 재고량 계산
+                # 어종별 실시간 재고량 계산 (등록된 재고 - 주문으로 차감된 재고)
                 from django.db.models import Sum
-                total_stock = Inventory.objects.filter(
+                from .models import StockTransaction
+                
+                # 등록된 총 재고량
+                total_registered_stock = Inventory.objects.filter(
                     fish_type_id=fish_type_id,
                     **get_user_queryset_filter(request)
                 ).aggregate(total=Sum('stock_quantity'))['total'] or 0
+                
+                # 주문으로 차감된 재고량 (quantity_change는 음수)
+                total_ordered = StockTransaction.objects.filter(
+                    fish_type_id=fish_type_id,
+                    user_id=request.user_id,
+                    transaction_type='order'
+                ).aggregate(total=Sum('quantity_change'))['total'] or 0
+                
+                # 실제 가용 재고 = 등록된 재고 + 차감된 재고 (음수이므로 실질적으로 빼기)
+                total_stock = total_registered_stock + total_ordered
                 
                 # 어종 정보 가져오기
                 fish_type = FishType.objects.get(id=fish_type_id, **get_user_queryset_filter(request))
