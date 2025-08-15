@@ -2,8 +2,8 @@
 FROM node:18-alpine AS builder
 
 # 빌드 인수 받기
-ARG REACT_APP_API_URL=https://badaejangbu.store/api
-ARG VITE_API_URL=https://badaejangbu.store/api
+ARG REACT_APP_API_URL=/api
+ARG VITE_API_URL=/api
 ARG NODE_ENV=production
 
 # 작업 디렉토리 설정

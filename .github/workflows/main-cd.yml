@@ -171,8 +171,8 @@ jobs:
           # Frontend 이미지 빌드 및 푸시 (권한 문제 해결됨)
           docker buildx build \
             --platform linux/amd64 \
-            --build-arg REACT_APP_API_URL="https://badaejangbu.store/api" \
-            --build-arg VITE_API_URL="https://badaejangbu.store/api" \
+            --build-arg REACT_APP_API_URL="/api" \
+            --build-arg VITE_API_URL="/api" \
             --build-arg NODE_ENV="production" \
             --tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
             --tag $ECR_REGISTRY/$ECR_REPOSITORY:latest \
@@ -272,9 +272,9 @@ jobs:
         ALLOWED_HOSTS="${{ secrets.ALLOWED_HOSTS }},badaejangbu.store,${{ secrets.EC2_HOST }}"
         PROJECT_NAME="Team-PICK-O Backend (Demo)"
         
-        # Network Configuration (HTTPS 활성화)
-        REACT_APP_API_URL="https://badaejangbu.store/api"
-        VITE_API_URL="https://badaejangbu.store/api"
+        # Network Configuration (상대 경로 사용 - nginx 프록시 통해 백엔드 연결)
+        REACT_APP_API_URL="/api"
+        VITE_API_URL="/api"
         BACKEND_CORS_ORIGINS='["https://badaejangbu.store","https://www.badaejangbu.store","http://localhost:3000","http://localhost:5173","http://127.0.0.1:3000","http://127.0.0.1:5173","https://localhost:3000"]'
         
         # Ports (데모용)
