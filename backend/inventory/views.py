@@ -384,7 +384,8 @@ class StockCheckView(View):
             'items': results,
             'warnings': warnings,
             'errors': errors,
-            'can_proceed': overall_status in ['ok', 'warning']  # 경고는 진행 가능, 오류/부족은 불가
+            'can_proceed': True,  # 재고 부족해도 주문은 항상 등록 가능하도록 변경
+            'has_stock_issues': overall_status in ['insufficient', 'out_of_stock', 'warning']  # 재고 이슈 여부만 알림
         }
         
         print(f"📦 재고 체크 결과: {response_data}")

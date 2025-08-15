@@ -1,6 +1,8 @@
 from django.urls import path
 from . import views
-from .views import BusinessCreateView, BusinessListAPIView
+from .views import (
+    BusinessCreateView, BusinessListAPIView
+)
 
 urlpatterns = [
     path('auth/register/', views.register_user, name='register_user'),
