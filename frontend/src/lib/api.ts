@@ -478,6 +478,44 @@ export const salesApi = {
   },
 }
 
+// Dashboard API
+export const dashboardApi = {
+  // 대시보드 통계 정보 조회
+  getStats: async (): Promise<{
+    todayOrders: number;
+    lowStockCount: number;
+    totalOutstandingBalance: number;
+    businessCount: number;
+  }> => {
+    const response = await api.get('/dashboard/stats/')
+    return response.data
+  },
+
+  // 최근 주문 목록 조회
+  getRecentOrders: async (limit: number = 10): Promise<Array<{
+    id: number;
+    business_name: string;
+    items_summary: string;
+    total_price: number;
+    order_status: string;
+    order_datetime: string;
+  }>> => {
+    const response = await api.get('/dashboard/recent-orders/', { params: { limit } })
+    return response.data
+  },
+
+  // 재고 부족 어종 목록
+  getLowStockItems: async (): Promise<Array<{
+    fish_name: string;
+    total_stock: number;
+    unit: string;
+    status: string;
+  }>> => {
+    const response = await api.get('/dashboard/low-stock/')
+    return response.data
+  },
+}
+
 // AI API
 export const aiApi = {
   getLogs: async (): Promise<any> => {

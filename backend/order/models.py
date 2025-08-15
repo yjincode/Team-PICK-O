@@ -58,6 +58,7 @@ class Order(models.Model):
     cancel_reason = models.TextField(blank=True, null=True, verbose_name="취소 사유")
 
     is_urgent = models.BooleanField(default=False, verbose_name="긴급 주문 여부")
+    has_stock_issues = models.BooleanField(default=False, verbose_name="재고 부족 여부")
     last_updated_at = models.DateTimeField(auto_now=True, verbose_name="최종 수정 일시")
 
     class Meta:
