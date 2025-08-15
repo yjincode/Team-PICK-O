@@ -15,44 +15,8 @@ interface BusinessSearchProps {
   onClose: () => void;
 }
 
-// 목업 거래처 데이터 (실제로는 API에서 가져올 예정)
-const mockBusinesses: Business[] = [
-  {
-    id: 1,
-    business_name: "동해수산",
-    phone_number: "010-1234-5678",
-    address: "부산시 해운대구",
-    memo: "정기 거래처"
-  },
-  {
-    id: 2,
-    business_name: "바다마트",
-    phone_number: "010-2345-6789",
-    address: "부산시 동래구",
-    memo: "신규 거래처"
-  },
-  {
-    id: 3,
-    business_name: "해양식품",
-    phone_number: "010-3456-7890",
-    address: "부산시 수영구",
-    memo: "대량 주문"
-  },
-  {
-    id: 4,
-    business_name: "서해수산",
-    phone_number: "010-4567-8901",
-    address: "인천시 연수구",
-    memo: "정기 거래처"
-  },
-  {
-    id: 5,
-    business_name: "남해어장",
-    phone_number: "010-5678-9012",
-    address: "경남 통영시",
-    memo: "신규 거래처"
-  }
-]
+// 목업 거래처 데이터 제거 - API에서 가져올 예정
+const mockBusinesses: Business[] = []
 
 const BusinessSearch: React.FC<BusinessSearchProps> = ({ onSelect, onClose }) => {
   const [searchTerm, setSearchTerm] = useState("")

@@ -31,7 +31,11 @@ interface RecentOrder {
 
 interface LowStockItem {
   fish_name: string;
-  total_stock: number;
+  registered_stock?: number;  // 등록된 재고
+  ordered_quantity?: number;  // 주문된 수량
+  available_stock?: number;   // 가용 재고
+  shortage?: number;         // 부족 수량
+  total_stock?: number;      // 기존 API 호환성
   unit: string;
   status: string;
 }
@@ -69,7 +73,7 @@ const Dashboard: React.FC = () => {
         ])
 
         setStats(statsData)
-        setRecentOrders(ordersData)
+        setRecentOrders(ordersData as any) // 타입 캐스팅으로 order_status 타입 불일치 해결
         setLowStockItems(stockData)
 
       } catch (err) {
@@ -220,23 +224,46 @@ const Dashboard: React.FC = () => {
           </CardHeader>
           <CardContent>
             {!loading && !error && lowStockItems.length > 0 ? (
-              <div className="space-y-3 max-h-48 overflow-y-auto">
+              <div className="space-y-3 max-h-64 overflow-y-auto">
                 {lowStockItems.map((item, index) => (
-                  <div key={index} className="flex items-center justify-between p-2 bg-orange-50 border-l-4 border-orange-400 rounded">
-                    <div className="flex-1">
-                      <div className="font-medium text-orange-900 text-sm">{item.fish_name}</div>
-                      <div className="text-xs text-orange-700">
-                        재고: {item.total_stock}{item.unit}
-                      </div>
-                    </div>
-                    <div className="flex-shrink-0">
+                  <div key={index} className={`p-3 rounded-lg border-l-4 ${
+                    item.status === 'out_of_stock' 
+                      ? 'bg-red-50 border-red-500' 
+                      : 'bg-orange-50 border-orange-400'
+                  }`}>
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="font-semibold text-sm text-gray-900">{item.fish_name}</div>
                       <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                        item.total_stock === 0 
+                        item.status === 'out_of_stock'
                           ? 'bg-red-100 text-red-800'
                           : 'bg-orange-100 text-orange-800'
                       }`}>
-                        {item.total_stock === 0 ? '품절' : '부족'}
+                        {item.status === 'out_of_stock' ? '품절' : '부족'}
                       </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      {item.registered_stock !== undefined ? (
+                        <>
+                          <div className="text-gray-600">
+                            <span className="font-medium">등록재고:</span> {item.registered_stock}{item.unit}
+                          </div>
+                          <div className="text-blue-600">
+                            <span className="font-medium">주문량:</span> {item.ordered_quantity || 0}{item.unit}
+                          </div>
+                          <div className={`font-medium ${(item.available_stock || 0) <= 0 ? 'text-red-600' : 'text-orange-600'}`}>
+                            <span>가용재고:</span> {item.available_stock || 0}{item.unit}
+                          </div>
+                          {(item.shortage || 0) > 0 && (
+                            <div className="text-red-600 font-medium">
+                              <span>부족:</span> {item.shortage}{item.unit}
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <div className="col-span-2 text-gray-600">
+                          <span className="font-medium">재고:</span> {item.total_stock || 0}{item.unit}
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}

@@ -20,15 +20,16 @@ class OrderItemSerializer(serializers.ModelSerializer):
 
 class OrderSerializer(serializers.ModelSerializer):
     order_items = OrderItemSerializer(many=True)
-    business_id = serializers.IntegerField()
+    business_id = serializers.IntegerField(write_only=True)  # 입력용
     user_id = serializers.IntegerField(required=False)  # user_id 필드 명시적 추가
 
     class Meta:
         model = Order
         fields = [
             'id',
-            'business_id',
-            'user_id',  # user_id 필드 추가
+            'business_id',  # write_only이므로 입력에만 사용
+            'business',     # ForeignKey 관계 출력용
+            'user_id',      # user_id 필드 추가
             'total_price',
             'delivery_datetime',
             'ship_out_datetime',
@@ -55,7 +56,7 @@ class OrderSerializer(serializers.ModelSerializer):
         }
 
     def create(self, validated_data):
-        print(f"🏗️ OrderSerializer.create() 호출됨 - 새 버전 3.0")
+        print(f"🏗️ OrderSerializer.create() 호출됨 - 새 버전 4.0 (재고 추적 포함)")
         print(f"📦 validated_data keys: {list(validated_data.keys())}")
         
         order_items_data = validated_data.pop('order_items')
@@ -63,19 +64,76 @@ class OrderSerializer(serializers.ModelSerializer):
         
         print(f"🏢 추출된 business_id: {business_id}")
         
-        # user_id는 save() 메서드에서 전달받음
+        # 재고 체크 및 재고 이슈 플래그 설정
+        has_stock_issues = False
+        
+        # inventoryApi.checkStock과 동일한 로직으로 재고 체크
+        from inventory.models import Inventory, StockTransaction
+        from fish_registry.models import FishType
+        from django.db.models import Sum
+        from business.models import User
+        
+        user = User.objects.get(id=validated_data.get('user_id'))
+        
+        for item_data in order_items_data:
+            fish_type_id = item_data.get('fish_type_id')
+            quantity = item_data.get('quantity', 0)
+            
+            if fish_type_id and quantity > 0:
+                # 현재 재고량 계산 (실제 재고 - 주문으로 차감된 재고)
+                total_registered_stock = Inventory.objects.filter(
+                    fish_type_id=fish_type_id,
+                    user=user
+                ).aggregate(total=Sum('stock_quantity'))['total'] or 0
+                
+                # 주문으로 차감된 재고량
+                total_ordered = StockTransaction.objects.filter(
+                    fish_type=fish_type_id,
+                    user=user,
+                    transaction_type='order'
+                ).aggregate(total=Sum('quantity_change'))['total'] or 0
+                
+                # 실제 가용 재고 = 등록된 재고 - 주문된 재고 (quantity_change는 음수로 저장됨)
+                available_stock = total_registered_stock + total_ordered  # 음수 더하기이므로 실질적으로는 빼기
+                
+                print(f"📦 재고 체크: {fish_type_id} - 등록재고: {total_registered_stock}, 주문차감: {total_ordered}, 가용재고: {available_stock}")
+                
+                # 재고 부족 여부 확인
+                if quantity > available_stock:
+                    has_stock_issues = True
+                    print(f"⚠️ 재고 부족 감지: {fish_type_id} - 주문: {quantity}, 가용: {available_stock}")
+        
+        # 주문 생성
         order = Order.objects.create(
-            business_id=business_id, 
+            business_id=business_id,
+            has_stock_issues=has_stock_issues,  # 재고 이슈 플래그 설정
             **validated_data
         )
         
-        print(f"🎯 생성된 주문 ID: {order.id}, user_id: {order.user_id}")
-        print(f"🏪 생성된 주문 business_id: {order.business_id}")
+        print(f"🎯 생성된 주문 ID: {order.id}, user_id: {order.user_id}, 재고이슈: {has_stock_issues}")
+        print(f"🏪 생성된 주문 거래처: {order.business.business_name}")
 
+        # 주문 항목 생성 및 재고 차감 기록
         for item_data in order_items_data:
             fish_type_id = item_data.pop('fish_type_id')
-            # inventory_id 제거됨
-            OrderItem.objects.create(order=order, fish_type_id=fish_type_id, **item_data)
+            quantity = item_data.get('quantity', 0)
+            unit = item_data.get('unit', '')
+            
+            # 주문 항목 생성
+            order_item = OrderItem.objects.create(order=order, fish_type_id=fish_type_id, **item_data)
+            
+            # 재고 거래 기록 생성 (주문으로 인한 차감)
+            if quantity > 0:
+                StockTransaction.objects.create(
+                    user=user,
+                    fish_type_id=fish_type_id,
+                    order=order,
+                    transaction_type='order',
+                    quantity_change=-quantity,  # 음수로 저장 (차감)
+                    unit=unit,
+                    notes=f"주문 #{order.id}로 인한 재고 차감"
+                )
+                print(f"📝 재고 거래 기록: {fish_type_id} - {quantity} {unit} 차감")
 
         return order
 
@@ -91,22 +149,20 @@ class OrderListSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'business', 'total_price', 
             'order_datetime', 'delivery_datetime', 'order_status', 'is_urgent', 'items_summary',
-            'memo', 'source_type', 'transcribed_text', 'last_updated_at', 'payment'
+            'memo', 'source_type', 'transcribed_text', 'last_updated_at', 'has_stock_issues', 'payment'
         ]
     
     def get_business(self, obj):
-        # business_id를 사용하여 Business 객체 조회
-        from business.models import Business
-        try:
-            business = Business.objects.get(id=obj.business_id)
+        # ForeignKey 관계를 직접 사용
+        if obj.business:
             return {
-                'id': business.id,
-                'business_name': business.business_name,
-                'phone_number': business.phone_number
+                'id': obj.business.id,
+                'business_name': obj.business.business_name,
+                'phone_number': obj.business.phone_number
             }
-        except Business.DoesNotExist:
+        else:
             return {
-                'id': obj.business_id,
+                'id': None,
                 'business_name': '거래처명 없음',
                 'phone_number': '연락처 없음'
             }

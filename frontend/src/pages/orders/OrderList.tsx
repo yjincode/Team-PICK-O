@@ -16,7 +16,8 @@ import {
   ChevronLeft,
   ChevronRight,
   RotateCcw,
-  Ban
+  Ban,
+  AlertTriangle
 } from "lucide-react"
 
 import { Badge } from "../../components/ui/badge"
@@ -390,9 +391,17 @@ const OrderList: React.FC = () => {
                     </TableRow>
                   ) : (
                     currentOrders.map((order, index) => (
-                      <TableRow key={order.id} className="hover:bg-gray-50 transition-colors">
+                      <TableRow key={order.id} className={`hover:bg-gray-50 transition-colors ${order.has_stock_issues ? 'border-l-4 border-l-red-500 bg-red-50/30' : ''}`}>
                         <TableCell className="font-medium text-gray-900">
-                          {startIndex + index + 1}
+                          <div className="flex items-center gap-2">
+                            {order.has_stock_issues && (
+                              <>
+                                <AlertTriangle className="h-4 w-4 text-red-500" />
+                                <span className="sr-only">재고 부족</span>
+                              </>
+                            )}
+                            {startIndex + index + 1}
+                          </div>
                         </TableCell>
                         <TableCell className="font-medium">
                           <div 
