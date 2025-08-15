@@ -65,7 +65,7 @@ const menuItems: MenuItem[] = [
 const Sidebar: React.FC = () => {
   const location = useLocation()
   // 열린 메뉴 아이템 상태 관리
-  const [openItems, setOpenItems] = useState<string[]>(["고객 관리"])
+  const [openItems, setOpenItems] = useState<string[]>([])
 
   // 메뉴 토글 함수
   const toggleItem = (title: string) => {
