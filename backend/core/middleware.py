@@ -16,16 +16,15 @@ class JWTAuthMiddleware:
     # 인증이 필요 없는 URL 패턴들 (회원가입, 로그인 등)
     EXCLUDED_PATHS = [
         '/admin/',
-        '/api/v1/business/auth/firebase-to-jwt/',
-        '/api/v1/business/auth/register/',
-        '/api/v1/business/auth/status/',
-        '/api/v1/business/auth/refresh/',
+        '/api/v1/business/auth/',  # 전체 auth 경로 제외
         '/api/v1/transcription/',  # STT 서비스는 인증 없이 사용 가능
         '/api/v1/payment/',  # 결제 관련 API는 인증 없이 사용 가능
         '/static/',
         '/media/',
         '/api/docs/',
         '/api/schema/',
+        '/health/',  # 헬스체크
+        '/',  # root
     ]
     
     def __init__(self, get_response):
@@ -78,10 +77,14 @@ class JWTAuthMiddleware:
         # 제외할 경로들 확인
         for excluded_path in self.EXCLUDED_PATHS:
             if request.path.startswith(excluded_path):
+                logger.debug(f"🔓 인증 제외 경로: {request.path}")
                 return False
         
         # API 경로만 처리
-        return request.path.startswith('/api/v1/')
+        should_process = request.path.startswith('/api/v1/')
+        if should_process:
+            logger.debug(f"🔒 인증 필요 경로: {request.path}")
+        return should_process
 
     def _authenticate_request(self, request):
         """JWT 토큰을 검증하고 사용자 정보를 반환"""
