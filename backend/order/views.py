@@ -694,7 +694,7 @@ class OrderListView(View):
         print(f"✅ 사용자 인증 확인: user_id={request.user_id}")
         
         # 미들웨어에서 설정된 user_id 사용
-        orders = Order.objects.select_related('business').prefetch_related('items__fish_type').filter(**get_user_queryset_filter(request))
+        orders = Order.objects.prefetch_related('items__fish_type').filter(**get_user_queryset_filter(request))
         
         # 상태별 필터링 (선택사항)
         status_filter = request.GET.get('status')
@@ -755,20 +755,28 @@ class OrderStatusUpdateView(View):
                 data = json.loads(request.body)
             else:
                 data = request.POST.dict()
+            print(f"📝 파싱된 데이터: {data}")
         except json.JSONDecodeError as e:
+            print(f"❌ JSON 파싱 오류: {e}")
             return JsonResponse({'error': '잘못된 JSON 형식입니다.'}, status=400)
         
         try:
             # 미들웨어에서 설정된 user_id 사용
             order = Order.objects.get(id=order_id, **get_user_queryset_filter(request))
+            print(f"🔍 주문 조회 성공: order_id={order.id}, 현재 상태={order.order_status}")
+            
             serializer = OrderStatusUpdateSerializer(order, data=data, partial=True)
+            print(f"🔍 Serializer 데이터: {serializer.initial_data}")
             
             if serializer.is_valid():
+                print(f"✅ Serializer 유효성 검증 성공")
                 serializer.save()
                 return JsonResponse({
                     'message': '주문 상태가 변경되었습니다.',
                     'order_status': serializer.data['order_status']
                 })
+            
+            print(f"❌ Serializer 유효성 검증 실패: {serializer.errors}")
             return JsonResponse(serializer.errors, status=400)
         except Order.DoesNotExist:
             return JsonResponse({'error': '주문을 찾을 수 없습니다.'}, status=404)
@@ -899,11 +907,7 @@ def ship_out_order_view(request, order_id):
                 'error': '출고 준비된 주문만 출고할 수 있습니다.'
             }, status=status.HTTP_400_BAD_REQUEST)
         
-        # 결제 완료 여부 확인
-        if not order.payment_set.filter(payment_status='paid').exists():
-            return Response({
-                'error': '결제가 완료되지 않은 주문은 출고할 수 없습니다.'
-            }, status=status.HTTP_400_BAD_REQUEST)
+
         
         # 출고 처리
         order.order_status = 'delivered'
@@ -955,11 +959,7 @@ def update_order_view(request, order_id):
                 'error': '취소된 주문은 수정할 수 없습니다.'
             }, status=status.HTTP_400_BAD_REQUEST)
         
-        # 결제 완료된 주문은 수정 불가
-        if order.payment_set.filter(payment_status='paid').exists():
-            return Response({
-                'error': '결제가 완료된 주문은 수정할 수 없습니다.'
-            }, status=status.HTTP_400_BAD_REQUEST)
+
         
         # Serializer로 수정 처리
         serializer = OrderUpdateSerializer(order, data=request.data, partial=request.method == 'PATCH')

@@ -18,7 +18,7 @@ interface Order {
   source_type: 'voice' | 'text' | 'manual' | 'image';
   transcribed_text?: string;
   delivery_date?: string;
-  status: 'success' | 'failed' | 'pending';
+  status: 'placed' | 'ready' | 'delivered' | 'cancelled';
   business?: {
     id: number;
     business_name: string;
@@ -44,12 +44,14 @@ interface OrderListTableProps {
 // 주문 상태 텍스트 변환
 const getStatusText = (status: string) => {
   switch (status) {
-    case "pending":
-      return <Badge variant="secondary">등록</Badge>
-    case "success":
-      return <Badge variant="default">완료</Badge>
-    case "failed":
-      return <Badge variant="destructive">실패</Badge>
+    case "placed":
+      return <Badge variant="secondary">주문접수</Badge>
+    case "ready":
+      return <Badge variant="default">출고준비</Badge>
+    case "delivered":
+      return <Badge variant="default">납품완료</Badge>
+    case "cancelled":
+      return <Badge variant="destructive">취소됨</Badge>
     default:
       return <Badge variant="outline">알 수 없음</Badge>
   }
@@ -58,12 +60,12 @@ const getStatusText = (status: string) => {
 // 결제 상태 텍스트 변환
 const getPaymentStatusText = (status: string) => {
   switch (status) {
-    case "pending":
-      return <Badge variant="outline">대기</Badge>
-    case "success":
-      return <Badge variant="default">완료</Badge>
-    case "failed":
-      return <Badge variant="destructive">실패</Badge>
+    case "placed":
+      return <Badge variant="outline">미결제</Badge>
+    case "paid":
+      return <Badge variant="default">결제완료</Badge>
+    case "refunded":
+      return <Badge variant="destructive">환불됨</Badge>
     default:
       return <Badge variant="outline">알 수 없음</Badge>
   }

@@ -35,3 +35,15 @@ export const PaymentStatusBadge: React.FC<PaymentStatusBadgeProps> = ({ status, 
     {getLabel('paymentStatus', status)}
   </Badge>
 )
+
+// ==================== 결제 방법 배지 ====================
+interface PaymentMethodBadgeProps {
+  method: 'card' | 'cash' | 'bank_transfer';
+  className?: string;
+}
+
+export const PaymentMethodBadge: React.FC<PaymentMethodBadgeProps> = ({ method, className }) => (
+  <Badge className={`text-xs sm:text-sm ${getBadgeClass('paymentMethod', method)} ${className || ''}`}>
+    {getLabel('paymentMethod', method)}
+  </Badge>
+)

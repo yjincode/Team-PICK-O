@@ -24,11 +24,7 @@ class Order(models.Model):
         on_delete=models.CASCADE, 
         verbose_name="사용자"
     )
-    business = models.ForeignKey(
-        'business.Business', 
-        on_delete=models.CASCADE, 
-        verbose_name="거래처 ID"
-    )
+    business_id = models.IntegerField(verbose_name="거래처 ID")
 
     total_price = models.IntegerField(default=0, verbose_name="총 주문 금액")
     order_datetime = models.DateTimeField(auto_now_add=True, verbose_name="주문 등록 일시")
@@ -67,7 +63,7 @@ class Order(models.Model):
         ordering = ['-order_datetime']
 
     def __str__(self):
-        return f"주문 #{self.id} - {self.business.business_name}"
+        return f"주문 #{self.id} - 거래처 ID: {self.business_id}"
 
 
 class OrderItem(models.Model):

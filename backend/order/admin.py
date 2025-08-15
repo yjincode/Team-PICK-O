@@ -10,9 +10,9 @@ class FishTypeAdmin(admin.ModelAdmin):
 
 @admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
-    list_display = ['id', 'business', 'total_price', 'source_type', 'order_status', 'order_datetime']
+    list_display = ['id', 'business_id', 'total_price', 'source_type', 'order_status', 'order_datetime']
     list_filter = ['order_status', 'source_type']
-    search_fields = ['business__business_name', 'memo']
+    search_fields = ['business_id', 'memo']
     readonly_fields = ['order_datetime']
 
 @admin.register(OrderItem)

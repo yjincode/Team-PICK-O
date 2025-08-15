@@ -27,7 +27,8 @@ def api_root(request):
             "business": "/api/v1/business/",
             "accounts": "/api/v1/accounts/",
             "dashboard": "/api/v1/dashboard/",
-            "order": "/api/v1/order/",
+            "orders": "/api/v1/orders/",
+            "payments": "/api/v1/payments/", 
             "inventory": "/api/v1/inventory/",
             "fish_registry": "/api/v1/fish-registry/",
         }
@@ -72,7 +73,7 @@ urlpatterns = [
     path('api/v1/dashboard/', include('dashboard.urls')),
     # path('api/v1/fish/', include('fish_analysis.urls')),  # PyTorch 의존성으로 임시 비활성화
     path('api/v1/orders/', include('order.urls')),  # 복수형으로 수정
-    path('api/v1/payments/', include('payment.urls')),  # 복수형으로 수정
+    path('api/v1/payments/', include('payment.urls')),  # 결제 API
     path('api/v1/inventory/', include('inventory.urls')),
     path('api/v1/fish-registry/', include('fish_registry.urls')),
     path('api/v1/transcription/', include('transcription.urls')),

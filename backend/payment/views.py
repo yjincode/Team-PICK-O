@@ -1,273 +1,336 @@
-import httpx
-import base64
-from django.conf import settings
+import logging
 from django.views.decorators.csrf import csrf_exempt
-from rest_framework.decorators import api_view, permission_classes
-from rest_framework.response import Response
+from django.utils.decorators import method_decorator
+from django.db.models import Sum, Count
 from rest_framework import status
-from rest_framework.permissions import AllowAny
-from django.shortcuts import get_object_or_404
+from rest_framework.response import Response
+from rest_framework.views import APIView
 from django.utils import timezone
 
+from core.middleware import UserValidationMixin, get_user_queryset_filter
+from .serializers import TossConfirmSerializer, MarkPaidSerializer, RefundSerializer, CancelOrderSerializer
+from .services import PaymentService, PaymentError
 from order.models import Order
-from .models import Payment
+from payment.models import Payment  # 결제 모델
+
+logger = logging.getLogger(__name__)
 
 
-@csrf_exempt
-@api_view(['POST'])
-@permission_classes([AllowAny])
-def toss_confirm_view(request):
+@method_decorator(csrf_exempt, name='dispatch')
+class TossConfirmView(APIView):
     """
-    토스 결제 승인 엔드포인트
-    프론트 성공 리다이렉트에서 전달된 paymentKey, orderId, amount를 받아
-    토스 서버 승인 API 호출 후 Payment/Order 상태 갱신
+    토스 페이먼츠 결제 확정 API
     """
-    payment_key = request.data.get('paymentKey')
-    order_id = request.data.get('orderId')
-    amount = request.data.get('amount')
+    permission_classes = []
+    authentication_classes = []
 
-    if not payment_key or not order_id or not amount:
-        return Response({'error': 'paymentKey, orderId, amount는 필수입니다.'}, status=status.HTTP_400_BAD_REQUEST)
+    def post(self, request):
+        logger.debug(f"🔍 TossConfirmView.post 시작: {request.path}")
+        logger.debug(f"🔍 request.data: {request.data}")
 
-    try:
-        amount = int(amount)
-    except Exception:
-        return Response({'error': 'amount는 정수여야 합니다.'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            serializer = TossConfirmSerializer(data=request.data, context={"request": request})
+            if not serializer.is_valid():
+                return Response(
+                    {"error": "요청 데이터가 올바르지 않습니다.", "details": serializer.errors},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
 
-    # orderId 형식: order-<order_pk>-<timestamp> 가정
-    try:
-        order_pk = int(str(order_id).split('-')[1])
-    except Exception:
-        return Response({'error': 'orderId 형식이 올바르지 않습니다.'}, status=status.HTTP_400_BAD_REQUEST)
+            payment_key = serializer.validated_data["paymentKey"]
+            merchant_uid = serializer.validated_data["orderId"]  # 문자열 그대로
+            amount = serializer.validated_data["amount"]
 
-    order = get_object_or_404(Order, id=order_pk)
+            # serializer에서 찾아둔 pending 결제
+            payment = serializer.context.get("payment")
+            if not payment:
+                payment = Payment.objects.filter(merchant_uid=merchant_uid, payment_status="pending").first()
+                if not payment:
+                    return Response({"error": "해당 결제를 찾을 수 없습니다."}, status=status.HTTP_404_NOT_FOUND)
 
-    # 금액 유효성 검증 (요청 금액과 주문 금액 일치 여부)
-    if amount != (order.total_price or 0):
-        return Response({'error': '요청 금액이 주문 금액과 일치하지 않습니다.'}, status=status.HTTP_400_BAD_REQUEST)
-
-    # Toss API 인증 정보
-    toss_secret_key = getattr(settings, 'TOSS_SECRET_KEY', None)
-    if not toss_secret_key:
-        # 개발 환경에서는 토스 승인을 스킵하고 주문 상태만 업데이트
-        print("⚠️ TOSS_SECRET_KEY가 설정되지 않아 개발 모드로 동작합니다.")
-        
-        # 주문 상태를 결제 완료로 업데이트
-        order.order_status = 'ready'  # 또는 'paid' 상태
-        order.save()
-        
-        # Payment 레코드 생성
-        Payment.objects.create(
-            order=order,
-            business_id=order.business_id,
-            amount=amount,
-            method='card',
-            payment_status='paid',
-            paid_at=timezone.now(),
-            imp_uid=payment_key,
-            merchant_uid=order_id
-        )
-        
-        return Response({
-            'message': '결제가 완료되었습니다 (개발 모드)',
-            'order_id': order.id,
-            'status': 'paid'
-        })
-
-    # 실제 토스 승인 API 호출
-    try:
-        toss_url = 'https://api.tosspayments.com/v1/payments/confirm'
-        auth_string = base64.b64encode(f'{toss_secret_key}:'.encode()).decode()
-        
-        with httpx.Client() as client:
-            response = client.post(
-                toss_url,
-                json={
-                    'paymentKey': payment_key,
-                    'orderId': order_id,
-                    'amount': amount
-                },
-                headers={
-                    'Authorization': f'Basic {auth_string}',
-                    'Content-Type': 'application/json'
-                }
+            result = PaymentService.process_toss_confirm(
+                payment_key=payment_key,
+                order_id=payment.order.id,
+                amount=amount,
+                order_id_for_toss=merchant_uid
             )
-            
-            if response.status_code == 200:
-                # 결제 승인 성공
-                order.order_status = 'ready'
-                order.save()
+
+            return Response({"message": "결제가 성공적으로 확정되었습니다.", "data": result})
+
+        except PaymentError as e:
+            return Response({"error": e.message}, status=e.code)
+        except Exception as e:
+            logger.error(f"토스 페이먼츠 확정 오류: {e}", exc_info=True)
+            return Response({"error": "결제 확정 중 오류가 발생했습니다."},
+                            status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class MarkPaidView(UserValidationMixin, APIView):
+    """수동 결제 완료 API (현금/계좌이체)"""
+    permission_classes = []
+    authentication_classes = []
+
+    def post(self, request):
+        try:
+            serializer = MarkPaidSerializer(data=request.data)
+            if not serializer.is_valid():
+                return Response(
+                    {"error": "요청 데이터가 올바르지 않습니다.", "details": serializer.errors},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            result = PaymentService.process_mark_paid(
+                serializer.validated_data["orderId"],
+                serializer.validated_data["amount"],
+                serializer.validated_data["method"],
+                serializer.validated_data.get("payerName"),
+                serializer.validated_data.get("bankName")
+            )
+
+            return Response({"message": "결제가 성공적으로 완료되었습니다.", "data": result})
+
+        except PaymentError as e:
+            return Response({"error": e.message}, status=e.code)
+        except Exception as e:
+            logger.error(f"수동 결제 완료 오류: {e}", exc_info=True)
+            return Response({"error": "결제 완료 처리 중 오류가 발생했습니다."},
+                            status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class RefundView(UserValidationMixin, APIView):
+    """환불 처리 API"""
+    permission_classes = []
+    authentication_classes = []
+
+    def post(self, request):
+        try:
+            serializer = RefundSerializer(data=request.data)
+            if not serializer.is_valid():
+                return Response(
+                    {"error": "요청 데이터가 올바르지 않습니다.", "details": serializer.errors},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            result = PaymentService.process_refund(
+                serializer.validated_data["orderId"],
+                serializer.validated_data["refundReason"]
+            )
+
+            return Response({"message": "환불이 성공적으로 처리되었습니다.", "data": result})
+
+        except PaymentError as e:
+            return Response({"error": e.message}, status=e.code)
+        except Exception as e:
+            logger.error(f"환불 처리 오류: {e}", exc_info=True)
+            return Response({"error": "환불 처리 중 오류가 발생했습니다."},
+                            status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class CancelOrderView(UserValidationMixin, APIView):
+    """주문 취소 API"""
+    permission_classes = []
+    authentication_classes = []
+
+    def post(self, request):
+        try:
+            serializer = CancelOrderSerializer(data=request.data)
+            if not serializer.is_valid():
+                return Response(
+                    {"error": "요청 데이터가 올바르지 않습니다.", "details": serializer.errors},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            result = PaymentService.process_cancel_order(
+                serializer.validated_data["orderId"],
+                serializer.validated_data["cancelReason"]
+            )
+
+            return Response({"message": "주문이 성공적으로 취소되었습니다.", "data": result})
+
+        except PaymentError as e:
+            return Response({"error": e.message}, status=e.code)
+        except Exception as e:
+            logger.error(f"주문 취소 오류: {e}", exc_info=True)
+            return Response({"error": "주문 취소 중 오류가 발생했습니다."},
+                            status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class TossRequestView(APIView):
+    """
+    토스 페이먼츠 결제 요청 API (결제창 방식용)
+    pending 상태의 Payment를 미리 생성하여 결제창 호출 준비
+    """
+    permission_classes = []
+    authentication_classes = []
+
+    def post(self, request):
+        logger.debug(f"🔍 TossRequestView.post 시작: {request.path}")
+        logger.debug(f"🔍 request.data: {request.data}")
+
+        try:
+            order_id = request.data.get("orderId")
+            amount = request.data.get("amount")
+            order_id_for_toss = request.data.get("orderIdForToss")
+
+            logger.info(f"🔍 받은 데이터: orderId={order_id}, amount={amount}, orderIdForToss={order_id_for_toss}")
+
+            if not all([order_id, amount, order_id_for_toss]):
+                missing_fields = []
+                if not order_id: missing_fields.append("orderId")
+                if not amount: missing_fields.append("amount")
+                if not order_id_for_toss: missing_fields.append("orderIdForToss")
                 
-                # Payment 레코드 생성
-                Payment.objects.create(
+                logger.error(f"필수 파라미터 누락: {missing_fields}")
+                return Response(
+                    {"error": f"필수 파라미터가 누락되었습니다: {missing_fields}"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # 주문 정보 조회
+            try:
+                order = Order.objects.get(id=order_id)
+                logger.info(f"주문 정보 조회 성공: order_id={order.id}, business_id={order.business_id}, total_price={order.total_price}")
+            except Order.DoesNotExist:
+                logger.error(f"존재하지 않는 주문: {order_id}")
+                return Response({"error": "존재하지 않는 주문입니다."}, status=status.HTTP_404_NOT_FOUND)
+            except Exception as e:
+                logger.error(f"주문 조회 중 오류: {e}", exc_info=True)
+                return Response({"error": "주문 조회 중 오류가 발생했습니다."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+            # 금액 검증
+            if amount != order.total_price:
+                logger.error(f"금액 불일치: 결제 금액 {amount}, 주문 금액 {order.total_price}")
+                return Response(
+                    {"error": f"결제 금액({amount:,}원)이 주문 금액({order.total_price:,}원)과 일치하지 않습니다."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # 중복 pending 결제 방지
+            existing_pending = Payment.objects.filter(
+                merchant_uid=order_id_for_toss,
+                payment_status='pending'
+            ).exists()
+            
+            if existing_pending:
+                logger.warning(f"이미 대기 중인 결제가 있습니다: merchant_uid={order_id_for_toss}")
+                return Response({"error": "이미 대기 중인 결제가 있습니다."}, status=status.HTTP_409_CONFLICT)
+
+            # pending 상태의 Payment 생성
+            try:
+                payment = Payment.objects.create(
                     order=order,
                     business_id=order.business_id,
                     amount=amount,
                     method='card',
-                    payment_status='paid',
-                    paid_at=timezone.now(),
-                    imp_uid=payment_key,
-                    merchant_uid=order_id
+                    payment_status='pending',
+                    merchant_uid=order_id_for_toss,
+                    created_at=timezone.now()
                 )
-                
-                return Response({
-                    'message': '결제가 완료되었습니다',
-                    'order_id': order.id,
-                    'status': 'paid'
-                })
-            else:
-                return Response({
-                    'error': '토스 결제 승인 실패',
-                    'details': response.text
-                }, status=status.HTTP_400_BAD_REQUEST)
-                
-    except Exception as e:
-        return Response({
-            'error': '결제 승인 처리 중 오류 발생',
-            'details': str(e)
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                logger.info(f"pending Payment 생성 완료: payment_id={payment.id}, merchant_uid={order_id_for_toss}")
+            except Exception as e:
+                logger.error(f"Payment 생성 중 오류: {e}", exc_info=True)
+                return Response({"error": "결제 정보 생성 중 오류가 발생했습니다."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-
-@api_view(['POST'])
-def manual_payment_complete_view(request):
-    """
-    현금/계좌이체 결제 완료 처리 API
-    운영자가 수동으로 결제 상태를 'paid'로 변경
-    """
-    # 사용자 인증 확인
-    if not hasattr(request, 'user_id') or not request.user_id:
-        return Response({
-            'error': '사용자 인증이 필요합니다.'
-        }, status=status.HTTP_401_UNAUTHORIZED)
-    
-    order_id = request.data.get('order_id')
-    payment_method = request.data.get('method')  # 'cash' 또는 'bank_transfer'
-    amount = request.data.get('amount')
-    
-    if not order_id or not payment_method or not amount:
-        return Response({
-            'error': 'order_id, method, amount는 필수입니다.'
-        }, status=status.HTTP_400_BAD_REQUEST)
-    
-    try:
-        amount = int(amount)
-    except Exception:
-        return Response({
-            'error': 'amount는 정수여야 합니다.'
-        }, status=status.HTTP_400_BAD_REQUEST)
-    
-    if payment_method not in ['cash', 'bank_transfer']:
-        return Response({
-            'error': 'method는 cash 또는 bank_transfer여야 합니다.'
-        }, status=status.HTTP_400_BAD_REQUEST)
-    
-    try:
-        order = get_object_or_404(Order, id=order_id)
-        
-        # 사용자 권한 확인 - 자신이 생성한 주문만 결제 완료 처리 가능 (임시 주석처리)
-        # if order.user_id != request.user_id:
-        #     return Response({
-        #         'error': '해당 주문을 결제 완료 처리할 권한이 없습니다.'
-        #     }, status=status.HTTP_403_FORBIDDEN)
-        
-        # 결제 정보 생성 또는 업데이트
-        payment, created = Payment.objects.get_or_create(
-            order=order,
-            defaults={
-                'business_id': order.business_id,
-                'amount': amount,
-                'method': payment_method,
-                'payment_status': 'paid',
-                'paid_at': timezone.now()
-            }
-        )
-        
-        if not created:
-            # 기존 결제 정보가 있으면 업데이트
-            payment.amount = amount
-            payment.method = payment_method
-            payment.payment_status = 'paid'
-            payment.paid_at = timezone.now()
-            payment.save()
-        
-        # 주문 상태를 'ready'로 변경 (결제 완료 시)
-        order.order_status = 'ready'
-        order.save()
-        
-        return Response({
-            'message': '결제가 완료되었습니다',
-            'order_id': order.id,
-            'payment_id': payment.id,
-            'status': 'paid'
-        })
-        
-    except Exception as e:
-        return Response({
-            'error': '결제 완료 처리 중 오류 발생',
-            'details': str(e)
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
-@api_view(['POST'])
-def refund_payment_view(request):
-    """
-    결제 환불 처리 API
-    결제 상태를 'refunded'로 변경하고 환불 사유 기록
-    """
-    # 사용자 인증 확인
-    if not hasattr(request, 'user_id') or not request.user_id:
-        return Response({
-            'error': '사용자 인증이 필요합니다.'
-        }, status=status.HTTP_401_UNAUTHORIZED)
-    
-    payment_id = request.data.get('payment_id')
-    refund_reason = request.data.get('refund_reason', '')
-    
-    if not payment_id:
-        return Response({
-            'error': 'payment_id는 필수입니다.'
-        }, status=status.HTTP_400_BAD_REQUEST)
-    
-    try:
-        payment = Payment.objects.get(id=payment_id)
-        
-        # 사용자 권한 확인 - 자신이 생성한 주문의 결제만 환불 가능 (임시 주석처리)
-        # if payment.order.user_id != request.user_id:
-        #     return Response({
-        #         'error': '해당 결제를 환불할 권한이 없습니다.'
-        #     }, status=status.HTTP_403_FORBIDDEN)
-        
-        # 환불 가능 여부 확인
-        if payment.payment_status != 'paid':
             return Response({
-                'error': '결제 완료된 결제만 환불할 수 있습니다.'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        # 환불 처리
-        payment.payment_status = 'refunded'
-        payment.refund_reason = refund_reason
-        payment.refunded = True
-        payment.save()
-        
-        return Response({
-            'message': '환불이 처리되었습니다',
-            'payment_id': payment.id,
-            'payment_status': 'refunded',
-            'refund_reason': refund_reason
-        })
-        
-    except Payment.DoesNotExist:
-        return Response({
-            'error': '결제를 찾을 수 없습니다.'
-        }, status=status.HTTP_404_NOT_FOUND)
-    except Exception as e:
-        return Response({
-            'error': '환불 처리 중 오류 발생',
-            'details': str(e)
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                "message": "결제 요청이 성공적으로 생성되었습니다.",
+                "data": {
+                    "paymentId": payment.id,
+                    "orderId": order_id,
+                    "amount": amount,
+                    "merchantUid": order_id_for_toss
+                }
+            })
+
+        except Exception as e:
+            logger.error(f"토스 페이먼츠 요청 생성 오류: {e}", exc_info=True)
+            return Response({"error": "결제 요청 생성 중 오류가 발생했습니다."},
+                            status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-# 기존 클래스 기반 뷰를 유지하되 사용하지 않음
-class TossConfirmView:
-    """레거시 - 사용하지 않음"""
-    pass
+class UnpaidOrdersView(UserValidationMixin, APIView):
+    """미결제 주문 목록 조회 API"""
+
+    def get(self, request):
+        try:
+            business_id = request.GET.get("businessId")
+            from_date = request.GET.get("from")
+            to_date = request.GET.get("to")
+
+            user_filter = get_user_queryset_filter(request)
+            orders_query = Order.objects.filter(**user_filter)
+            orders_query = orders_query.exclude(payment__payment_status="paid").distinct()
+
+            if business_id:
+                orders_query = orders_query.filter(business_id=business_id)
+            if from_date:
+                orders_query = orders_query.filter(order_datetime__gte=from_date)
+            if to_date:
+                orders_query = orders_query.filter(order_datetime__lte=to_date)
+
+            unpaid_orders = []
+            for order in orders_query.select_related("business"):
+                unpaid_orders.append({
+                    "orderId": order.id,
+                    "businessId": order.business_id,
+                    "businessName": order.business.business_name if order.business else None,
+                    "unpaidAmount": order.total_price,
+                    "orderStatus": getattr(order, "order_status", None) or getattr(order, "status", None),
+                    "orderDatetime": order.order_datetime.isoformat(),
+                    "deliveryDatetime": getattr(order, "delivery_datetime", None).isoformat()
+                        if getattr(order, "delivery_datetime", None) else None
+                })
+
+            return Response(unpaid_orders)
+
+        except Exception as e:
+            logger.error(f"미결제 주문 조회 오류: {e}", exc_info=True)
+            return Response({"error": "미결제 주문 조회 중 오류가 발생했습니다."},
+                            status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class ARSummaryView(UserValidationMixin, APIView):
+    """미수금 요약 조회 API"""
+
+    def get(self, request):
+        try:
+            user_filter = get_user_queryset_filter(request)
+            from business.models import Business
+
+            summary_data = (
+                Order.objects
+                .filter(**user_filter)
+                .exclude(payment__payment_status="paid")
+                .values("business_id")
+                .annotate(
+                    unpaidTotal=Sum("total_price"),
+                    unpaidOrders=Count("id")
+                )
+                .order_by("-unpaidTotal")
+            )
+
+            summary_list = []
+            for item in summary_data:
+                business_id = item["business_id"]
+                business_name = "알 수 없는 거래처"
+                if business_id:
+                    try:
+                        business = Business.objects.get(id=business_id)
+                        business_name = business.business_name
+                    except Business.DoesNotExist:
+                        pass
+                summary_list.append({
+                    "businessId": business_id,
+                    "businessName": business_name,
+                    "unpaidTotal": item["unpaidTotal"] or 0,
+                    "unpaidOrders": item["unpaidOrders"] or 0
+                })
+
+            return Response(summary_list)
+
+        except Exception as e:
+            logger.error(f"미수금 요약 조회 오류: {e}", exc_info=True)
+            return Response({"error": "미수금 요약 조회 중 오류가 발생했습니다."},
+                            status=status.HTTP_500_INTERNAL_SERVER_ERROR)

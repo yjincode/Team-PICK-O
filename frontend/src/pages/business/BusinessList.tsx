@@ -9,7 +9,7 @@ import { Card, CardContent } from "../../components/ui/card"
 import { Button } from "../../components/ui/button"
 import { Input } from "../../components/ui/input"
 import { Search, Plus, Phone, Eye, Edit, Loader2 } from "lucide-react"
-import { businessApi, orderApi, paymentsApi } from "../../lib/api"
+import { businessApi, orderApi } from "../../lib/api"
 import { useAuth } from "../../contexts/AuthContext"
 import toast, { Toaster } from 'react-hot-toast';
 import { useKakaoPostcode } from "../../hooks/useKakaoPostcode";
@@ -93,6 +93,35 @@ const BusinessList: React.FC = () => {
       setIsLoadingBusinesses(false);
     }
   };
+
+
+  // 주문 및 결제 불러와서 미수금 계산
+  const fetchUnpaidStats = async () => {
+    try {
+      // 주문 목록 (기존 order API 사용)
+      const ordersRes = await orderApi.getAll();
+      const orders = Array.isArray(ordersRes) ? ordersRes : ordersRes.data || [];
+      const sumByBusiness: Record<number, { orders: number }> = {};
+
+      for (const o of orders) {
+        const businessId = o.business_id;
+        if (!businessId) continue;
+        if (!sumByBusiness[businessId]) sumByBusiness[businessId] = { orders: 0 };
+        sumByBusiness[businessId].orders += Number(o.total_price || 0);
+      }
+
+      const unpaid: Record<number, number> = {};
+      Object.entries(sumByBusiness).forEach(([bizId, sums]) => {
+        unpaid[Number(bizId)] = sums.orders || 0;
+      });
+
+      setUnpaidByBusinessId(unpaid);
+    } catch (e) {
+      console.warn('미수금 계산 실패 (주문/결제 로드 실패):', e);
+      setUnpaidByBusinessId({});
+    }
+  };
+
 
 
   // AuthContext 로딩이 완료되면 API 호출 (인증 여부와 관계없이)

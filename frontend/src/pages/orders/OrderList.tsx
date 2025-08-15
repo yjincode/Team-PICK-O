@@ -14,7 +14,9 @@ import {
   CreditCard,
   Filter,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  RotateCcw,
+  Ban
 } from "lucide-react"
 
 import { Badge } from "../../components/ui/badge"
@@ -27,20 +29,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../components/ui/table"
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card"
 import { OrderListItem } from "../../types"
-import { orderApi } from "../../lib/api"
+import { orderApi, paymentApi } from "../../lib/api"
 import toast from 'react-hot-toast'
 import OrderForm from "./OrderForm"
 import { OrderStatusBadge, PaymentStatusBadge } from "../../components/common/StatusBadges"
 import { getLabel } from "../../lib/labels"
-
-// 주문 데이터 타입 정의 (OrderListSerializer 반영)
-type Order = OrderListItem;
-
-
-
-
-
-
+import RefundCancelModal from "../../components/modals/RefundCancelModal"
 
 // 금액 포맷팅
 const formatPrice = (price: number) => {
@@ -50,15 +44,23 @@ const formatPrice = (price: number) => {
 const OrderList: React.FC = () => {
   const navigate = useNavigate()
   const [showOrderForm, setShowOrderForm] = useState(false)
-  const [orders, setOrders] = useState<Order[]>([])
-  const [filteredOrders, setFilteredOrders] = useState<Order[]>([])
+  const [orders, setOrders] = useState<OrderListItem[]>([])
+  const [filteredOrders, setFilteredOrders] = useState<OrderListItem[]>([])
   const [date, setDate] = useState<Date>()
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [paymentStatusFilter, setPaymentStatusFilter] = useState<string>("all")
+
   const [searchQuery, setSearchQuery] = useState<string>("")
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage] = useState(10)
   const [loading, setLoading] = useState(true)
+
+  // 환불/취소 모달 상태
+  const [showRefundModal, setShowRefundModal] = useState(false)
+  const [showCancelModal, setShowCancelModal] = useState(false)
+  const [selectedOrderId, setSelectedOrderId] = useState<number | null>(null)
+  const [processingRefund, setProcessingRefund] = useState(false)
+  const [processingCancel, setProcessingCancel] = useState(false)
 
   // 주문 목록 가져오기 (orderApi 사용)
   useEffect(() => {
@@ -92,33 +94,31 @@ const OrderList: React.FC = () => {
 
     // 결제 상태별 필터
     if (paymentStatusFilter !== "all") {
-      // OrderListSerializer에는 payment_status가 없으므로 필터링 제거
-      // 대신 주문 상태에 따라 필터링
       if (paymentStatusFilter === "paid") {
-        filtered = filtered.filter(order => order.order_status === "delivered" || order.order_status === "cancelled")
+        filtered = filtered.filter(order => order.payment?.payment_status === "paid")
       } else if (paymentStatusFilter === "pending") {
-        filtered = filtered.filter(order => order.order_status === "placed")
+        filtered = filtered.filter(order => !order.payment || order.payment.payment_status === "pending")
       } else if (paymentStatusFilter === "refunded") {
-        filtered = filtered.filter(order => order.order_status === "cancelled")
+        filtered = filtered.filter(order => order.payment?.payment_status === "refunded")
       }
     }
 
     // 날짜별 필터
     if (date) {
-      const selectedDate = format(date, "yyyy-MM-dd")
-      filtered = filtered.filter(order => 
-        format(new Date(order.order_datetime), "yyyy-MM-dd") === selectedDate
-      )
+      filtered = filtered.filter(order => {
+        const orderDate = new Date(order.order_datetime)
+        return orderDate.toDateString() === date.toDateString()
+      })
     }
 
     // 검색 필터
     if (searchQuery) {
-      const query = searchQuery.toLowerCase()
-      filtered = filtered.filter(order => 
-        order.business?.business_name?.toLowerCase().includes(query) ||
-        order.id.toString().includes(query) ||
-        order.memo?.toLowerCase().includes(query)
-      )
+      filtered = filtered.filter(order => {
+        const businessName = order.business?.business_name || ''
+        const itemsSummary = order.items_summary || ''
+        return businessName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+               itemsSummary.toLowerCase().includes(searchQuery.toLowerCase())
+      })
     }
 
     setFilteredOrders(filtered)
@@ -157,10 +157,7 @@ const OrderList: React.FC = () => {
     refreshOrders()
   }
 
-  // 결제 처리 (OrderListSerializer에는 payment 정보가 없으므로 주문 상태만 변경)
-  const handlePayment = (orderId: number) => {
-    navigate(`/orders/${orderId}/payment`)
-  }
+
 
   // 상세보기 처리
   const handleViewDetail = (orderId: number) => {
@@ -170,6 +167,77 @@ const OrderList: React.FC = () => {
       return
     }
     navigate(`/orders/${orderId}`)
+  }
+
+  // 결제 처리
+  const handlePayment = (orderId: number) => {
+    navigate(`/orders/${orderId}/payment`)
+  }
+
+  // 환불 처리
+  const handleRefund = (orderId: number) => {
+    setSelectedOrderId(orderId)
+    setShowRefundModal(true)
+  }
+
+  // 주문 취소
+  const handleCancel = (orderId: number) => {
+    setSelectedOrderId(orderId)
+    setShowCancelModal(true)
+  }
+
+  // 환불 처리 실행
+  const executeRefund = async (reason: string) => {
+    if (!selectedOrderId) return
+
+    try {
+      setProcessingRefund(true)
+      await paymentApi.refund({
+        orderId: selectedOrderId,
+        refundReason: reason
+      })
+      
+      toast.success('환불이 성공적으로 처리되었습니다!')
+      setShowRefundModal(false)
+      
+      // 주문 목록 새로고침
+      const response = await orderApi.getAll()
+      const ordersData = response.data || response || []
+      setOrders(Array.isArray(ordersData) ? ordersData : [])
+      
+    } catch (error: any) {
+      console.error('환불 처리 실패:', error)
+      toast.error(error.response?.data?.error || '환불 처리 중 오류가 발생했습니다.')
+    } finally {
+      setProcessingRefund(false)
+    }
+  }
+
+  // 주문 취소 실행
+  const executeCancel = async (reason: string) => {
+    if (!selectedOrderId) return
+
+    try {
+      setProcessingCancel(true)
+      await paymentApi.cancelOrder({
+        orderId: selectedOrderId,
+        cancelReason: reason
+      })
+      
+      toast.success('주문이 성공적으로 취소되었습니다!')
+      setShowCancelModal(false)
+      
+      // 주문 목록 새로고침
+      const response = await orderApi.getAll()
+      const ordersData = response.data || response || []
+      setOrders(Array.isArray(ordersData) ? ordersData : [])
+      
+    } catch (error: any) {
+      console.error('주문 취소 실패:', error)
+      toast.error(error.response?.data?.error || '주문 취소 중 오류가 발생했습니다.')
+    } finally {
+      setProcessingCancel(false)
+    }
   }
 
   return (
@@ -232,9 +300,9 @@ const OrderList: React.FC = () => {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">전체</SelectItem>
-                    <SelectItem value="paid">{getLabel('paymentStatus', 'paid')}</SelectItem>
-                    <SelectItem value="pending">{getLabel('paymentStatus', 'pending')}</SelectItem>
-                    <SelectItem value="refunded">{getLabel('paymentStatus', 'refunded')}</SelectItem>
+                    <SelectItem value="pending">미결제</SelectItem>
+                    <SelectItem value="paid">결제 완료</SelectItem>
+                    <SelectItem value="refunded">환불됨</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -348,7 +416,13 @@ const OrderList: React.FC = () => {
                         </TableCell>
                         <TableCell>
                           {/* 결제 상태 표시 */}
-                          <PaymentStatusBadge status={order.payment?.payment_status || 'pending'} />
+                          {order.payment ? (
+                            <PaymentStatusBadge status={order.payment.payment_status} />
+                          ) : (
+                            <Badge variant="outline" className="text-gray-500 border-gray-300">
+                              미결제
+                            </Badge>
+                          )}
                         </TableCell>
                         <TableCell className="text-center">
                           {/* 주문 상태 표시 */}
@@ -365,8 +439,9 @@ const OrderList: React.FC = () => {
                               <Eye className="h-4 w-4 mr-1" />
                               상세
                             </Button>
-                            {/* 결제 버튼 노출 조건 */}
-                            {(order.order_status === 'placed' || order.order_status === 'ready') && (
+
+                            {/* 결제 버튼 - 미결제 상태일 때만 표시 */}
+                            {(!order.payment || order.payment.payment_status !== 'paid') && (
                               <Button
                                 variant="outline"
                                 size="sm"
@@ -377,6 +452,34 @@ const OrderList: React.FC = () => {
                                 결제
                               </Button>
                             )}
+
+                            {/* 환불 버튼 - 결제 완료 상태일 때만 표시 */}
+                            {order.payment?.payment_status === 'paid' && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleRefund(order.id)}
+                                className="border-orange-600 text-orange-600 hover:bg-orange-50"
+                              >
+                                <RotateCcw className="h-4 w-4 mr-1" />
+                                환불
+                              </Button>
+                            )}
+
+                            {/* 주문 취소 버튼 - 결제되지 않았거나 대기 상태일 때만 표시 */}
+                            {(!order.payment || order.payment.payment_status === 'pending') && 
+                             order.order_status !== 'cancelled' && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleCancel(order.id)}
+                                className="border-red-600 text-red-600 hover:bg-red-50"
+                              >
+                                <Ban className="h-4 w-4 mr-1" />
+                                취소
+                              </Button>
+                            )}
+
                           </div>
                         </TableCell>
                       </TableRow>
@@ -438,6 +541,25 @@ const OrderList: React.FC = () => {
           onSubmit={handleNewOrder}
         />
       )}
+
+      {/* 환불/취소 모달 */}
+      <RefundCancelModal
+        isOpen={showRefundModal}
+        onClose={() => setShowRefundModal(false)}
+        onSubmit={executeRefund}
+        type="refund"
+        orderId={selectedOrderId || 0}
+        isLoading={processingRefund}
+      />
+
+      <RefundCancelModal
+        isOpen={showCancelModal}
+        onClose={() => setShowCancelModal(false)}
+        onSubmit={executeCancel}
+        type="cancel"
+        orderId={selectedOrderId || 0}
+        isLoading={processingCancel}
+      />
     </div>
   )
 }

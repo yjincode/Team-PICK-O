@@ -20,8 +20,7 @@ interface SettlementData {
   totalAmount: number;     // 총 미수금
   paidAmount: number;      // 결제 금액
   remainingAmount: number; // 잔여 금액
-  paymentDate: string;     // 결제일
-  paymentMethod: string;   // 결제 방법
+
   notes: string;          // 메모
 }
 
@@ -35,8 +34,7 @@ const SettlementForm: React.FC = () => {
     totalAmount: 2400000,
     paidAmount: 0,
     remainingAmount: 2400000,
-    paymentDate: "",
-    paymentMethod: "bank_transfer",
+
     notes: "",
   })
 
@@ -123,59 +121,6 @@ const SettlementForm: React.FC = () => {
                 </div>
               </div>
             </div>
-          </CardContent>
-        </Card>
-
-        {/* 결제 정보 카드 */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <DollarSign className="h-5 w-5" />
-              <span>결제 정보</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <Label htmlFor="paidAmount">결제 금액</Label>
-              <div className="flex items-center space-x-2 mt-1">
-                <DollarSign className="h-4 w-4 text-green-500" />
-                <Input
-                  id="paidAmount"
-                  type="number"
-                  value={formData.paidAmount}
-                  onChange={(e) => handleInputChange('paidAmount', Number(e.target.value))}
-                  className="font-semibold"
-                  min="0"
-                  max={formData.totalAmount}
-                />
-              </div>
-            </div>
-            <div>
-              <Label htmlFor="paymentDate">결제일</Label>
-              <div className="flex items-center space-x-2 mt-1">
-                <Calendar className="h-4 w-4 text-gray-400" />
-                <Input
-                  id="paymentDate"
-                  type="date"
-                  value={formData.paymentDate}
-                  onChange={(e) => handleInputChange('paymentDate', e.target.value)}
-                  className="mt-1"
-                />
-              </div>
-            </div>
-            <div>
-              <Label htmlFor="paymentMethod">결제 방법</Label>
-              <select
-                id="paymentMethod"
-                value={formData.paymentMethod}
-                onChange={(e) => handleInputChange('paymentMethod', e.target.value)}
-                className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="bank_transfer">계좌이체</option>
-                <option value="card">카드결제</option>
-                <option value="cash">현금</option>
-              </select>
-            </div>
             <div>
               <Label htmlFor="notes">메모</Label>
               <Textarea
@@ -189,6 +134,8 @@ const SettlementForm: React.FC = () => {
             </div>
           </CardContent>
         </Card>
+
+
       </div>
 
       {/* 액션 버튼들 */}

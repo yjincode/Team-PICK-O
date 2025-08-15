@@ -7,11 +7,11 @@ from pathlib import Path
 from dotenv import load_dotenv
 import ast
 
-# Load environment variables
-load_dotenv()
-
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Load environment variables (BASE_DIR 설정 후에 호출)
+load_dotenv(BASE_DIR / '.env')
 
 # Media files (user uploaded files)
 MEDIA_URL = '/media/'
@@ -35,14 +35,26 @@ JWT_ALGORITHM = 'HS256'
 JWT_ACCESS_EXPIRATION_MINUTES = 15  # 액세스 토큰: 15분
 JWT_REFRESH_EXPIRATION_DAYS = 7    # 리프레시 토큰: 7일
 
+# Toss Payments 설정
+TOSS_SECRET_KEY = os.getenv('TOSS_SECRET_KEY')  # .env 파일에서 설정
+TOSS_PAYMENT_KEY = os.getenv('TOSS_PAYMENT_KEY')  # .env 파일에서 설정
+TOSS_ENVIRONMENT = os.getenv('TOSS_ENVIRONMENT', 'test')  # test 또는 live
+
 # Firebase Admin SDK 설정
 FIREBASE_ADMIN_CREDENTIALS = os.path.join(BASE_DIR, 'firebase-admin-key.json')
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('DEBUG', 'True').lower() == 'true'
 
-# CSRF 보호 비활성화 (JWT 사용 시)
-# 미들웨어에서 이미 비활성화했으므로 추가 설정 불필요
+# CSRF 보호 완전 비활성화 (JWT 사용 시)
+CSRF_COOKIE_SECURE = False
+CSRF_COOKIE_HTTPONLY = False
+CSRF_USE_SESSIONS = False
+CSRF_COOKIE_SAMESITE = None
+CSRF_COOKIE_AGE = None
+CSRF_COOKIE_NAME = None
+CSRF_HEADER_NAME = None
+CSRF_TRUSTED_ORIGINS = []
 
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
 
@@ -241,7 +253,6 @@ CORS_ALLOW_HEADERS = [
     'dnt',
     'origin',
     'user-agent',
-    'x-csrftoken',
     'x-requested-with',
 ]
 
@@ -254,22 +265,8 @@ CORS_ALLOW_METHODS = [
     'PUT',
 ]
 
-# CSRF settings
-CSRF_TRUSTED_ORIGINS = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    "http://localhost:8080",
-    "http://127.0.0.1:8080",
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-]
-
-# 개발 환경에서는 모든 Origin 허용
-if DEBUG:
-    CSRF_TRUSTED_ORIGINS.extend([
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-    ])
+# CSRF settings - 완전 비활성화
+CSRF_TRUSTED_ORIGINS = []
 
 # Logging configuration - Console only
 LOGGING = {
