@@ -10,8 +10,8 @@ services:
       - "443:443"
     environment:
       - NODE_ENV=${NODE_ENV:-production}
-      - REACT_APP_API_URL=${REACT_APP_API_URL:-https://badaejangbu.store/api}
-      - VITE_API_URL=${VITE_API_URL:-https://badaejangbu.store/api}
+      - REACT_APP_API_URL=${REACT_APP_API_URL:-/api}
+      - VITE_API_URL=${VITE_API_URL:-/api}
       # 토스 결제 설정 (Secrets에서 주입)
       - VITE_TOSS_CLIENT_KEY=${VITE_TOSS_CLIENT_KEY:-test_ck_default}
     volumes:
