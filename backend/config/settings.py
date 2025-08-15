@@ -25,6 +25,9 @@ TESSERACT_TESSDATA_DIR = os.getenv('TESSERACT_TESSDATA_DIR', '/usr/share/tessera
 FILE_UPLOAD_PERMISSIONS = 0o644
 FILE_UPLOAD_DIRECTORY_PERMISSIONS = 0o755
 
+# Django SECRET_KEY (필수)
+SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-change-me-in-production')
+
 # JWT Settings for fast authentication (replacing Firebase token verification)
 JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY')
 JWT_REFRESH_SECRET_KEY = os.getenv('JWT_REFRESH_SECRET_KEY')
@@ -50,7 +53,7 @@ DJANGO_APPS = [
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
-    'django.contrib.staticfiles',
+    # 'django.contrib.staticfiles',  # API 서버이므로 비활성화
     'prediction',
 ]
 
@@ -151,12 +154,10 @@ TIME_ZONE = 'Asia/Seoul'
 USE_I18N = True
 USE_TZ = True
 
-# Static files (CSS, JavaScript, Images)
-STATIC_URL = '/static/'
-STATIC_ROOT = BASE_DIR / 'staticfiles'
-STATICFILES_DIRS = [
-    BASE_DIR / 'static',
-]
+# Static files 비활성화 (API 서버로만 사용)
+# STATIC_URL = '/static/'
+# STATIC_ROOT = BASE_DIR / 'staticfiles'
+# STATICFILES_DIRS = []
 
 # Media files (User uploads)
 MEDIA_URL = '/media/'
