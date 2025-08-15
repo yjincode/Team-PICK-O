@@ -24,25 +24,27 @@ FROM nginx:1.25-alpine
 RUN apk add --no-cache curl && \
     rm -rf /var/cache/apk/*
 
-# nginx 설정 파일 복사
+# nginx 설정 파일 및 entrypoint 복사
 COPY --from=builder /app/nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=builder /app/entrypoint.sh /entrypoint.sh
 
 # 빌드된 앱만 복사 (최소한의 파일)
 COPY --from=builder /app/dist /usr/share/nginx/html
 
-# 권한 최소화
+# 권한 설정
 RUN chown -R nginx:nginx /usr/share/nginx/html && \
-    chmod -R 755 /usr/share/nginx/html
+    chmod -R 755 /usr/share/nginx/html && \
+    chmod +x /entrypoint.sh
 
 # 포트 설정
-EXPOSE 3000
+EXPOSE 80 443
 
 # 간단한 헬스체크
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=2 \
-    CMD curl -f http://localhost:3000/health || exit 1
+    CMD curl -f http://localhost/health || exit 1
 
 # root로 실행 (권한 문제 해결)
 # USER nginx
 
-# nginx 실행
-CMD ["nginx", "-g", "daemon off;"]
+# entrypoint 스크립트 실행
+CMD ["/entrypoint.sh"]
