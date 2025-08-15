@@ -171,6 +171,9 @@ jobs:
           # Frontend 이미지 빌드 및 푸시 (권한 문제 해결됨)
           docker buildx build \
             --platform linux/amd64 \
+            --build-arg REACT_APP_API_URL="https://badaejangbu.store/api" \
+            --build-arg VITE_API_URL="https://badaejangbu.store/api" \
+            --build-arg NODE_ENV="production" \
             --tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
             --tag $ECR_REGISTRY/$ECR_REPOSITORY:latest \
             --push \

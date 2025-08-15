@@ -1,6 +1,11 @@
 # 경량화된 React frontend
 FROM node:18-alpine AS builder
 
+# 빌드 인수 받기
+ARG REACT_APP_API_URL=https://badaejangbu.store/api
+ARG VITE_API_URL=https://badaejangbu.store/api
+ARG NODE_ENV=production
+
 # 작업 디렉토리 설정
 WORKDIR /app
 
@@ -13,8 +18,12 @@ RUN npm ci --silent --no-audit --no-fund
 # 소스 코드 복사
 COPY . .
 
+# 환경변수 설정
+ENV REACT_APP_API_URL=$REACT_APP_API_URL
+ENV VITE_API_URL=$VITE_API_URL
+ENV NODE_ENV=$NODE_ENV
+
 # React 앱 빌드 (최적화)
-ENV NODE_ENV=production
 RUN npm run build
 
 # 경량화된 nginx alpine
