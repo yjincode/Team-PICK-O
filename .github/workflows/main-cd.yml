@@ -122,13 +122,14 @@ jobs:
           cd backend
           ls -la
           
-          # Backend 이미지 빌드 및 푸시
+          # Backend 이미지 빌드 및 푸시 (Ubuntu 기반, faster-whisper 포함)
           docker buildx build \
             --platform linux/amd64 \
             --tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
             --tag $ECR_REGISTRY/$ECR_REPOSITORY:latest \
             --push \
             --progress=plain \
+            -f Dockerfile \
             .
           
           echo "✅ Backend 이미지 빌드 및 푸시 완료"
@@ -167,13 +168,16 @@ jobs:
           cd frontend
           ls -la
           
-          # Frontend 이미지 빌드 및 푸시
+          # Frontend 이미지 빌드 및 푸시 (권한 문제 해결됨)
           docker buildx build \
             --platform linux/amd64 \
+            --build-arg VITE_API_BASE_URL="/api/v1" \
+            --build-arg NODE_ENV="production" \
             --tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
             --tag $ECR_REGISTRY/$ECR_REPOSITORY:latest \
             --push \
             --progress=plain \
+            -f Dockerfile \
             .
           
           echo "✅ Frontend 이미지 빌드 및 푸시 완료"
@@ -239,7 +243,6 @@ jobs:
         # Copy deployment files to EC2
         scp -i ec2_key.pem -o StrictHostKeyChecking=no \
           deployment/docker-compose.yml \
-          deployment/nginx.conf \
           deployment/auto-shutdown.sh \
           $EC2_USER@$EC2_HOST:~/
         
@@ -265,13 +268,12 @@ jobs:
         # Application Configuration
         DEBUG=False
         SECRET_KEY="${{ secrets.SECRET_KEY }}"
-        ALLOWED_HOSTS="${{ secrets.ALLOWED_HOSTS }}"
+        ALLOWED_HOSTS="${{ secrets.ALLOWED_HOSTS }},badaejangbu.store,${{ secrets.EC2_HOST }}"
         PROJECT_NAME="Team-PICK-O Backend (Demo)"
         
-        # Network Configuration
-        REACT_APP_API_URL="https://badaejangbu.store/api"
-        VITE_API_URL="https://badaejangbu.store/api"
-        BACKEND_CORS_ORIGINS=["https://badaejangbu.store","http://localhost:3000"]
+        # Network Configuration (상대 경로 사용 - nginx 프록시 통해 백엔드 연결)
+        VITE_API_BASE_URL="/api/v1"
+        BACKEND_CORS_ORIGINS='["https://badaejangbu.store","https://www.badaejangbu.store","http://localhost:3000","http://localhost:5173","http://127.0.0.1:3000","http://127.0.0.1:5173","https://localhost:3000"]'
         
         # Ports (데모용)
         FRONTEND_PORT=3000
@@ -302,11 +304,25 @@ jobs:
         scp -i ec2_key.pem -o StrictHostKeyChecking=no deployment.env $EC2_USER@$EC2_HOST:~/.env
         
         # Deploy on EC2
-        ssh -i ec2_key.pem -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST << 'EOF'
+        ssh -i ec2_key.pem -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST << EOF
+          # Emergency Docker cleanup first
+          echo "🚨 긴급 Docker 정리 시작..."
+          docker stop $(docker ps -aq) 2>/dev/null || true
+          docker rm $(docker ps -aq) 2>/dev/null || true
+          docker rmi $(docker images -q) 2>/dev/null || true
+          docker system prune -af --volumes 2>/dev/null || true
+          docker builder prune -af 2>/dev/null || true
+          
+          echo "🔍 정리 후 디스크 공간:"
+          df -h
+          
           # Configure AWS credentials on EC2
           export AWS_ACCESS_KEY_ID="${{ secrets.AWS_ACCESS_KEY_ID }}"
           export AWS_SECRET_ACCESS_KEY="${{ secrets.AWS_SECRET_ACCESS_KEY }}"
           export AWS_DEFAULT_REGION="${{ secrets.AWS_REGION }}"
+          
+          # Set Firebase Admin SDK JSON for file creation
+          export FIREBASE_ADMIN_CREDENTIALS_JSON='${{ secrets.FIREBASE_ADMIN_CREDENTIALS_JSON }}'
           
           echo "🔍 AWS 자격증명 확인:"
           aws sts get-caller-identity || {
@@ -329,33 +345,116 @@ jobs:
             exit 1
           fi
           
+          # Check disk space before deployment
+          echo "🔍 배포 전 디스크 공간 확인:"
+          df -h
+          
           # Stop existing containers (using production compose)
           docker compose --env-file ~/.env down || true
+          
+          # Create Firebase Admin SDK key file from environment variable
+          echo "🔧 Firebase Admin SDK 키 파일 생성 중..."
+          echo "🔍 환경변수 확인: FIREBASE_ADMIN_CREDENTIALS_JSON 길이: \$${#FIREBASE_ADMIN_CREDENTIALS_JSON}"
+          
+          # Check if Firebase credentials are available from GitHub Secrets
+          echo "🔍 GitHub Secrets 확인 중..."
+          
+          # Remove any existing firebase-admin-key.json (directory or file)
+          rm -rf firebase-admin-key.json
+          
+          if [ ! -z '${{ secrets.FIREBASE_ADMIN_CREDENTIALS_JSON }}' ]; then
+            echo "✅ Firebase Admin SDK 시크릿 발견"
+            echo '${{ secrets.FIREBASE_ADMIN_CREDENTIALS_JSON }}' > firebase-admin-key.json
+            if [ -f firebase-admin-key.json ] && [ -s firebase-admin-key.json ]; then
+              echo "✅ Firebase Admin SDK 키 파일 생성 완료"
+              ls -la firebase-admin-key.json
+              echo "🔍 파일 내용 검증 (첫 줄):"
+              head -1 firebase-admin-key.json | cut -c1-50
+            else
+              echo "❌ Firebase Admin SDK 키 파일 생성 실패"
+              touch firebase-admin-key.json
+            fi
+          else
+            echo "⚠️ GitHub Secrets FIREBASE_ADMIN_CREDENTIALS_JSON이 설정되지 않았습니다"
+            touch firebase-admin-key.json
+          fi
+          
+          # Clean up Docker resources to free space
+          echo "🧹 Docker 리소스 정리 중..."
+          docker system prune -af --volumes || true
+          docker builder prune -af || true
+          
+          # Check disk space after cleanup
+          echo "🔍 정리 후 디스크 공간:"
+          df -h
           
           # Pull latest images
           docker compose --env-file ~/.env pull
           
           # Start new containers in production mode
+          echo "🔧 컨테이너 시작 중..."
           docker compose --env-file ~/.env up -d
           
+          # Wait for containers to be ready
+          echo "⏳ 컨테이너 준비 대기 중..."
+          sleep 15
+          
+          # Check container status
+          echo "🔍 컨테이너 상태 확인:"
+          docker compose --env-file ~/.env ps
+          
+          # Copy Firebase Admin SDK key to backend container
+          echo "🔧 Firebase Admin SDK 키 파일을 백엔드 컨테이너에 복사 중..."
+          if [ -f "firebase-admin-key.json" ]; then
+            # Wait for backend container to be ready
+            sleep 10
+            docker cp firebase-admin-key.json teamPicko-backend:/app/firebase-admin-key.json
+            echo "✅ Firebase Admin SDK 키 파일 복사 완료"
+            
+            # Verify the file in container
+            docker exec teamPicko-backend ls -la /app/firebase-admin-key.json || echo "⚠️ 파일 복사 확인 실패"
+            
+            # Restart backend container to reload Firebase SDK
+            echo "🔄 백엔드 컨테이너 재시작 중..."
+            docker compose --env-file ~/.env restart backend
+          else
+            echo "⚠️ firebase-admin-key.json 파일이 없습니다"
+          fi
+          
           # Wait for services to be healthy
-          sleep 60
+          sleep 50
           
           # Check if services are running
           docker compose --env-file ~/.env ps
           
+          # Check backend logs if unhealthy
+          echo "🔍 백엔드 컨테이너 로그 확인:"
+          docker logs teamPicko-backend --tail 50 || true
+          
+          echo "🔍 데이터베이스 컨테이너 로그 확인:"
+          docker logs teamPicko-database --tail 20 || true
+          
+          echo "🔍 프론트엔드 컨테이너 로그 확인:"
+          docker logs teamPicko-frontend --tail 20 || true
+          
           # Verify services are accessible
           echo "🔍 서비스 상태 확인 중..."
-          curl -f http://localhost/ || echo "⚠️ Nginx health check failed"
-          curl -f http://localhost:3000/ || echo "⚠️ Frontend check failed"
-          curl -f http://localhost:8000/api/v1/ || echo "⚠️ Backend check failed"
+          curl -f http://localhost/ || echo "⚠️ Frontend health check failed"
+          curl -f http://localhost:8000/health/ || echo "⚠️ Backend check failed"
+          
+          # Additional debugging if backend fails
+          if ! curl -f http://localhost:8000/health/ 2>/dev/null; then
+            echo "🔍 백엔드 디버깅 정보:"
+            docker exec teamPicko-backend ps aux || true
+            docker exec teamPicko-backend netstat -tlnp || echo "netstat not available"
+          fi
           
           # Setup auto-shutdown after 1 hour
           chmod +x auto-shutdown.sh
           ./auto-shutdown.sh 1
           echo "✅ 데모 배포 완료 - 1시간 후 자동 종료"
-          echo "🌐 Frontend: http://${{ secrets.EC2_HOST }}"
-          echo "🔧 Backend API: http://${{ secrets.EC2_HOST }}:8000"
+          echo "🌐 Frontend: https://badaejangbu.store"
+          echo "🔧 Backend API: https://badaejangbu.store/api"
         EOF
         
         rm ec2_key.pem
@@ -366,8 +465,8 @@ jobs:
       run: |
         sleep 30
         echo "🔍 외부에서 서비스 접근 테스트..."
-        curl -f http://$EC2_HOST/ || echo "⚠️ Nginx 외부 접근 실패"
-        curl -f http://$EC2_HOST:3000/ || echo "⚠️ Frontend 외부 접근 실패"  
+        curl -f http://$EC2_HOST/ || echo "⚠️ Frontend 외부 접근 실패"
+        curl -f https://$EC2_HOST/ || echo "⚠️ HTTPS Frontend 외부 접근 실패"
         curl -f http://$EC2_HOST:8000/api/v1/ || echo "⚠️ Backend 외부 접근 실패"
         echo "✅ 데모 배포 성공"
     
@@ -376,7 +475,8 @@ jobs:
       run: |
         if [ "${{ job.status }}" == "success" ]; then
           echo "🚀 데모 배포 성공! EC2 서버가 1시간 후 자동 종료됩니다."
-          echo "접속 URL: http://${{ secrets.EC2_HOST }}"
+          echo "접속 URL: https://badaejangbu.store"
+          echo "API URL: https://badaejangbu.store/api"
         else
           echo "❌ 데모 배포 실패! 로그를 확인해주세요."
         fi

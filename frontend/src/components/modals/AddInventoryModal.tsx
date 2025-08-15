@@ -63,19 +63,19 @@ const AddInventoryModal: React.FC<AddInventoryModalProps> = ({
     console.log('🔄 어종 목록 로딩 시작...')
     setLoadingFishTypes(true)
     try {
-      const data = await inventoryApi.getFishTypes()
-      console.log('✅ 어종 데이터 수신:', data)
+      const response = await inventoryApi.getFishTypes()
+      console.log('✅ 어종 데이터 수신:', response)
       
-      // pagination 응답 처리
+      // inventoryApi.getFishTypes()는 { data: FishType[] } 형태로 반환
       let fishTypeData: FishType[] = []
       
-      if (Array.isArray(data)) {
-        // 직접 배열인 경우
-        fishTypeData = data
-      } else if (data && typeof data === 'object' && 'results' in data && Array.isArray(data.results)) {
-        // Django pagination 구조: {count, results, next, previous}
-        fishTypeData = data.results
-        console.log('📄 전체 어종 수:', 'count' in data ? data.count : 'N/A')
+      if (response && response.data && Array.isArray(response.data)) {
+        fishTypeData = response.data
+      } else if (Array.isArray(response)) {
+        // 직접 배열인 경우 (예외 처리)
+        fishTypeData = response
+      } else {
+        console.warn('예상치 못한 응답 형태:', response)
       }
       
       console.log('📊 로드된 어종 개수:', fishTypeData.length)

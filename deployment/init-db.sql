@@ -25,7 +25,7 @@ DO $$
 BEGIN
     IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'dev_user') THEN
         CREATE ROLE dev_user WITH LOGIN PASSWORD '12341234';
-        GRANT ALL PRIVILEGES ON DATABASE teamPicko_dev TO dev_user;
+        GRANT ALL PRIVILEGES ON DATABASE teamPicko TO dev_user;
         GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO dev_user;
         GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO dev_user;
         ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO dev_user;
@@ -39,7 +39,7 @@ $$;
 
 -- 개발용 로그 출력
 \echo '✅ Team-PICK-O 개발용 데이터베이스 초기화 완료'
-\echo '📊 데이터베이스: teamPicko_dev'
+\echo '📊 데이터베이스: teamPicko'
 \echo '👤 사용자: teamPicko / dev_user'
 \echo '🔑 비밀번호: 12341234'
 \echo '🌐 접속: localhost:5432'

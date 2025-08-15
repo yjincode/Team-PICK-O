@@ -32,6 +32,7 @@ interface Business {
   business_name: string;
   phone_number: string;
   address?: string;
+  outstanding_balance: number; // 백엔드에서 동적으로 계산된 미수금
   // 추가 정보 (실제로는 별도 API에서 가져올 예정)
   unpaid_amount?: number;
   status?: string;
@@ -45,7 +46,6 @@ const BusinessList: React.FC = () => {
   const [page, setPage] = useState(1);
   const [pageSize] = useState(10); // 고정값, 필요시 변경 가능
   const [count, setCount] = useState(0); // 전체 개수
-  const [unpaidByBusinessId, setUnpaidByBusinessId] = useState<Record<number, number>>({});
 
   const { user, isAuthenticated, loading } = useAuth();
 
@@ -94,6 +94,7 @@ const BusinessList: React.FC = () => {
     }
   };
 
+
   // 주문 및 결제 불러와서 미수금 계산
   const fetchUnpaidStats = async () => {
     try {
@@ -121,6 +122,8 @@ const BusinessList: React.FC = () => {
     }
   };
 
+
+
   // AuthContext 로딩이 완료되면 API 호출 (인증 여부와 관계없이)
   useEffect(() => {
     console.log('🔍 useEffect 실행됨:', {
@@ -145,7 +148,6 @@ const BusinessList: React.FC = () => {
     console.log('🚀 거래처 목록 로드 (인증 상태와 관계없이)');
     setHasInitialized(true);
     fetchBusinesses(1); // 첫 페이지 로드
-    fetchUnpaidStats(); // 초기 로드 시 미수금 계산
   }, [loading, hasInitialized]);
 
   // 페이지 변경 시 목록 새로고침
@@ -550,7 +552,7 @@ const BusinessList: React.FC = () => {
                         <div className="text-right">
                           <p className="text-sm text-gray-500">미수금</p>
                           <p className="text-lg font-bold text-red-600">
-                            {formatCurrency(unpaidByBusinessId[business.id] ?? 0)}
+                            {formatCurrency(business.outstanding_balance ?? 0)}
                           </p>
                         </div>
                         <div className="flex space-x-2">

@@ -68,7 +68,7 @@ const refreshAccessToken = async (): Promise<string | null> => {
       
       console.log('🔄 액세스 토큰 자동 갱신 시작')
       
-      const response = await fetch('/api/v1/business/auth/refresh/', {
+      const response = await fetch(`${API_BASE_URL}/business/auth/refresh/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -317,6 +317,35 @@ export const inventoryApi = {
     const response = await api.get(url)
     return response.data
   },
+
+  // 주문 등록 시 재고 체크
+  checkStock: async (orderItems: Array<{
+    fish_type_id: number;
+    quantity: number;
+    unit: string;
+  }>): Promise<{
+    status: 'ok' | 'warning' | 'insufficient' | 'error';
+    items: Array<{
+      fish_type_id: number;
+      fish_name: string;
+      requested_quantity: number;
+      available_stock: number;
+      unit: string;
+      status: string;
+      shortage?: number;
+    }>;
+    warnings: string[];
+    errors: Array<{
+      fish_name?: string;
+      fish_type_id?: number;
+      message: string;
+      shortage?: number;
+    }>;
+    can_proceed: boolean;
+  }> => {
+    const response = await api.post('/inventory/stock-check/', { order_items: orderItems })
+    return response.data
+  },
 }
 
 // 주문 관리 API
@@ -436,7 +465,7 @@ export const sttApi = {
     formData.append('language', language)
 
     // STT API는 인증이 필요 없으므로 직접 fetch 사용
-    const response = await fetch('/api/v1/transcription/transcribe/', {
+    const response = await fetch(`${API_BASE_URL}/transcription/transcribe/`, {
       method: 'POST',
       body: formData,
     })

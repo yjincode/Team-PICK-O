@@ -1,7 +1,7 @@
 from django.urls import path
 from .views import (
     InventoryListCreateView, InventoryDetailView, 
-    InventoryLogListView, FishTypeListView
+    InventoryLogListView, FishTypeListView, StockCheckView
 )
 
 app_name = 'inventory'
@@ -12,4 +12,5 @@ urlpatterns = [
     path('<int:inventory_id>/logs/', InventoryLogListView.as_view(), name='inventory-logs'),
     path('logs/', InventoryLogListView.as_view(), name='all-inventory-logs'),
     path('fish-types/', FishTypeListView.as_view(), name='fish-types'),
+    path('stock-check/', StockCheckView.as_view(), name='stock-check'),
 ]

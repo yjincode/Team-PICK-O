@@ -16,10 +16,7 @@ class JWTAuthMiddleware:
     # 인증이 필요 없는 URL 패턴들 (회원가입, 로그인 등)
     EXCLUDED_PATHS = [
         '/admin/',
-        '/api/v1/business/auth/firebase-to-jwt/',
-        '/api/v1/business/auth/register/',
-        '/api/v1/business/auth/status/',
-        '/api/v1/business/auth/refresh/',
+        '/api/v1/business/auth/',  # 전체 auth 경로 제외
         '/api/v1/transcription/',  # STT 서비스는 인증 없이 사용 가능
         
         # 결제 관련 URL (토스페이먼츠 웹훅 및 결제창용)
@@ -30,6 +27,7 @@ class JWTAuthMiddleware:
         '/media/',
         '/api/docs/',
         '/api/schema/',
+        '/health/',  # 헬스체크
     ]
     
     def __init__(self, get_response):
@@ -79,15 +77,27 @@ class JWTAuthMiddleware:
         """요청이 인증을 필요로 하는지 확인"""
         # OPTIONS 요청은 제외 (CORS preflight)
         if request.method == 'OPTIONS':
+            logger.debug(f"🔓 OPTIONS 요청 제외: {request.path}")
             return False
             
         # 제외할 경로들 확인
         for excluded_path in self.EXCLUDED_PATHS:
             if request.path.startswith(excluded_path):
+                logger.debug(f"🔓 인증 제외 경로: {request.path} (매칭: {excluded_path})")
                 return False
         
+        # 정확한 root 경로 매칭 (/ 단독)
+        if request.path == '/':
+            logger.debug(f"🔓 Root 경로 제외: {request.path}")
+            return False
+        
         # API 경로만 처리
-        return request.path.startswith('/api/v1/')
+        should_process = request.path.startswith('/api/v1/')
+        if should_process:
+            logger.debug(f"🔒 인증 필요 경로: {request.path}")
+        else:
+            logger.debug(f"🔓 API 경로 아님: {request.path}")
+        return should_process
 
     def _authenticate_request(self, request):
         """JWT 토큰을 검증하고 사용자 정보를 반환"""
