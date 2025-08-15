@@ -14,7 +14,6 @@ services:
       # 토스 결제 설정 (Secrets에서 주입)
       - VITE_TOSS_CLIENT_KEY=${VITE_TOSS_CLIENT_KEY:-test_ck_default}
     volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf:ro
       - /etc/letsencrypt:/etc/letsencrypt:ro
     depends_on:
       backend:
