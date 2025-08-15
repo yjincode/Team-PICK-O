@@ -12,6 +12,7 @@ export interface Business {
   phone_number: string;
   address?: string;
   memo?: string;
+  outstanding_balance: number; // 미수금 필드 추가
 }
 
 // 2. 어종 테이블
