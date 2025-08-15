@@ -14,16 +14,19 @@ const LABELS: Record<Domain, Record<string, string>> = {
     delivered: '완료',
     cancelled: '취소',
   },
+
   paymentStatus: {
-    pending: '미결제',
+    pending: '결제 대기',
     paid: '결제 완료',
     refunded: '환불됨',
   },
+
   paymentMethod: {
     card: '카드',
     cash: '현금',
     bank_transfer: '계좌이체',
   },
+
   inventoryStatus: {
     in_stock: '재고 있음',
     low: '재고 부족',
@@ -39,16 +42,19 @@ const BADGE: Record<Domain, Record<string, string>> = {
     delivered: 'bg-green-100 text-green-800',
     cancelled: 'bg-red-100 text-red-800',
   },
+
   paymentStatus: {
     pending: 'bg-yellow-100 text-yellow-800',
     paid: 'bg-green-100 text-green-800',
     refunded: 'bg-gray-100 text-gray-800',
   },
+
   paymentMethod: {
     card: 'bg-blue-100 text-blue-800',
     cash: 'bg-emerald-100 text-emerald-800',
     bank_transfer: 'bg-indigo-100 text-indigo-800',
   },
+
   inventoryStatus: {
     in_stock: 'bg-green-100 text-green-800',
     low: 'bg-orange-100 text-orange-800',

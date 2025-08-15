@@ -40,13 +40,7 @@ const topProducts = [
   { name: "연어", sales: 4800000, percentage: 10.5, trend: "하락" },
 ]
 
-// 결제 방법별 매출 데이터
-const paymentMethods = [
-  { method: "카드", amount: 28400000, percentage: 45.2 },
-  { method: "계좌이체", amount: 19800000, percentage: 31.5 },
-  { method: "현금", amount: 8900000, percentage: 14.2 },
-  { method: "외상", amount: 5700000, percentage: 9.1 },
-]
+
 
 export default function SalesChart() {
   // 금액 포맷팅 함수
@@ -221,37 +215,7 @@ export default function SalesChart() {
           </CardContent>
         </Card>
 
-        {/* 결제 방법별 매출 */}
-        <Card className="shadow-sm">
-          <CardHeader>
-            <CardTitle className="text-lg font-semibold text-gray-800">결제 방법별 매출</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {/* 결제 방법 차트 플레이스홀더 */}
-            <div className="h-60 bg-muted rounded-lg flex items-center justify-center mb-4">
-              <div className="text-center text-gray-500">
-                <BarChart3 className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                <p className="text-sm">[Payment Methods Chart]</p>
-              </div>
-            </div>
 
-            {/* 결제 방법별 데이터 */}
-            <div className="space-y-3">
-              {paymentMethods.map((method) => (
-                <div key={method.method} className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-4 h-4 bg-accent-blue rounded-full"></div>
-                    <span className="font-medium text-gray-900">{method.method}</span>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-semibold text-gray-900">{formatCurrency(method.amount)}</p>
-                    <p className="text-sm text-gray-600">{method.percentage}%</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
       </div>
     </div>
   )

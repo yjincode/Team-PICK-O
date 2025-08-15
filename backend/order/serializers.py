@@ -84,6 +84,7 @@ class OrderListSerializer(serializers.ModelSerializer):
     business = serializers.SerializerMethodField()
     items_summary = serializers.SerializerMethodField()
     payment = serializers.SerializerMethodField()
+
     
     class Meta:
         model = Order
@@ -94,17 +95,21 @@ class OrderListSerializer(serializers.ModelSerializer):
         ]
     
     def get_business(self, obj):
-        if obj.business:
+        # business_id를 사용하여 Business 객체 조회
+        from business.models import Business
+        try:
+            business = Business.objects.get(id=obj.business_id)
             return {
-                'id': obj.business.id,
-                'business_name': obj.business.business_name,
-                'phone_number': obj.business.phone_number
+                'id': business.id,
+                'business_name': business.business_name,
+                'phone_number': business.phone_number
             }
-        return {
-            'id': obj.business_id,
-            'business_name': '거래처명 없음',
-            'phone_number': '연락처 없음'
-        }
+        except Business.DoesNotExist:
+            return {
+                'id': obj.business_id,
+                'business_name': '거래처명 없음',
+                'phone_number': '연락처 없음'
+            }
     
     def get_items_summary(self, obj):
         items = obj.items.all()
@@ -144,7 +149,6 @@ class OrderListSerializer(serializers.ModelSerializer):
         
         return None
 
-
 class OrderDetailItemSerializer(serializers.ModelSerializer):
     fish_type_name = serializers.CharField(source='fish_type.name')
     
@@ -157,9 +161,9 @@ class OrderDetailItemSerializer(serializers.ModelSerializer):
 
 
 class OrderDetailSerializer(serializers.ModelSerializer):
-    business_name = serializers.CharField(source='business.business_name')
-    business_phone = serializers.CharField(source='business.phone_number')
-    business_address = serializers.CharField(source='business.address')
+    business_name = serializers.SerializerMethodField()
+    business_phone = serializers.SerializerMethodField()
+    business_address = serializers.SerializerMethodField()
     items = OrderDetailItemSerializer(many=True, read_only=True)
     
     class Meta:
@@ -170,6 +174,30 @@ class OrderDetailSerializer(serializers.ModelSerializer):
             'order_status', 'cancel_reason', 'is_urgent', 'source_type', 
             'transcribed_text', 'memo', 'items'
         ]
+    
+    def get_business_name(self, obj):
+        from business.models import Business
+        try:
+            business = Business.objects.get(id=obj.business_id)
+            return business.business_name
+        except Business.DoesNotExist:
+            return '거래처명 없음'
+    
+    def get_business_phone(self, obj):
+        from business.models import Business
+        try:
+            business = Business.objects.get(id=obj.business_id)
+            return business.phone_number
+        except Business.DoesNotExist:
+            return '연락처 없음'
+    
+    def get_business_address(self, obj):
+        from business.models import Business
+        try:
+            business = Business.objects.get(id=obj.business_id)
+            return business.address
+        except Business.DoesNotExist:
+            return '주소 없음'
 
 
 class OrderStatusUpdateSerializer(serializers.ModelSerializer):

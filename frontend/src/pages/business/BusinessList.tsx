@@ -9,7 +9,7 @@ import { Card, CardContent } from "../../components/ui/card"
 import { Button } from "../../components/ui/button"
 import { Input } from "../../components/ui/input"
 import { Search, Plus, Phone, Eye, Edit, Loader2 } from "lucide-react"
-import { businessApi, orderApi, paymentsApi } from "../../lib/api"
+import { businessApi, orderApi } from "../../lib/api"
 import { useAuth } from "../../contexts/AuthContext"
 import toast, { Toaster } from 'react-hot-toast';
 import { useKakaoPostcode } from "../../hooks/useKakaoPostcode";
@@ -100,34 +100,18 @@ const BusinessList: React.FC = () => {
       // 주문 목록 (기존 order API 사용)
       const ordersRes = await orderApi.getAll();
       const orders = Array.isArray(ordersRes) ? ordersRes : ordersRes.data || [];
-      // 결제 목록 (엔드포인트 없으면 빈 배열 처리)
-      let payments: any[] = [];
-      try {
-        const paymentsRes = await paymentsApi.getAll();
-        payments = paymentsRes.results || paymentsRes.data?.results || paymentsRes.data || paymentsRes || [];
-      } catch (e) {
-        payments = [];
-      }
-
-      const sumByBusiness: Record<number, { orders: number; payments: number }> = {};
+      const sumByBusiness: Record<number, { orders: number }> = {};
 
       for (const o of orders) {
         const businessId = o.business_id;
         if (!businessId) continue;
-        if (!sumByBusiness[businessId]) sumByBusiness[businessId] = { orders: 0, payments: 0 };
+        if (!sumByBusiness[businessId]) sumByBusiness[businessId] = { orders: 0 };
         sumByBusiness[businessId].orders += Number(o.total_price || 0);
-      }
-
-      for (const p of payments) {
-        const businessId = p.business_id;
-        if (!businessId) continue;
-        if (!sumByBusiness[businessId]) sumByBusiness[businessId] = { orders: 0, payments: 0 };
-        sumByBusiness[businessId].payments += Number(p.amount || 0);
       }
 
       const unpaid: Record<number, number> = {};
       Object.entries(sumByBusiness).forEach(([bizId, sums]) => {
-        unpaid[Number(bizId)] = Math.max(0, (sums.orders || 0) - (sums.payments || 0));
+        unpaid[Number(bizId)] = sums.orders || 0;
       });
 
       setUnpaidByBusinessId(unpaid);

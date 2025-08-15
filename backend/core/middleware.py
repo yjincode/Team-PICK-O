@@ -21,7 +21,11 @@ class JWTAuthMiddleware:
         '/api/v1/business/auth/status/',
         '/api/v1/business/auth/refresh/',
         '/api/v1/transcription/',  # STT 서비스는 인증 없이 사용 가능
-        '/api/v1/payment/',  # 결제 관련 API는 인증 없이 사용 가능
+        
+        # 결제 관련 URL (토스페이먼츠 웹훅 및 결제창용)
+        '/api/v1/payments/toss/request/',  # 결제 요청 (pending Payment 생성)
+        '/api/v1/payments/toss/confirm/',  # 결제 확정 (웹훅용)
+
         '/static/',
         '/media/',
         '/api/docs/',
@@ -46,6 +50,8 @@ class JWTAuthMiddleware:
                 request.user_id = user_data['user_id']
                 request.user_status = user_data['status']
                 request.business_name = user_data['business_name']
+                
+                logger.debug(f"🔧 request에 사용자 정보 설정: user_id={request.user_id}, user_status={request.user_status}")
                 
                 # DRF IsAuthenticated 호환성을 위한 더미 user 객체 설정
                 from django.contrib.auth.models import AnonymousUser
@@ -155,8 +161,13 @@ class UserValidationMixin:
     """
     
     def dispatch(self, request, *args, **kwargs):
+        logger.debug(f"🔍 UserValidationMixin.dispatch 시작: {request.path}")
+        logger.debug(f"🔍 request.user_id: {getattr(request, 'user_id', 'NOT SET')}")
+        logger.debug(f"🔍 request.user_status: {getattr(request, 'user_status', 'NOT SET')}")
+        
         # 미들웨어에서 설정된 사용자 정보 확인
         if not hasattr(request, 'user_id') or not request.user_id:
+            logger.warning("❌ UserValidationMixin: user_id 없음")
             return JsonResponse(
                 {'error': '사용자 인증이 필요합니다.'}, 
                 status=401
@@ -164,11 +175,13 @@ class UserValidationMixin:
         
         # 승인 상태 확인 (미들웨어에서 이미 확인했지만 추가 검증)
         if not hasattr(request, 'user_status') or request.user_status != 'approved':
+            logger.warning(f"❌ UserValidationMixin: user_status 검증 실패 - {getattr(request, 'user_status', 'NOT SET')}")
             return JsonResponse(
                 {'error': '승인된 사용자만 접근할 수 있습니다.'}, 
                 status=403
             )
         
+        logger.debug("✅ UserValidationMixin: 사용자 검증 성공")
         return super().dispatch(request, *args, **kwargs)
 
 

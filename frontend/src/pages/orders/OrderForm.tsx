@@ -2,39 +2,38 @@
  * 주문 폼 컴포넌트
  * 새 주문을 생성하는 폼입니다
  */
-import { useState, useEffect } from "react"
-import type { ChangeEvent, FormEvent } from "react"
-import { businessApi, fishTypeApi } from "../../lib/api"
-import { Card, CardContent } from "../../components/ui/card"
+import React, { useState, useEffect, useCallback, ChangeEvent, FormEvent } from "react"
+import { useParams } from "react-router-dom"
+import { Plus, Trash2, Upload, Mic, FileText, X, Save, CalendarDays } from "lucide-react"
+import { toast, Toaster } from "react-hot-toast"
+
 import { Button } from "../../components/ui/button"
-// import { Input } from "../../components/ui/input"
+import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card"
+import { Input } from "../../components/ui/input"
 import { Label } from "../../components/ui/label"
-import { Textarea } from "../../components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select"
+import { Textarea } from "../../components/ui/textarea"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../components/ui/tabs"
+import { Badge } from "../../components/ui/badge"
 import { Popover, PopoverContent, PopoverTrigger } from "../../components/ui/popover"
-import { Plus, Save, CalendarDays, Mic, Upload } from "lucide-react"
-import BusinessSearch from "../../components/BusinessSearch"
 import { parseVoiceOrder, validateAndCompleteOrder } from "../../utils/orderParser"
-// import { formatPhoneNumber } from "../../utils/phoneFormatter"
-import toast, { Toaster } from 'react-hot-toast'
-import { TokenManager } from "../../lib/tokenManager"
-import { 
-  AudioFileInfo 
-} from "../../utils/audioProcessor"
+import { OrderItem } from "../../types"
+import OrderItemList from "./components/OrderItemList"
 import MinimalCalendar from "../../components/ui/MinimalCalendar"
-import { format } from "date-fns"
-import { ko } from "date-fns/locale"
+import BusinessSearch from "../../components/BusinessSearch"
 
 // 공통 컴포넌트들 import
 import VoiceUploadTab from "./components/VoiceUploadTab"
 import TextInputTab from "./components/TextInputTab"
 import ManualInputTab from "./components/ManualInputTab"
 import ImageUploadTab from "./components/ImageUploadTab"
-import OrderItemList from "./components/OrderItemList"
 
 // 타입 정의 - types/index.ts에서 가져온 타입 사용
 import type { Business, FishType } from "../../types"
+
+// API import
+import { fishTypeApi, businessApi } from "../../lib/api"
+import { TokenManager } from "../../lib/tokenManager"
 
 // JWT 토큰 기반 API 사용 (../../lib/api.ts에서 import)
 
@@ -52,7 +51,7 @@ const fromKoreanDate = (dateString: string): Date => {
 const formatKoreanDate = (dateString: string): string => {
   if (!dateString) return ""
   const date = fromKoreanDate(dateString)
-  return format(date, "yyyy-MM-dd", { locale: ko })
+  return date.toISOString().split('T')[0] // date-fns format 대신 직접 포맷
 }
 
 interface OrderFormProps {
@@ -67,24 +66,13 @@ interface OrderFormProps {
       raw_input_path?: string;
     };
     order_items: Array<{
-      fish_type_id: number;
+      fish_type: number;
       quantity: number;
       unit_price: number;
       unit: string;
       remarks?: string;
     }>;
   };
-}
-
-interface OrderItem {
-  id: string;
-  fish_type_id: number;
-  fish_name: string;
-  quantity: number;
-  unit_price: number;
-  unit: string;
-  remarks?: string;
-  delivery_datetime: string;
 }
 
 interface FormData {
@@ -96,92 +84,6 @@ interface FormData {
   raw_input_path: string;
   delivery_datetime: string;
   items: OrderItem[];
-}
-
-// JWT 인증이 포함된 fetch 함수
-const fetchWithAuth = async (url: string, options: RequestInit = {}): Promise<Response> => {
-  let token = TokenManager.getAccessToken()
-  
-  if (!token || !TokenManager.isAccessTokenValid()) {
-    // 토큰 갱신 시도
-    const refreshToken = TokenManager.getRefreshToken()
-    if (!refreshToken) {
-      throw new Error('인증이 필요합니다. 다시 로그인해주세요.')
-    }
-    
-    const refreshResponse = await fetch('/api/v1/business/auth/refresh/', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        refresh_token: refreshToken
-      })
-    })
-    
-    if (refreshResponse.ok) {
-      const refreshData = await refreshResponse.json()
-      TokenManager.setAccessToken(refreshData.access_token)
-      token = refreshData.access_token
-    } else {
-      TokenManager.removeTokens()
-      window.location.href = '/login'
-      throw new Error('토큰 갱신에 실패했습니다.')
-    }
-  }
-  
-  // Authorization 헤더 추가
-  const headers = {
-    ...options.headers,
-    'Authorization': `Bearer ${token}`
-  }
-  
-  const response = await fetch(url, {
-    ...options,
-    headers
-  })
-  
-  // 401 에러 시 한 번 더 토큰 갱신 시도
-  if (response.status === 401) {
-    const refreshToken = TokenManager.getRefreshToken()
-    if (!refreshToken) {
-      TokenManager.removeTokens()
-      window.location.href = '/login'
-      throw new Error('인증이 만료되었습니다.')
-    }
-    
-    const refreshResponse = await fetch('/api/v1/business/auth/refresh/', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        refresh_token: refreshToken
-      })
-    })
-    
-    if (refreshResponse.ok) {
-      const refreshData = await refreshResponse.json()
-      TokenManager.setAccessToken(refreshData.access_token)
-      
-      // 새 토큰으로 원래 요청 재시도
-      const newHeaders = {
-        ...options.headers,
-        'Authorization': `Bearer ${refreshData.access_token}`
-      }
-      
-      return await fetch(url, {
-        ...options,
-        headers: newHeaders
-      })
-    } else {
-      TokenManager.removeTokens()
-      window.location.href = '/login'
-      throw new Error('인증이 만료되었습니다.')
-    }
-  }
-  
-  return response
 }
 
 // STT 상태를 폴링하는 함수 (중복 요청 방지)
@@ -197,7 +99,11 @@ const pollTranscriptionStatus = async (transcriptionId: string, _businessId: num
       attempts++
       console.log(`폴링 시도 ${attempts}/${maxAttempts}: transcriptionId=${transcriptionId}`)
       
-      const response = await fetchWithAuth(`/api/v1/order/transcription/${transcriptionId}/status/`)
+      const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/v1/order/transcription/${transcriptionId}/status/`, {
+        headers: {
+          'Authorization': `Bearer ${TokenManager.getAccessToken()}`
+        }
+      })
       
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`)
@@ -216,8 +122,11 @@ const pollTranscriptionStatus = async (transcriptionId: string, _businessId: num
           
           // 주문 생성
           try {
-            const orderResponse = await fetchWithAuth(`/api/v1/order/transcription/${transcriptionId}/create-order/`, {
-              method: 'POST'
+            const orderResponse = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/v1/order/transcription/${transcriptionId}/create-order/`, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${TokenManager.getAccessToken()}`
+              }
             })
             const orderResult = await orderResponse.json()
             
@@ -348,12 +257,11 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
   })
 
   const [newItem, setNewItem] = useState<Partial<OrderItem>>({
-    fish_type_id: 1,
+    fish_type: 1,
     quantity: 1,
     unit_price: 0,
     unit: "박스",
-    remarks: "",
-    delivery_datetime: ""
+    remarks: ""
   })
 
   const handleInputChange = (field: string, value: string) => {
@@ -485,13 +393,13 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
           delivery_datetime: validatedData.delivery_date || prev.delivery_datetime,
           memo: validatedData.memo || prev.memo,
           items: validatedData.items.map((item: any) => ({
-            id: Date.now().toString(),
-            fish_type_id: item.fish_type_id,
-            fish_name: fishTypes.find((f: FishType) => f.id === item.fish_type_id)?.name || '',
+            id: Date.now(),
+            fish_type: item.fish_type_id,
+            item_name_snapshot: fishTypes.find((f) => f.id === item.fish_type_id)?.name || '',
             quantity: item.quantity,
             unit_price: item.unit_price || 0,
             unit: item.unit,
-            delivery_datetime: formData.delivery_datetime
+            remarks: ''
           }))
         }))
         
@@ -507,16 +415,15 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
   // 주문 항목 추가
   const addItem = () => {
     if (newItem.quantity && newItem.quantity > 0 && newItem.unit_price && newItem.unit_price > 0) {
-      const fishType = fishTypes.find((f: FishType) => f.id === newItem.fish_type_id)
+      const fishType = fishTypes.find((f: FishType) => f.id === newItem.fish_type)
       const item: OrderItem = {
-        id: Date.now().toString(),
-        fish_type_id: newItem.fish_type_id || 1,
-        fish_name: fishType?.name || '',
+        id: Date.now(),
+        fish_type: newItem.fish_type || 1,
+        item_name_snapshot: fishType?.name || '',
         quantity: newItem.quantity || 0,
         unit_price: newItem.unit_price || 0,
         unit: newItem.unit || "박스",
-        remarks: newItem.remarks,
-        delivery_datetime: newItem.delivery_datetime || formData.delivery_datetime
+        remarks: newItem.remarks
       }
       
       setFormData((prev: FormData) => ({
@@ -525,21 +432,20 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
       }))
       
       setNewItem({
-        fish_type_id: 1,
+        fish_type: 1,
         quantity: 1,
         unit_price: 0,
         unit: "박스",
-        remarks: "",
-        delivery_datetime: ""
+        remarks: ""
       })
     }
   }
 
   // 주문 항목 제거
-  const removeItem = (itemId: string) => {
+  const removeItem = (index: number) => {
     setFormData((prev: FormData) => ({
       ...prev,
-      items: prev.items.filter((item: OrderItem) => item.id !== itemId)
+      items: prev.items.filter((_, i) => i !== index)
     }))
   }
 
@@ -575,7 +481,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
       delivery_datetime: delivery_datetime,
       order_status: "placed",
       order_items: formData.items.map((item: OrderItem) => ({
-        fish_type_id: item.fish_type_id,
+        fish_type_id: item.fish_type,
         quantity: item.quantity,
         unit_price: parseFloat(item.unit_price.toString()),
         unit: item.unit || '',
@@ -603,8 +509,11 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
         })
         
         // JWT 토큰으로 multipart/form-data 전송
-        const response = await fetchWithAuth('/api/v1/order/upload/', {
+        const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/v1/order/upload/`, {
           method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${TokenManager.getAccessToken()}`
+          },
           body: formDataToSend
         })
         
@@ -627,10 +536,11 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
         }
       } else {
         // 일반 JSON 요청 (수동, 텍스트, 이미지) - fetchWithAuth 사용
-        const response = await fetchWithAuth('/api/v1/order/upload/', {
+        const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/v1/order/upload/`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'Authorization': `Bearer ${TokenManager.getAccessToken()}`
           },
           body: JSON.stringify(orderData)
         })
@@ -848,13 +758,12 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
                         delivery_datetime: orderData.delivery_date || prev.delivery_datetime,
                         memo: orderData.memo || prev.memo,
                         items: orderData.items?.map((item: any, index: number) => ({
-                          id: `${Date.now()}-${index}`,
-                          fish_type_id: item.fish_type_id,
-                          fish_name: fishTypes.find((f) => f.id === item.fish_type_id)?.name || '',
+                          id: Date.now() + index,
+                          fish_type: item.fish_type_id,
+                          item_name_snapshot: fishTypes.find((f) => f.id === item.fish_type_id)?.name || '',
                           quantity: item.quantity,
                           unit_price: item.unit_price || 0,
                           unit: item.unit,
-                          delivery_datetime: orderData.delivery_date || prev.delivery_datetime,
                           remarks: ''
                         })) || prev.items
                       }))
@@ -895,13 +804,12 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
                         delivery_datetime: orderData.delivery_date || prev.delivery_datetime,
                         memo: orderData.memo || prev.memo,
                         items: orderData.items?.map((item: any, index: number) => ({
-                          id: `${Date.now()}-${index}`,
-                          fish_type_id: item.fish_type_id,
-                          fish_name: fishTypes.find((f) => f.id === item.fish_type_id)?.name || '',
+                          id: Date.now() + index,
+                          fish_type: item.fish_type_id,
+                          item_name_snapshot: fishTypes.find((f) => f.id === item.fish_type_id)?.name || '',
                           quantity: item.quantity,
                           unit_price: item.unit_price || 0,
                           unit: item.unit,
-                          delivery_datetime: orderData.delivery_date || prev.delivery_datetime,
                           remarks: ''
                         })) || prev.items
                       }))
@@ -911,9 +819,12 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
                 
                 <TabsContent value="manual" className="mt-0">
                   <ManualInputTab
+                    businessId={selectedBusinessId}
                     currentItem={newItem}
                     setCurrentItem={setNewItem}
                     onAddItem={addItem}
+                    onRemoveItem={removeItem}
+                    items={formData.items}
                     fishTypes={fishTypes}
                   />
                 </TabsContent>
@@ -939,13 +850,12 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
                         delivery_datetime: orderData.delivery_date || prev.delivery_datetime,
                         memo: orderData.memo || prev.memo,
                         items: orderData.items?.map((item: any, index: number) => ({
-                          id: `${Date.now()}-${index}`,
-                          fish_type_id: item.fish_type_id,
-                          fish_name: fishTypes.find((f) => f.id === item.fish_type_id)?.name || '',
+                          id: Date.now() + index,
+                          fish_type: item.fish_type_id,
+                          item_name_snapshot: fishTypes.find((f) => f.id === item.fish_type_id)?.name || '',
                           quantity: item.quantity,
                           unit_price: item.unit_price || 0,
                           unit: item.unit,
-                          delivery_datetime: orderData.delivery_date || prev.delivery_datetime,
                           remarks: ''
                         })) || prev.items
                       }))
@@ -973,6 +883,10 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
             {/* 주문 품목 목록 */}
             <OrderItemList
               items={formData.items}
+              onEditItem={(index: number) => {
+                // 편집 기능은 나중에 구현
+                console.log('편집할 항목:', index)
+              }}
               onRemoveItem={removeItem}
               totalPrice={formData.items.reduce((sum: number, item: OrderItem) => sum + (item.quantity * item.unit_price), 0)}
             />

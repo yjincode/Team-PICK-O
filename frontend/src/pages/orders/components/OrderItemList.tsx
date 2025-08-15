@@ -6,23 +6,13 @@ import React from "react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../../components/ui/table"
 import { Button } from "../../../components/ui/button"
 import { Trash2 } from "lucide-react"
-
-// 주문 항목 타입 정의
-interface OrderItem {
-  id: string
-  fish_type_id: number
-  fish_name: string
-  quantity: number
-  unit_price: number
-  unit: string
-  remarks?: string
-  delivery_datetime: string
-}
+import { OrderItem } from "../../../types"
 
 interface OrderItemListProps {
-  items: OrderItem[]
-  onRemoveItem: (itemId: string) => void
-  totalPrice?: number
+  items: OrderItem[];
+  onEditItem: (index: number) => void;
+  onRemoveItem: (index: number) => void;
+  totalPrice: number;
 }
 
 const OrderItemList: React.FC<OrderItemListProps> = ({
@@ -50,19 +40,19 @@ const OrderItemList: React.FC<OrderItemListProps> = ({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {items.map((item) => (
-            <TableRow key={item.id}>
-              <TableCell>{item.fish_name}</TableCell>
+          {items.map((item, index) => (
+            <TableRow key={item.id || index}>
+              <TableCell>{item.item_name_snapshot}</TableCell>
               <TableCell>{item.quantity}</TableCell>
               <TableCell>{item.unit_price.toLocaleString()}원</TableCell>
               <TableCell>{item.unit}</TableCell>
               <TableCell>{item.remarks || "-"}</TableCell>
-              <TableCell>{item.delivery_datetime}</TableCell>
+              <TableCell>-</TableCell>
               <TableCell>
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => onRemoveItem(item.id)}
+                  onClick={() => onRemoveItem(index)}
                 >
                   <Trash2 className="h-4 w-4 text-red-500" />
                 </Button>

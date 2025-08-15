@@ -2,34 +2,27 @@
  * 수동 입력 탭 컴포넌트
  * 주문 항목을 수동으로 입력하는 탭입니다.
  */
-import type { FC } from "react"
+import React, { useState } from "react"
+import { Plus, Trash2 } from "lucide-react"
 import { Button } from "../../../components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "../../../components/ui/card"
 import { Input } from "../../../components/ui/input"
 import { Label } from "../../../components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../../components/ui/select"
-import { Plus } from "lucide-react"
-import type { FishType } from "../../../types"
-
-// 주문 항목 타입 정의
-interface OrderItem {
-  id: string
-  fish_type_id: number
-  fish_name: string
-  quantity: number
-  unit_price: number
-  unit: string
-  remarks?: string
-  delivery_datetime: string
-}
+import { Textarea } from "../../../components/ui/textarea"
+import { OrderItem } from "../../../types"
 
 interface ManualInputTabProps {
-  currentItem: Partial<OrderItem>
-  setCurrentItem: (item: Partial<OrderItem>) => void
-  onAddItem: () => void
-  fishTypes: FishType[]
+  businessId: number | null;
+  fishTypes: Array<{ id: number; name: string; unit: string }>;
+  currentItem: Partial<OrderItem>;
+  setCurrentItem: (item: Partial<OrderItem>) => void;
+  onAddItem: () => void;
+  onRemoveItem: (index: number) => void;
+  items: OrderItem[];
 }
 
-const ManualInputTab: FC<ManualInputTabProps> = ({
+const ManualInputTab: React.FC<ManualInputTabProps> = ({
   currentItem,
   setCurrentItem,
   onAddItem,
@@ -40,8 +33,8 @@ const ManualInputTab: FC<ManualInputTabProps> = ({
     if (fishType) {
       setCurrentItem({
         ...currentItem,
-        fish_type_id: fishType.id,
-        fish_name: fishType.name,  // fish_name에서 name으로 변경
+        fish_type: fishType.id,
+        item_name_snapshot: fishType.name,
         unit_price: 0 // default_price가 없으므로 0으로 설정
       })
     }
@@ -130,7 +123,7 @@ const ManualInputTab: FC<ManualInputTabProps> = ({
         <Button 
           onClick={onAddItem} 
           className="w-full bg-gray-700 hover:bg-gray-800" 
-          disabled={!currentItem.fish_type_id || !currentItem.quantity || !currentItem.unit_price}
+          disabled={!currentItem.fish_type || !currentItem.quantity || !currentItem.unit_price}
         >
           <Plus className="h-4 w-4 mr-2" />
           항목 추가

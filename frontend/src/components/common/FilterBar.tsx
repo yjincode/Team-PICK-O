@@ -88,7 +88,7 @@ export interface FilterBarProps {
  *       onChange: setStatusFilter,
  *       options: [
  *         { value: "all", label: "전체" },
- *         { value: "pending", label: "대기중" },
+ *         { value: "placed", label: "주문접수" },
  *         { value: "paid", label: "결제완료" }
  *       ]
  *     }
