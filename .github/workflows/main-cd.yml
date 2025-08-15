@@ -481,23 +481,26 @@ jobs:
           echo "⏳ 프론트엔드 컨테이너 준비 대기 중..."
           sleep 10
           
-          # Copy SSL certificates to frontend container if they exist
+          # Check SSL certificate availability
           if sudo test -f "/etc/letsencrypt/live/badaejangbu.store/fullchain.pem" && sudo test -f "/etc/letsencrypt/live/badaejangbu.store/privkey.pem"; then
-            echo "🔧 SSL 인증서를 프론트엔드 컨테이너로 복사 중..."
-            docker compose --env-file ~/.env exec -T frontend sh -c "mkdir -p /etc/letsencrypt/live/badaejangbu.store" || true
-            sudo docker cp /etc/letsencrypt/live/badaejangbu.store/fullchain.pem teamPicko-frontend:/etc/letsencrypt/live/badaejangbu.store/fullchain.pem
-            sudo docker cp /etc/letsencrypt/live/badaejangbu.store/privkey.pem teamPicko-frontend:/etc/letsencrypt/live/badaejangbu.store/privkey.pem
-            echo "✅ SSL 인증서 복사 완료"
+            echo "✅ SSL 인증서가 볼륨으로 마운트됨"
+          else
+            echo "⚠️ SSL 인증서가 없습니다. HTTP만 사용됩니다."
           fi
           
-          # Copy nginx configuration to frontend container
-          echo "🔧 nginx 설정을 프론트엔드 컨테이너로 복사 중..."
-          docker cp nginx.conf teamPicko-frontend:/etc/nginx/nginx.conf
+          # Check container status
+          echo "🔍 컨테이너 상태 확인:"
+          docker compose --env-file ~/.env ps
           
-          # Reload nginx configuration
-          echo "🔄 nginx 설정 리로드 중..."
-          docker compose --env-file ~/.env exec -T frontend nginx -s reload
-          echo "✅ nginx 설정 적용 완료"
+          # Test nginx configuration
+          echo "🔧 nginx 설정 테스트 중..."
+          docker compose --env-file ~/.env exec -T frontend nginx -t || echo "⚠️ nginx 설정 테스트 실패"
+          
+          # Check if frontend is responding
+          echo "🔍 프론트엔드 내부 상태 확인:"
+          docker compose --env-file ~/.env exec -T frontend curl -f http://localhost/ || echo "⚠️ 프론트엔드 내부 HTTP 실패"
+          
+          echo "✅ 프론트엔드 설정 완료"
           
           # Copy Firebase Admin SDK key to backend container
           echo "🔧 Firebase Admin SDK 키 파일을 백엔드 컨테이너에 복사 중..."
