@@ -106,87 +106,28 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'config.wsgi.application'
 
-# Database - PostgreSQL 사용 (1차: 외부 서버, 2차: 로컬 도커)
-# 1차 연결 실패 시 자동으로 2차 데이터베이스로 전환
-import psycopg2
+# Database - PostgreSQL 설정
 
-def test_database_connection(host, port, name, user, password):
-    """데이터베이스 연결을 테스트하는 함수"""
-    try:
-        conn = psycopg2.connect(
-            host=host,
-            port=port,
-            database=name,
-            user=user,
-            password=password,
-            connect_timeout=5
-        )
-        conn.close()
-        return True
-    except:
-        return False
-
-# 1차 데이터베이스 설정 (외부 서버)
-PRIMARY_DB_CONFIG = {
+# 데이터베이스 설정 (환경에 따라 자동 설정)
+DEFAULT_DB_CONFIG = {
     'ENGINE': 'django.db.backends.postgresql',
     'NAME': os.getenv('POSTGRES_DB', 'teamPicko'),
-    'USER': os.getenv('POSTGRES_USER', 'teamPicko'),
-    'PASSWORD': os.getenv('POSTGRES_PASSWORD', '12341234'),
-    'HOST': os.getenv('DB_HOST', 'localhost'), 
+    'USER': os.getenv('POSTGRES_USER', 'postgres'),
+    'PASSWORD': os.getenv('POSTGRES_PASSWORD', 'password'),
+    'HOST': os.getenv('DB_HOST', 'database'),  # 기본값: 도커 컨테이너
     'PORT': os.getenv('DB_PORT', '5432'),
     'OPTIONS': {
-        'connect_timeout': 5,
+        'connect_timeout': 10,
     },
 }
 
-# # 2차 데이터베이스 설정 (SQLite - 로컬 개발용)
-# FALLBACK_DB_CONFIG = {
-#     'ENGINE': 'django.db.backends.sqlite3',
-#     'NAME': BASE_DIR / 'db.sqlite3',
-# }
 
-# 데이터베이스 연결 테스트 후 선택
-print("🔍 데이터베이스 연결 상태를 확인중...")
+# 간단한 데이터베이스 설정
+DATABASES = {
+    'default': DEFAULT_DB_CONFIG
+}
 
-# 1차 데이터베이스 연결 테스트
-primary_available = test_database_connection(
-    PRIMARY_DB_CONFIG['HOST'],
-    PRIMARY_DB_CONFIG['PORT'], 
-    PRIMARY_DB_CONFIG['NAME'],
-    PRIMARY_DB_CONFIG['USER'],
-    PRIMARY_DB_CONFIG['PASSWORD']
-)
-
-if primary_available:
-    print("✅ 1차 데이터베이스(외부 서버) 연결 성공")
-    DATABASES = {
-        'default': PRIMARY_DB_CONFIG,
-        'fallback': FALLBACK_DB_CONFIG,
-    }
-    CURRENT_DATABASE = 'primary'
-else:
-    # SQLite는 별도 연결 테스트 없이 항상 사용 가능
-    fallback_available = True
-    
-    if fallback_available:
-        print("⚠️ 1차 데이터베이스 연결 실패, 2차 데이터베이스(로컬 도커) 사용")
-        DATABASES = {
-            'default': FALLBACK_DB_CONFIG,
-            'fallback': FALLBACK_DB_CONFIG,
-        }
-        CURRENT_DATABASE = 'fallback'
-    else:
-        print("❌ 모든 데이터베이스 연결 실패, 기본 설정 사용")
-        DATABASES = {
-            'default': PRIMARY_DB_CONFIG,
-            'fallback': FALLBACK_DB_CONFIG,
-        }
-        CURRENT_DATABASE = 'primary'
-
-print(f"📊 활성 데이터베이스: {CURRENT_DATABASE} ({DATABASES['default']['HOST']}:{DATABASES['default']['PORT']})")
-
-# 데이터베이스 연결 fallback 설정
-DATABASE_FALLBACK_ENABLED = True
+print(f"📊 데이터베이스 설정: {DEFAULT_DB_CONFIG['USER']}@{DEFAULT_DB_CONFIG['HOST']}:{DEFAULT_DB_CONFIG['PORT']}/{DEFAULT_DB_CONFIG['NAME']}")
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
