@@ -2,8 +2,7 @@
 FROM node:18-alpine AS builder
 
 # 빌드 인수 받기
-ARG REACT_APP_API_URL=/api
-ARG VITE_API_URL=/api
+ARG VITE_API_BASE_URL=/api/v1
 ARG NODE_ENV=production
 
 # 작업 디렉토리 설정
@@ -19,8 +18,7 @@ RUN NODE_ENV=development npm ci --silent --no-audit --no-fund
 COPY . .
 
 # 환경변수 설정
-ENV REACT_APP_API_URL=$REACT_APP_API_URL
-ENV VITE_API_URL=$VITE_API_URL
+ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 ENV NODE_ENV=$NODE_ENV
 
 # React 앱 빌드 (최적화)

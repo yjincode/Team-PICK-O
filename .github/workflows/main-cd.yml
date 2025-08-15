@@ -171,8 +171,7 @@ jobs:
           # Frontend 이미지 빌드 및 푸시 (권한 문제 해결됨)
           docker buildx build \
             --platform linux/amd64 \
-            --build-arg REACT_APP_API_URL="/api" \
-            --build-arg VITE_API_URL="/api" \
+            --build-arg VITE_API_BASE_URL="/api/v1" \
             --build-arg NODE_ENV="production" \
             --tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
             --tag $ECR_REGISTRY/$ECR_REPOSITORY:latest \
@@ -273,8 +272,7 @@ jobs:
         PROJECT_NAME="Team-PICK-O Backend (Demo)"
         
         # Network Configuration (상대 경로 사용 - nginx 프록시 통해 백엔드 연결)
-        REACT_APP_API_URL="/api"
-        VITE_API_URL="/api"
+        VITE_API_BASE_URL="/api/v1"
         BACKEND_CORS_ORIGINS='["https://badaejangbu.store","https://www.badaejangbu.store","http://localhost:3000","http://localhost:5173","http://127.0.0.1:3000","http://127.0.0.1:5173","https://localhost:3000"]'
         
         # Ports (데모용)

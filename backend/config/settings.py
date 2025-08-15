@@ -25,9 +25,6 @@ TESSERACT_TESSDATA_DIR = os.getenv('TESSERACT_TESSDATA_DIR', '/usr/share/tessera
 FILE_UPLOAD_PERMISSIONS = 0o644
 FILE_UPLOAD_DIRECTORY_PERMISSIONS = 0o755
 
-# Django SECRET_KEY (필수)
-SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-change-me-in-production')
-
 # JWT Settings for fast authentication (replacing Firebase token verification)
 JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY')
 JWT_REFRESH_SECRET_KEY = os.getenv('JWT_REFRESH_SECRET_KEY')
@@ -53,7 +50,7 @@ DJANGO_APPS = [
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
-    # 'django.contrib.staticfiles',  # API 서버이므로 비활성화
+    'django.contrib.staticfiles',
     'prediction',
 ]
 
@@ -83,9 +80,8 @@ MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
-    # 'django.middleware.csrf.CsrfViewMiddleware',  # ❌ JWT 사용 시 불필요
     'django.contrib.auth.middleware.AuthenticationMiddleware',
-    'core.middleware.JWTAuthMiddleware',  # 빠른 JWT 토큰 검증 미들웨어 (Firebase 지연시간 해결)
+    'core.middleware.JWTAuthMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -110,22 +106,87 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'config.wsgi.application'
 
-# Database - PostgreSQL 단순 설정 (Docker Compose 환경)
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.getenv('DB_NAME', os.getenv('POSTGRES_DB', 'teamPicko')),
-        'USER': os.getenv('DB_USER', os.getenv('POSTGRES_USER', 'postgres')),
-        'PASSWORD': os.getenv('DB_PASSWORD', os.getenv('POSTGRES_PASSWORD', 'password')),
-        'HOST': os.getenv('DB_HOST', 'database'),
-        'PORT': os.getenv('DB_PORT', '5432'),
-        'OPTIONS': {
-            'connect_timeout': 10,
-        },
-    }
+# Database - PostgreSQL 사용 (1차: 외부 서버, 2차: 로컬 도커)
+# 1차 연결 실패 시 자동으로 2차 데이터베이스로 전환
+import psycopg2
+
+def test_database_connection(host, port, name, user, password):
+    """데이터베이스 연결을 테스트하는 함수"""
+    try:
+        conn = psycopg2.connect(
+            host=host,
+            port=port,
+            database=name,
+            user=user,
+            password=password,
+            connect_timeout=5
+        )
+        conn.close()
+        return True
+    except:
+        return False
+
+# 1차 데이터베이스 설정 (외부 서버)
+PRIMARY_DB_CONFIG = {
+    'ENGINE': 'django.db.backends.postgresql',
+    'NAME': os.getenv('POSTGRES_DB', 'teamPicko'),
+    'USER': os.getenv('POSTGRES_USER', 'teamPicko'),
+    'PASSWORD': os.getenv('POSTGRES_PASSWORD', '12341234'),
+    'HOST': os.getenv('DB_HOST', 'localhost'), 
+    'PORT': os.getenv('DB_PORT', '5432'),
+    'OPTIONS': {
+        'connect_timeout': 5,
+    },
 }
 
-print(f"📊 데이터베이스 설정: {DATABASES['default']['HOST']}:{DATABASES['default']['PORT']}/{DATABASES['default']['NAME']}")
+# # 2차 데이터베이스 설정 (SQLite - 로컬 개발용)
+# FALLBACK_DB_CONFIG = {
+#     'ENGINE': 'django.db.backends.sqlite3',
+#     'NAME': BASE_DIR / 'db.sqlite3',
+# }
+
+# 데이터베이스 연결 테스트 후 선택
+print("🔍 데이터베이스 연결 상태를 확인중...")
+
+# 1차 데이터베이스 연결 테스트
+primary_available = test_database_connection(
+    PRIMARY_DB_CONFIG['HOST'],
+    PRIMARY_DB_CONFIG['PORT'], 
+    PRIMARY_DB_CONFIG['NAME'],
+    PRIMARY_DB_CONFIG['USER'],
+    PRIMARY_DB_CONFIG['PASSWORD']
+)
+
+if primary_available:
+    print("✅ 1차 데이터베이스(외부 서버) 연결 성공")
+    DATABASES = {
+        'default': PRIMARY_DB_CONFIG,
+        'fallback': FALLBACK_DB_CONFIG,
+    }
+    CURRENT_DATABASE = 'primary'
+else:
+    # SQLite는 별도 연결 테스트 없이 항상 사용 가능
+    fallback_available = True
+    
+    if fallback_available:
+        print("⚠️ 1차 데이터베이스 연결 실패, 2차 데이터베이스(로컬 도커) 사용")
+        DATABASES = {
+            'default': FALLBACK_DB_CONFIG,
+            'fallback': FALLBACK_DB_CONFIG,
+        }
+        CURRENT_DATABASE = 'fallback'
+    else:
+        print("❌ 모든 데이터베이스 연결 실패, 기본 설정 사용")
+        DATABASES = {
+            'default': PRIMARY_DB_CONFIG,
+            'fallback': FALLBACK_DB_CONFIG,
+        }
+        CURRENT_DATABASE = 'primary'
+
+print(f"📊 활성 데이터베이스: {CURRENT_DATABASE} ({DATABASES['default']['HOST']}:{DATABASES['default']['PORT']})")
+
+# 데이터베이스 연결 fallback 설정
+DATABASE_FALLBACK_ENABLED = True
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
@@ -149,10 +210,12 @@ TIME_ZONE = 'Asia/Seoul'
 USE_I18N = True
 USE_TZ = True
 
-# Static files 비활성화 (API 서버로만 사용)
-# STATIC_URL = '/static/'
-# STATIC_ROOT = BASE_DIR / 'static'
-# STATICFILES_DIRS = []
+# Static files (CSS, JavaScript, Images)
+STATIC_URL = '/static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+STATICFILES_DIRS = [
+    BASE_DIR / 'static',
+]
 
 # Media files (User uploads)
 MEDIA_URL = '/media/'
@@ -211,37 +274,21 @@ SPECTACULAR_SETTINGS = {
 }
 
 # CORS settings
-# 기본 개발 환경 Origins
-DEFAULT_CORS_ORIGINS = [
+CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://localhost:8080", 
     "http://127.0.0.1:3000",
     "http://127.0.0.1:8080",
     "http://localhost:5173",  # Vite default port
     "http://127.0.0.1:5173",
-    "https://localhost:3000",  # HTTPS 개발환경
 ]
-
-# 환경변수에서 CORS origins 가져오기 (배포 환경용)
-BACKEND_CORS_ORIGINS = os.getenv('BACKEND_CORS_ORIGINS', '[]')
-try:
-    import ast
-    EXTRA_CORS_ORIGINS = ast.literal_eval(BACKEND_CORS_ORIGINS) if BACKEND_CORS_ORIGINS != '[]' else []
-except (ValueError, SyntaxError):
-    EXTRA_CORS_ORIGINS = []
-    print(f"⚠️ CORS 환경변수 파싱 실패: {BACKEND_CORS_ORIGINS}")
-
-# 기본 Origins + 환경변수 Origins 합치기
-CORS_ALLOWED_ORIGINS = DEFAULT_CORS_ORIGINS + EXTRA_CORS_ORIGINS
 
 CORS_ALLOW_CREDENTIALS = True
 
 # 개발 환경에서는 모든 Origin 허용
 if DEBUG:
     CORS_ALLOW_ALL_ORIGINS = True
-    print(f"🔧 DEBUG 모드: 모든 CORS Origin 허용")
-else:
-    print(f"🔧 CORS 허용 Origins: {CORS_ALLOWED_ORIGINS}")
+    CORS_ALLOWED_ORIGINS = []
 
 # CORS 헤더 설정
 CORS_ALLOW_HEADERS = [
