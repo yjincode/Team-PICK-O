@@ -3,14 +3,22 @@
  * 백엔드 API와의 통신을 담당하는 axios 인스턴스와 API 함수들을 정의합니다
  */
 import axios from 'axios'
-import { 
-  Business, 
-  Inventory, 
-  Order, 
+import {
+  Business,
   FishType,
+  Inventory,
+  Order,
   Payment,
+  TossConfirmRequest,
+  MarkPaidRequest,
+  UnpaidOrder,
+  ARSummary,
   ApiResponse,
   PaginatedResponse,
+  RefundRequest,
+  RefundResponse,
+  CancelOrderRequest,
+  CancelOrderResponse,
   OrderListItem
 } from '../types'
 
@@ -47,12 +55,12 @@ const refreshAccessToken = async (): Promise<string | null> => {
   if (isRefreshing && refreshPromise) {
     return await refreshPromise
   }
-  
+
   isRefreshing = true
   refreshPromise = new Promise(async (resolve) => {
     try {
       const refreshToken = TokenManager.getRefreshToken()
-      
+
       if (!refreshToken) {
         resolve(null)
         return
@@ -60,7 +68,7 @@ const refreshAccessToken = async (): Promise<string | null> => {
       
       console.log('🔄 액세스 토큰 자동 갱신 시작')
       
-      const response = await fetch('/api/v1/business/auth/refresh/', {
+      const response = await fetch(`${API_BASE_URL}/business/auth/refresh/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -69,14 +77,14 @@ const refreshAccessToken = async (): Promise<string | null> => {
           refresh_token: refreshToken
         })
       })
-      
+
       if (response.ok) {
         const data = await response.json()
         const newAccessToken = data.access_token
-        
+
         TokenManager.setAccessToken(newAccessToken)
         console.log('✅ 액세스 토큰 자동 갱신 성공')
-        
+
         resolve(newAccessToken)
       } else {
         console.log('❌ 토큰 갱신 실패 - 리로그인 필요')
@@ -89,11 +97,11 @@ const refreshAccessToken = async (): Promise<string | null> => {
       resolve(null)
     }
   })
-  
+
   const result = await refreshPromise
   isRefreshing = false
   refreshPromise = null
-  
+
   return result
 }
 
@@ -105,36 +113,36 @@ api.interceptors.request.use(
       '/business/auth/register/',
       '/business/auth/refresh/'
     ]
-    
+
     const isPublicEndpoint = publicEndpoints.some(endpoint => config.url?.includes(endpoint))
-    
+
     if (isPublicEndpoint) {
       console.log('🔓 공개 엔드포인트 - 토큰 없이 요청:', config.url)
       return config
     }
-    
+
     // 일반 엔드포인트는 토큰 필요
     let accessToken = TokenManager.getAccessToken()
-    
+
     // 액세스 토큰이 없거나 만료된 경우 갱신 시도
     if (!accessToken || !TokenManager.isAccessTokenValid()) {
       console.log('🔄 액세스 토큰 갱신 필요')
       accessToken = await refreshAccessToken()
-      
+
       // 갱신에 실패한 경우 로그인 페이지로 리다이렉트
       if (!accessToken) {
         window.location.href = '/login'
         return Promise.reject(new Error('토큰 갱신 실패'))
       }
     }
-    
+
     // Authorization 헤더에 액세스 토큰 추가
     if (accessToken) {
       config.headers.Authorization = `Bearer ${accessToken}`
     }
-    
 
-    
+
+
     console.log('🚀 자동 토큰 갱신 API 요청:', {
       url: config.url,
       fullUrl: `${config.baseURL}${config.url}`,
@@ -143,7 +151,7 @@ api.interceptors.request.use(
       tokenTimeLeft: TokenManager.getAccessTokenTimeUntilExpiry() + '초',
       headers: config.headers
     });
-    
+
     return config
   },
   (error) => {
@@ -169,7 +177,7 @@ api.interceptors.response.use(
       method: error.config?.method?.toUpperCase(),
       message: error.response?.data?.error || error.message
     });
-    
+
     // 401 오류 시 토큰 갱신 후 재시도
     if (error.response?.status === 401 && !error.config._retry) {
       error.config._retry = true;
@@ -177,7 +185,7 @@ api.interceptors.response.use(
       console.log('🔄 401 오류로 인한 토큰 갱신 및 재시도');
       
       const newAccessToken = await refreshAccessToken();
-      
+
       if (newAccessToken) {
         // 새로운 액세스 토큰으로 원래 요청 재시도
         error.config.headers.Authorization = `Bearer ${newAccessToken}`;
@@ -189,7 +197,7 @@ api.interceptors.response.use(
         window.location.href = '/login';
       }
     }
-    
+
     return Promise.reject(error)
   }
 )
@@ -272,7 +280,7 @@ export const inventoryApi = {
     const response = await api.get('/inventory/', { params })
     return response.data
   },
-  
+
   // 어종 목록 조회 (재고 추가시 선택용)
   getFishTypes: async (): Promise<{ data: FishType[] }> => {
     const response = await api.get('/fish-registry/fish-types/')
@@ -309,18 +317,47 @@ export const inventoryApi = {
     const response = await api.get(url)
     return response.data
   },
+
+  // 주문 등록 시 재고 체크
+  checkStock: async (orderItems: Array<{
+    fish_type_id: number;
+    quantity: number;
+    unit: string;
+  }>): Promise<{
+    status: 'ok' | 'warning' | 'insufficient' | 'error';
+    items: Array<{
+      fish_type_id: number;
+      fish_name: string;
+      requested_quantity: number;
+      available_stock: number;
+      unit: string;
+      status: string;
+      shortage?: number;
+    }>;
+    warnings: string[];
+    errors: Array<{
+      fish_name?: string;
+      fish_type_id?: number;
+      message: string;
+      shortage?: number;
+    }>;
+    can_proceed: boolean;
+  }> => {
+    const response = await api.post('/inventory/stock-check/', { order_items: orderItems })
+    return response.data
+  },
 }
 
 // 주문 관리 API
 export const orderApi = {
-  // 모든 주문 조회
+  // 모든 주문 조회 (페이지네이션) - OrderListSerializer 사용
   getAll: async (params?: { page?: number; page_size?: number }): Promise<ApiResponse<OrderListItem[]>> => {
     const response = await api.get('/orders/', { params })
     return response.data
   },
 
-  // ID로 주문 조회
-  getById: async (id: number): Promise<ApiResponse<Order>> => {
+  // 주문 상세 조회 - OrderDetailSerializer 사용
+  getById: async (id: number): Promise<Order> => {
     const response = await api.get(`/orders/${id}/`)
     return response.data
   },
@@ -344,55 +381,8 @@ export const orderApi = {
   },
 
   // 주문 상태 업데이트
-  updateStatus: async (id: number, status: Order['status']): Promise<ApiResponse<Order>> => {
+  updateStatus: async (id: number, status: Order['order_status']): Promise<ApiResponse<Order>> => {
     const response = await api.patch(`/orders/${id}/status/`, { order_status: status })
-    return response.data
-  },
-}
-
-
-// 결제 관리 API
-export const paymentApi = {
-  // 모든 결제 조회
-  getAll: async (): Promise<ApiResponse<Payment[]>> => {
-    const response = await api.get('/payments/')
-    return response.data
-  },
-
-  // ID로 결제 조회
-  getById: async (id: number): Promise<ApiResponse<Payment>> => {
-    const response = await api.get(`/payments/${id}/`)
-    return response.data
-  },
-
-  // 새 결제 생성
-  create: async (payment: Omit<Payment, 'id' | 'created_at'>): Promise<ApiResponse<Payment>> => {
-    const response = await api.post('/payments/', payment)
-    return response.data
-  },
-
-  // 결제 정보 수정
-  update: async (id: number, payment: Partial<Payment>): Promise<ApiResponse<Payment>> => {
-    const response = await api.put(`/payments/${id}/`, payment)
-    return response.data
-  },
-
-  // 결제 삭제
-  delete: async (id: number): Promise<ApiResponse<void>> => {
-    const response = await api.delete(`/payments/${id}/`)
-    return response.data
-  },
-}
-
-export const paymentsApi = {
-  getAll: async (params?: { page?: number; page_size?: number }) => {
-    const response = await api.get('/payments/', { params })
-    return response.data
-  },
-  
-  // 토스 페이먼츠 결제 승인 (복수형 payments로 통일)
-  confirmToss: async (data: { paymentKey: string; orderId: string; amount: number }) => {
-    const response = await api.post('/payments/toss/confirm/', data)
     return response.data
   },
 }
@@ -404,19 +394,19 @@ export const authApi = {
     const response = await api.post('/business/auth/register/', userData)
     return response.data
   },
-  
+
   // 사용자 등록 (별칭 - LoginPage 호환성)
   registerUser: async (userData: any): Promise<any> => {
     const response = await api.post('/business/auth/register/', userData)
     return response.data
   },
-  
+
   // 사용자 상태 확인
   checkUserStatus: async (firebaseUid: string): Promise<any> => {
     const response = await api.get(`/business/auth/status/?firebase_uid=${firebaseUid}`)
     return response.data
   },
-  
+
 
   // 로그아웃
   logout: async (): Promise<ApiResponse<void>> => {
@@ -433,7 +423,7 @@ export const authApi = {
 
 // Sales API
 export const salesApi = {
-  getAll: async (params?: { page?: number; page_size?: number }): Promise<ApiResponse<OrderListItem[]>> => {
+  getAll: async (params?: { page?: number; page_size?: number }): Promise<ApiResponse<Order[]>> => {
     const response = await api.get('/orders/', { params })
     return response.data
   },
@@ -445,6 +435,44 @@ export const salesApi = {
 
   getAuctionPrediction: async (): Promise<any> => {
     const response = await api.get('/sales/auction-prediction')
+    return response.data
+  },
+}
+
+// Dashboard API
+export const dashboardApi = {
+  // 대시보드 통계 정보 조회
+  getStats: async (): Promise<{
+    todayOrders: number;
+    lowStockCount: number;
+    totalOutstandingBalance: number;
+    businessCount: number;
+  }> => {
+    const response = await api.get('/dashboard/stats/')
+    return response.data
+  },
+
+  // 최근 주문 목록 조회
+  getRecentOrders: async (limit: number = 10): Promise<Array<{
+    id: number;
+    business_name: string;
+    items_summary: string;
+    total_price: number;
+    order_status: string;
+    order_datetime: string;
+  }>> => {
+    const response = await api.get('/dashboard/recent-orders/', { params: { limit } })
+    return response.data
+  },
+
+  // 재고 부족 어종 목록
+  getLowStockItems: async (): Promise<Array<{
+    fish_name: string;
+    total_stock: number;
+    unit: string;
+    status: string;
+  }>> => {
+    const response = await api.get('/dashboard/low-stock/')
     return response.data
   },
 }
@@ -465,7 +493,7 @@ export const aiApi = {
 // STT (Speech-to-Text) API
 export const sttApi = {
   // 음성 파일을 텍스트로 변환
-  transcribe: async (audioFile: File, language: string = 'ko'): Promise<{ 
+  transcribe: async (audioFile: File, language: string = 'ko'): Promise<{
     message: string;
     transcription: string;
     language: string;
@@ -473,19 +501,67 @@ export const sttApi = {
     const formData = new FormData()
     formData.append('audio', audioFile)
     formData.append('language', language)
-    
+
     // STT API는 인증이 필요 없으므로 직접 fetch 사용
-    const response = await fetch('/api/v1/transcription/transcribe/', {
+    const response = await fetch(`${API_BASE_URL}/transcription/transcribe/`, {
       method: 'POST',
       body: formData,
     })
-    
+
     if (!response.ok) {
       const error = await response.json()
       throw new Error(error.error || 'STT 변환 실패')
     }
-    
+
     return await response.json()
+  },
+}
+
+// ==================== 결제 관리 API ====================
+
+export const paymentApi = {
+  // 토스 페이먼츠 결제 확정
+  confirmToss: async (data: TossConfirmRequest): Promise<ApiResponse<any>> => {
+    const response = await api.post('/payments/toss/confirm/', data)
+    return response.data
+  },
+
+  // 수동 결제 완료 (현금/계좌이체)
+  markPaid: async (data: MarkPaidRequest): Promise<ApiResponse<any>> => {
+    const response = await api.post('/payments/mark-paid/', data)
+    return response.data
+  },
+
+  // 환불 처리
+  refund: async (data: RefundRequest): Promise<ApiResponse<RefundResponse>> => {
+    const response = await api.post('/payments/refund/', data)
+    return response.data
+  },
+
+  // 주문 취소
+  cancelOrder: async (data: CancelOrderRequest): Promise<ApiResponse<CancelOrderResponse>> => {
+    const response = await api.post('/payments/cancel-order/', data)
+    return response.data
+  },
+}
+
+// ==================== 미수금(AR) 조회 API ====================
+
+export const arApi = {
+  // 미결제 주문 목록 조회
+  getUnpaidOrders: async (params?: {
+    businessId?: number;
+    from?: string;
+    to?: string
+  }): Promise<UnpaidOrder[]> => {
+    const response = await api.get('/payments/ar/unpaid-orders/', { params })
+    return response.data
+  },
+
+  // 거래처별 미수금 요약
+  getSummary: async (): Promise<ARSummary[]> => {
+    const response = await api.get('/payments/ar/summary/')
+    return response.data
   },
 }
 

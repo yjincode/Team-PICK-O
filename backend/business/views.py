@@ -1,6 +1,7 @@
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes, authentication_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -25,6 +26,10 @@ from django.http import JsonResponse
 import firebase_admin
 from firebase_admin import auth
 from core.jwt_utils import generate_token_pair, verify_refresh_token, generate_access_token
+from django.db.models import Sum, Count
+from order.models import Order
+from inventory.models import Inventory
+from datetime import datetime, date
 
 @api_view(['POST'])
 @authentication_classes([])  # 인증 완전 비활성화
@@ -383,6 +388,7 @@ def firebase_to_jwt_exchange(request):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+
 @api_view(['POST'])
 @authentication_classes([])
 @permission_classes([AllowAny])
@@ -519,10 +525,9 @@ class BusinessPagination(PageNumberPagination):
 class BusinessListAPIView(ListAPIView):
     serializer_class = BusinessSerializer
     pagination_class = BusinessPagination
-    # REST Framework 인증/권한 검증 완전 비활성화
-    authentication_classes = []  # ❌ 인증 클래스 비활성화
-    permission_classes = []      # ❌ 권한 클래스 비활성화
     
     def get_queryset(self):
-        # 미들웨어에서 설정된 user_id 사용
+        # 미들웨어에서 설정된 user_id 사용 (JWT 미들웨어 인증 필요)
+        if not hasattr(self.request, 'user_id') or not self.request.user_id:
+            raise PermissionDenied('사용자 인증이 필요합니다.')
         return Business.objects.filter(user_id=self.request.user_id).order_by('-id')

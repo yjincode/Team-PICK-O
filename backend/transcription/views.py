@@ -1,7 +1,15 @@
 import logging
 import os
 import tempfile
-from faster_whisper import WhisperModel
+
+# faster_whisper 모듈을 조건부로 import
+try:
+    from faster_whisper import WhisperModel
+    FASTER_WHISPER_AVAILABLE = True
+except ImportError:
+    print("⚠️ faster_whisper 모듈이 설치되지 않았습니다. STT 기능이 비활성화됩니다.")
+    WhisperModel = None
+    FASTER_WHISPER_AVAILABLE = False
 from django.conf import settings
 from django.db import transaction
 from rest_framework import status

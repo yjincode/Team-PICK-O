@@ -143,17 +143,7 @@ interface OrderItem {
   fish_type?: FishType  // 조인된 데이터
 }
 
-// 결제 정보
-interface Payment {
-  id: number
-  order_id: number
-  business_id: number
-  amount: number
-  method: 'bank_transfer' | 'card' | 'cash'
-  status: 'paid' | 'pending' | 'failed'
-  paid_at?: string
-  created_at: string
-}
+
 
 // SMS 추천
 interface SmsRecommendation {

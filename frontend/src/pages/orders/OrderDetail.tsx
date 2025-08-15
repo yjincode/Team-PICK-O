@@ -8,7 +8,7 @@ import { useParams, useNavigate } from "react-router-dom"
 import { Button } from "../../components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card"
 import { Badge } from "../../components/ui/badge"
-import { ArrowLeft, CreditCard, Banknote, Building2 } from "lucide-react"
+import { ArrowLeft } from "lucide-react"
 import { format } from "date-fns"
 import { formatPhoneNumber } from "../../utils/phoneFormatter"
 import { orderApi } from "../../lib/api"
@@ -20,10 +20,7 @@ const OrderDetail: React.FC = () => {
   const navigate = useNavigate()
   const [order, setOrder] = useState<any>(null)
   const [loading, setLoading] = useState(true)
-  const [processingPayment, setProcessingPayment] = useState(false)
-  const [showRefundModal, setShowRefundModal] = useState(false)
-  const [refundReason, setRefundReason] = useState('')
-  const [processingRefund, setProcessingRefund] = useState(false)
+
   const [showCancelModal, setShowCancelModal] = useState(false)
   const [cancelReason, setCancelReason] = useState('')
   const [processingCancel, setProcessingCancel] = useState(false)
@@ -53,104 +50,15 @@ const OrderDetail: React.FC = () => {
     fetchOrder()
   }, [id, navigate])
 
-  const handleManualPaymentComplete = async () => {
-    if (!order || !order.payment) return
-    
-    try {
-      setProcessingPayment(true)
-      
-      // 토큰 가져오기
-      const token = localStorage.getItem('access_token')
-      if (!token) {
-        toast.error('로그인이 필요합니다.')
-        navigate('/login')
-        return
-      }
-      
-      const response = await fetch('/api/v1/payments/manual/complete/', {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          order_id: order.id,
-          method: order.payment.method,
-          amount: order.payment.amount || order.total_price
-        })
-      })
-      
-      if (response.ok) {
-        toast.success('결제가 완료되었습니다.')
-        const updatedOrder = await orderApi.getById(parseInt(id!))
-        setOrder(updatedOrder)
-      } else if (response.status === 401) {
-        toast.error('인증이 만료되었습니다. 다시 로그인해주세요.')
-        navigate('/login')
-      } else {
-        const errorData = await response.json()
-        toast.error(errorData.error || '결제 완료 처리에 실패했습니다.')
-      }
-    } catch (error) {
-      console.error('결제 완료 처리 오류:', error)
-      toast.error('결제 완료 처리 중 오류가 발생했습니다.')
-    } finally {
-      setProcessingPayment(false)
-    }
-  }
 
-  const handleRefund = async () => {
-    if (!order || !order.payment || !refundReason.trim()) return
-    
-    try {
-      setProcessingRefund(true)
-      
-      // 토큰 가져오기
-      const token = localStorage.getItem('access_token')
-      if (!token) {
-        toast.error('로그인이 필요합니다.')
-        navigate('/login')
-        return
-      }
-      
-      const response = await fetch('/api/v1/payments/refund/', {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          payment_id: order.payment.id,
-          refund_reason: refundReason
-        })
-      })
-      
-      if (response.ok) {
-        toast.success('환불이 처리되었습니다.')
-        const updatedOrder = await orderApi.getById(parseInt(id!))
-        setOrder(updatedOrder)
-        setShowRefundModal(false)
-        setRefundReason('')
-      } else if (response.status === 401) {
-        toast.error('인증이 만료되었습니다. 다시 로그인해주세요.')
-        navigate('/login')
-      } else {
-        const errorData = await response.json()
-        toast.error(errorData.error || '환불 처리에 실패했습니다.')
-      }
-    } catch (error) {
-      console.error('환불 처리 오류:', error)
-      toast.error('환불 처리 중 오류가 발생했습니다.')
-    } finally {
-      setProcessingRefund(false)
-    }
-  }
+
+
 
   const handleShipOut = async () => {
     if (!order) return
     
     try {
-      setProcessingPayment(true)
+      setLoading(true)
       
       // 토큰 가져오기
       const token = localStorage.getItem('access_token')
@@ -183,7 +91,7 @@ const OrderDetail: React.FC = () => {
       console.error('출고 처리 오류:', error)
       toast.error('출고 처리 중 오류가 발생했습니다.')
     } finally {
-      setProcessingPayment(false)
+      setLoading(false)
     }
   }
 
@@ -476,49 +384,7 @@ const OrderDetail: React.FC = () => {
             </Card>
           )}
 
-          {/* 결제 정보 */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">결제 정보</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {order.payment ? (
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="font-medium">결제 상태:</span>
-                    <Badge className={getBadgeClass('paymentStatus', order.payment.payment_status)}>
-                      {getLabel('paymentStatus', order.payment.payment_status)}
-                    </Badge>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="font-medium">결제 수단:</span>
-                    <div className="flex items-center space-x-2">
-                      {order.payment.method === 'card' && <CreditCard className="h-4 w-4" />}
-                      {order.payment.method === 'cash' && <Banknote className="h-4 w-4" />}
-                      {order.payment.method === 'bank_transfer' && <Building2 className="h-4 w-4" />}
-                      <span className="capitalize">{getLabel('paymentMethod', order.payment.method)}</span>
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="font-medium">결제 금액:</span>
-                    <span className="font-bold text-blue-600">
-                      {order.payment.amount?.toLocaleString()}원
-                    </span>
-                  </div>
-                  {order.payment.paid_at && (
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium">결제 완료 시각:</span>
-                      <span>{format(new Date(order.payment.paid_at), "yyyy-MM-dd HH:mm")}</span>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="text-center py-4 text-gray-500">
-                  결제 정보가 없습니다.
-                </div>
-              )}
-            </CardContent>
-          </Card>
+
 
           {/* 액션 버튼 */}
            <div className="flex justify-end space-x-3 pt-4">
@@ -543,101 +409,34 @@ const OrderDetail: React.FC = () => {
                </>
              ) : null} */}
             
-            {!order.payment || order.payment.payment_status !== 'paid' ? (
-              <Button onClick={() => navigate(`/orders/${order.id}/payment`)} className="bg-blue-600 hover:bg-blue-700">
-                결제하기
+            {/* 출고 처리 버튼 - 출고 준비 상태일 때만 표시 */}
+            {order.order_status === 'ready' && (
+              <Button 
+                onClick={handleShipOut}
+                variant="outline"
+                className="border-orange-600 text-orange-600 hover:bg-orange-50"
+                disabled={loading}
+              >
+                {loading ? '처리 중...' : '출고 처리'}
               </Button>
-            ) : (
-              <>
-                <Button 
-                  onClick={() => handleManualPaymentComplete()} 
-                  className="bg-green-600 hover:bg-green-700"
-                  disabled={order.payment.payment_status === 'paid' || processingPayment}
-                >
-                  {order.payment.payment_status === 'paid' ? '결제 완료됨' : '결제 완료 처리'}
-                </Button>
-                
-                {/* 환불 버튼 - 결제 완료 상태일 때만 표시 */}
-                {order.payment.payment_status === 'paid' && (
-                  <Button 
-                    onClick={() => setShowRefundModal(true)}
-                    variant="outline"
-                    className="border-red-600 text-red-600 hover:bg-red-50"
-                  >
-                    환불 처리
-                  </Button>
-                )}
-                
-                {/* 출고 처리 버튼 - 출고 준비 상태이고 결제 완료일 때만 표시 */}
-                {order.order_status === 'ready' && order.payment?.payment_status === 'paid' && (
-                  <Button 
-                    onClick={handleShipOut}
-                    variant="outline"
-                    className="border-orange-600 text-orange-600 hover:bg-orange-50"
-                    disabled={processingPayment}
-                  >
-                    {processingPayment ? '처리 중...' : '출고 처리'}
-                  </Button>
-                )}
-                
-                {/* 주문 취소 버튼 - 취소 가능한 상태일 때만 표시 */}
-                {(order.order_status === 'placed' || 
-                  (order.order_status === 'ready' && !order.ship_out_datetime)) && (
-                  <Button 
-                    onClick={() => setShowCancelModal(true)}
-                    variant="outline"
-                    className="border-gray-600 text-gray-600 hover:bg-gray-50"
-                  >
-                    주문 취소
-                  </Button>
-                )}
-              </>
+            )}
+            
+            {/* 주문 취소 버튼 - 취소 가능한 상태일 때만 표시 */}
+            {(order.order_status === 'placed' || 
+              (order.order_status === 'ready' && !order.ship_out_datetime)) && (
+              <Button 
+                onClick={() => setShowCancelModal(true)}
+                variant="outline"
+                className="border-gray-600 text-gray-600 hover:bg-gray-50"
+              >
+                주문 취소
+              </Button>
             )}
           </div>
         </CardContent>
       </Card>
 
-      {/* 환불 모달 */}
-      {showRefundModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
-            <h3 className="text-lg font-semibold mb-4">환불 처리</h3>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  환불 사유
-                </label>
-                <textarea
-                  value={refundReason}
-                  onChange={(e) => setRefundReason(e.target.value)}
-                  placeholder="환불 사유를 입력해주세요"
-                  className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  rows={3}
-                />
-              </div>
-              <div className="flex justify-end space-x-3">
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setShowRefundModal(false)
-                    setRefundReason('')
-                  }}
-                  disabled={processingRefund}
-                >
-                  취소
-                </Button>
-                <Button
-                  onClick={handleRefund}
-                  disabled={!refundReason.trim() || processingRefund}
-                  className="bg-red-600 hover:bg-red-700"
-                >
-                  {processingRefund ? '처리 중...' : '환불 처리'}
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+
 
       {/* 주문 취소 모달 */}
       {showCancelModal && (

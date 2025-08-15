@@ -256,3 +256,137 @@ class FishTypeListView(View):
         fish_types = FishType.objects.filter(**get_user_queryset_filter(request)).order_by('name')
         serializer = FishTypeSerializer(fish_types, many=True)
         return JsonResponse(serializer.data, safe=False)
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class StockCheckView(View):
+    """주문 등록 시 재고 체크 - Django View 기반 JWT 미들웨어 인증"""
+    
+    def post(self, request):
+        """주문 아이템들의 재고 상태 체크"""
+        print(f"📦 재고 체크 요청")
+        print(f"🆔 request.user_id: {getattr(request, 'user_id', 'NOT SET')}")
+        
+        # 미들웨어에서 설정된 사용자 정보 확인
+        if not hasattr(request, 'user_id') or not request.user_id:
+            print(f"❌ 사용자 인증 정보 없음")
+            return JsonResponse({'error': '사용자 인증이 필요합니다.'}, status=401)
+        
+        print(f"✅ 사용자 인증 확인: user_id={request.user_id}")
+        
+        # Django View에서 JSON 데이터 파싱
+        try:
+            if request.content_type and 'application/json' in request.content_type:
+                data = json.loads(request.body)
+            else:
+                data = request.POST.dict()
+            print(f"📝 파싱된 데이터: {data}")
+        except json.JSONDecodeError as e:
+            print(f"❌ JSON 파싱 오류: {e}")
+            return JsonResponse({'error': '잘못된 JSON 형식입니다.'}, status=400)
+        
+        order_items = data.get('order_items', [])
+        if not order_items:
+            return JsonResponse({'error': '주문 아이템이 필요합니다.'}, status=400)
+        
+        results = []
+        warnings = []
+        errors = []
+        
+        for item in order_items:
+            fish_type_id = item.get('fish_type_id')
+            quantity = item.get('quantity', 0)
+            unit = item.get('unit', '')
+            
+            if not fish_type_id or quantity <= 0:
+                continue
+                
+            try:
+                # 어종별 총 재고량 계산
+                from django.db.models import Sum
+                total_stock = Inventory.objects.filter(
+                    fish_type_id=fish_type_id,
+                    **get_user_queryset_filter(request)
+                ).aggregate(total=Sum('stock_quantity'))['total'] or 0
+                
+                # 어종 정보 가져오기
+                fish_type = FishType.objects.get(id=fish_type_id, **get_user_queryset_filter(request))
+                
+                item_result = {
+                    'fish_type_id': fish_type_id,
+                    'fish_name': fish_type.name,
+                    'requested_quantity': quantity,
+                    'available_stock': total_stock,
+                    'unit': unit,
+                    'status': 'ok'
+                }
+                
+                # 재고 부족 체크
+                if quantity > total_stock:
+                    shortage = quantity - total_stock
+                    item_result['status'] = 'insufficient'
+                    item_result['shortage'] = shortage
+                    
+                    # 소수점 제거를 위한 포맷팅
+                    quantity_str = f"{quantity:g}"
+                    total_stock_str = f"{total_stock:g}"
+                    shortage_str = f"{shortage:g}"
+                    
+                    warning_msg = f"{fish_type.name}: 주문수량 {quantity_str}{unit}, 재고 {total_stock_str}{unit} (부족: {shortage_str}{unit})"
+                    warnings.append(warning_msg)
+                    errors.append({
+                        'fish_name': fish_type.name,
+                        'message': f'재고가 부족합니다. 주문: {quantity_str}{unit}, 재고: {total_stock_str}{unit}',
+                        'shortage': shortage
+                    })
+                elif total_stock == 0:
+                    item_result['status'] = 'out_of_stock'
+                    warning_msg = f"{fish_type.name}: 재고가 없습니다"
+                    warnings.append(warning_msg)
+                    errors.append({
+                        'fish_name': fish_type.name,
+                        'message': '재고가 없습니다',
+                        'shortage': quantity
+                    })
+                elif quantity > total_stock * 0.8:  # 재고의 80% 이상 주문 시 경고
+                    item_result['status'] = 'warning'
+                    quantity_str = f"{quantity:g}"
+                    total_stock_str = f"{total_stock:g}"
+                    warning_msg = f"{fish_type.name}: 재고 부족 주의 (주문: {quantity_str}{unit}, 재고: {total_stock_str}{unit})"
+                    warnings.append(warning_msg)
+                
+                results.append(item_result)
+                
+            except FishType.DoesNotExist:
+                error_msg = f"어종 ID {fish_type_id}를 찾을 수 없습니다"
+                errors.append({
+                    'fish_type_id': fish_type_id,
+                    'message': error_msg
+                })
+            except Exception as e:
+                error_msg = f"어종 ID {fish_type_id} 처리 중 오류: {str(e)}"
+                errors.append({
+                    'fish_type_id': fish_type_id,
+                    'message': error_msg
+                })
+        
+        # 전체 상태 결정
+        overall_status = 'ok'
+        if errors:
+            overall_status = 'error'
+        elif any(item['status'] in ['insufficient', 'out_of_stock'] for item in results):
+            overall_status = 'insufficient'
+        elif any(item['status'] == 'warning' for item in results):
+            overall_status = 'warning'
+        
+        response_data = {
+            'status': overall_status,
+            'items': results,
+            'warnings': warnings,
+            'errors': errors,
+            'can_proceed': True,  # 재고 부족해도 주문은 항상 등록 가능하도록 변경
+            'has_stock_issues': overall_status in ['insufficient', 'out_of_stock', 'warning']  # 재고 이슈 여부만 알림
+        }
+        
+        print(f"📦 재고 체크 결과: {response_data}")
+        return JsonResponse(response_data)
