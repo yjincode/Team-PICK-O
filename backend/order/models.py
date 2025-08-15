@@ -57,6 +57,17 @@ class Order(models.Model):
     has_stock_issues = models.BooleanField(default=False, verbose_name="재고 부족 여부")
     last_updated_at = models.DateTimeField(auto_now=True, verbose_name="최종 수정 일시")
 
+    @property
+    def business(self):
+        """거래처 객체 반환"""
+        if not hasattr(self, '_business_cache'):
+            from business.models import Business
+            try:
+                self._business_cache = Business.objects.get(id=self.business_id)
+            except Business.DoesNotExist:
+                self._business_cache = None
+        return self._business_cache
+
     class Meta:
         db_table = 'orders'
         verbose_name = '주문'

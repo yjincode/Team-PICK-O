@@ -13,7 +13,6 @@ import { Textarea } from "../../../components/ui/textarea"
 import { OrderItem } from "../../../types"
 
 interface ManualInputTabProps {
-
   businessId: number | null;
   fishTypes: Array<{ id: number; name: string; unit: string }>;
   currentItem: Partial<OrderItem>;
@@ -21,6 +20,7 @@ interface ManualInputTabProps {
   onAddItem: () => void;
   onRemoveItem: (index: number) => void;
   items: OrderItem[];
+  onItemChange?: (item: Partial<OrderItem>) => void;
 }
 
 const ManualInputTab: React.FC<ManualInputTabProps> = ({
@@ -37,6 +37,7 @@ const ManualInputTab: React.FC<ManualInputTabProps> = ({
         ...currentItem,
         fish_type: fishType.id,
         item_name_snapshot: fishType.name,
+        unit: fishType.unit, // 어종의 단위 추가
         unit_price: 0 // default_price가 없으므로 0으로 설정
       }
       setCurrentItem(updatedItem)

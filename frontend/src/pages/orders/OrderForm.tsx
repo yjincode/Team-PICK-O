@@ -32,7 +32,7 @@ import ImageUploadTab from "./components/ImageUploadTab"
 import type { Business, FishType } from "../../types"
 
 // API import
-import { fishTypeApi, businessApi } from "../../lib/api"
+import { fishTypeApi, businessApi, inventoryApi } from "../../lib/api"
 import { TokenManager } from "../../lib/tokenManager"
 
 // JWT 토큰 기반 API 사용 (../../lib/api.ts에서 import)
@@ -99,7 +99,7 @@ const pollTranscriptionStatus = async (transcriptionId: string, _businessId: num
       attempts++
       console.log(`폴링 시도 ${attempts}/${maxAttempts}: transcriptionId=${transcriptionId}`)
       
-      const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/v1/order/transcription/${transcriptionId}/status/`, {
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/orders/transcription/${transcriptionId}/status/`, {
         headers: {
           'Authorization': `Bearer ${TokenManager.getAccessToken()}`
         }
@@ -122,7 +122,7 @@ const pollTranscriptionStatus = async (transcriptionId: string, _businessId: num
           
           // 주문 생성
           try {
-            const orderResponse = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/v1/order/transcription/${transcriptionId}/create-order/`, {
+            const orderResponse = await fetch(`${import.meta.env.VITE_API_BASE_URL}/orders/transcription/${transcriptionId}/create-order/`, {
               method: 'POST',
               headers: {
                 'Authorization': `Bearer ${TokenManager.getAccessToken()}`
@@ -185,6 +185,9 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
   const [isCheckingStock, setIsCheckingStock] = useState<boolean>(false)
   const [tempStockInfo, setTempStockInfo] = useState<{warnings: string[], errors: any[]}>({warnings: [], errors: []})
   
+  // 주문 완료 후 재고 이슈 상태
+  const [completedOrderStockIssue, setCompletedOrderStockIssue] = useState<boolean>(false)
+  
   // 어종 목록 상태 (API에서 가져올 예정)
   const [fishTypes, setFishTypes] = useState<FishType[]>([])
   // const [isLoadingFishTypes, setIsLoadingFishTypes] = useState<boolean>(false)
@@ -192,6 +195,20 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
   const [businesses, setBusinesses] = useState<Business[]>([])
   const [selectedBusinessId, setSelectedBusinessId] = useState<number | null>(null)
   // const [isLoadingBusinesses, setIsLoadingBusinesses] = useState<boolean>(false)
+
+  // Form 데이터 상태 정의 (useEffect에서 사용하므로 먼저 선언)
+  const [formData, setFormData] = useState<FormData>(() => {
+    return {
+      business_name: "",
+      phone_number: "",
+      memo: "",
+      source_type: "text" as "voice" | "text" | "manual" | "image",
+      transcribed_text: "",
+      raw_input_path: "",
+      delivery_datetime: "",
+      items: [] as OrderItem[]
+    }
+  })
 
   // 어종 목록 가져오기 (JWT 토큰 기반 API 사용)
   useEffect(() => {
@@ -213,6 +230,39 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
     fetchFishTypes()
   }, [])
 
+  // 주문 아이템이 변경될 때마다 재고 체크
+  useEffect(() => {
+    const checkStockForAllItems = async () => {
+      if (formData.items.length === 0) {
+        setStockWarnings([])
+        setStockErrors([])
+        return
+      }
+
+      try {
+        const stockCheckItems = formData.items.map((item: OrderItem) => ({
+          fish_type_id: item.fish_type,
+          quantity: item.quantity,
+          unit: item.unit || '박스'
+        }))
+        
+        const stockResult = await inventoryApi.checkStock(stockCheckItems)
+        
+        setStockWarnings(stockResult.warnings || [])
+        setStockErrors(stockResult.errors || [])
+        
+      } catch (error) {
+        console.error('재고 체크 실패:', error)
+        setStockWarnings([])
+        setStockErrors([])
+      }
+    }
+
+    // 디바운스를 위해 500ms 지연
+    const timeoutId = setTimeout(checkStockForAllItems, 500)
+    return () => clearTimeout(timeoutId)
+  }, [formData.items])
+
   // 거래처 목록 가져오기 (JWT 토큰 기반 API 사용)
   useEffect(() => {
     const fetchBusinesses = async () => {
@@ -230,9 +280,9 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
         if (response && Array.isArray(response)) {
           console.log('📁 응답이 배열 형태')
           businessData = response
-        } else if (response && Array.isArray(response.results)) {
+        } else if (response && Array.isArray((response as any).results)) {
           console.log('📁 페이지네이션 응답 형태 (results)')
-          businessData = response.results
+          businessData = (response as any).results
         } else if (response && response.data && Array.isArray(response.data.results)) {
           console.log('📁 페이지네이션 응답 형태 (data.results)')
           businessData = response.data.results
@@ -266,19 +316,6 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
   // const findBusinessById = (businessId: number): Business | undefined => {
   //   return businesses.find((business: Business) => business.id === businessId)
   // }
-
-  const [formData, setFormData] = useState<FormData>(() => {
-    return {
-      business_name: "",
-      phone_number: "",
-      memo: "",
-      source_type: "text" as "voice" | "text" | "manual" | "image",
-      transcribed_text: "",
-      raw_input_path: "",
-      delivery_datetime: "",
-      items: [] as OrderItem[]
-    }
-  })
 
   const [newItem, setNewItem] = useState<Partial<OrderItem>>({
     fish_type: 1,
@@ -418,8 +455,8 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
           memo: validatedData.memo || prev.memo,
           items: validatedData.items.map((item: any) => ({
             id: Date.now(),
-            fish_type: item.fish_type_id,
-            item_name_snapshot: fishTypes.find((f) => f.id === item.fish_type_id)?.name || '',
+                    fish_type: item.fish_type,
+        item_name_snapshot: fishTypes.find((f) => f.id === item.fish_type)?.name || '',
             quantity: item.quantity,
             unit_price: item.unit_price || 0,
             unit: item.unit,
@@ -497,24 +534,24 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
     setIsCheckingStock(true)
     try {
       const orderItems = formData.items.map(item => ({
-        fish_type_id: item.fish_type_id,
+        fish_type: item.fish_type,
         quantity: item.quantity,
         unit: item.unit
       }))
 
-      const result = await inventoryApi.checkStock(orderItems)
+      // const result = await inventoryApi.checkStock(orderItems) // inventoryApi 사용 제거
       
-      setStockWarnings(result.warnings || [])
-      setStockErrors(result.errors || [])
+      // setStockWarnings(result.warnings || [])
+      // setStockErrors(result.errors || [])
       
-      // 재고 부족 시 정보성 메시지만 표시 (주문은 가능)
-      if (result.status === 'insufficient') {
-        toast.warning('일부 어종의 재고가 부족하지만 주문은 가능합니다.')
-      } else if (result.status === 'warning') {
-        toast.warning('일부 어종의 재고가 부족할 수 있습니다.')
-      } else if (result.status === 'error') {
-        toast.error('재고 확인 중 오류가 발생했습니다.')
-      }
+      // 재고 체크 기능 비활성화
+      // if (result.status === 'insufficient') {
+      //   toast.warning('일부 어종의 재고가 부족하지만 주문은 가능합니다.')
+      // } else if (result.status === 'warning') {
+      //   toast.warning('일부 어종의 재고가 부족할 수 있습니다.')
+      // } else if (result.status === 'error') {
+      //   toast.error('재고 확인 중 오류가 발생했습니다.')
+      // }
     } catch (error) {
       console.error('재고 체크 오류:', error)
       setStockWarnings([])
@@ -526,14 +563,14 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
 
   // 임시 아이템에 대한 재고 체크 (수동 입력 중)
   const checkTempStock = async (tempItem: Partial<OrderItem>) => {
-    if (!tempItem.fish_type_id || !tempItem.quantity || tempItem.quantity <= 0) {
+    if (!tempItem.fish_type || !tempItem.quantity || tempItem.quantity <= 0) {
       setTempStockInfo({warnings: [], errors: []})
       return
     }
 
     try {
       const orderItems = [{
-        fish_type_id: tempItem.fish_type_id,
+        fish_type_id: tempItem.fish_type,
         quantity: tempItem.quantity,
         unit: tempItem.unit || '박스'
       }]
@@ -554,6 +591,24 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
     e.preventDefault()
     
     if (!selectedBusinessId) {
+      toast.error('거래처를 선택해주세요!', {
+        duration: 3000,
+        style: {
+          background: '#dc2626',
+          color: '#fff'
+        }
+      })
+      return
+    }
+    
+    if (formData.items.length === 0) {
+      toast.error('주문할 어종을 최소 1개 이상 입력해주세요!', {
+        duration: 3000,
+        style: {
+          background: '#dc2626',
+          color: '#fff'
+        }
+      })
       return
     }
     
@@ -571,6 +626,32 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
       }
     }
     
+    // 재고 체크 먼저 실행
+    try {
+      setIsCheckingStock(true)
+      const stockCheckItems = formData.items.map((item: OrderItem) => ({
+        fish_type_id: item.fish_type,
+        quantity: item.quantity,
+        unit: item.unit || '박스'
+      }))
+      
+      const stockResult = await inventoryApi.checkStock(stockCheckItems)
+      
+      // 재고 체크 결과를 상태에 저장
+      setStockWarnings(stockResult.warnings || [])
+      setStockErrors(stockResult.errors || [])
+      
+      // 재고 부족 메시지 표시 (주문은 계속 진행)
+      if (stockResult.warnings.length > 0) {
+        console.log('재고 부족 경고:', stockResult.warnings)
+      }
+      
+    } catch (stockError) {
+      console.error('재고 체크 실패:', stockError)
+    } finally {
+      setIsCheckingStock(false)
+    }
+
     // Order 타입에 맞게 데이터 변환
     const orderData = {
       business_id: selectedBusinessId,
@@ -610,7 +691,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
         })
         
         // JWT 토큰으로 multipart/form-data 전송
-        const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/v1/order/upload/`, {
+        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/orders/upload/`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${TokenManager.getAccessToken()}`
@@ -637,7 +718,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
         }
       } else {
         // 일반 JSON 요청 (수동, 텍스트, 이미지) - fetchWithAuth 사용
-        const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/v1/order/upload/`, {
+        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/orders/upload/`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -649,7 +730,20 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
         const result = await response.json()
         
         if (response.ok && result.data) {
-          toast.success('주문이 성공적으로 저장되었습니다!')
+          // 재고 이슈 확인
+          if (result.data.has_stock_issues) {
+            setCompletedOrderStockIssue(true)
+            toast.success('주문이 등록되었습니다. (재고 부족 주문 포함)', {
+              duration: 5000,
+              style: {
+                background: '#f59e0b',
+                color: '#fff'
+              }
+            })
+          } else {
+            toast.success('주문이 성공적으로 저장되었습니다!')
+          }
+          
           onSubmit(result.data)
         } else {
           throw new Error(result.error || '주문 저장에 실패했습니다.')
@@ -784,8 +878,17 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
 
             {/* 거래처 선택 - 수동 탭에서만 표시 */}
             {formData.source_type === "manual" && (
-              <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                <h3 className="text-lg font-semibold mb-3 text-blue-900">거래처 선택</h3>
+              <div className={`p-4 rounded-lg border-2 ${!selectedBusinessId ? 'bg-red-50 border-red-300' : 'bg-blue-50 border-blue-200'}`}>
+                <div className="flex items-center gap-2 mb-3">
+                  <h3 className={`text-lg font-semibold ${!selectedBusinessId ? 'text-red-900' : 'text-blue-900'}`}>
+                    거래처 선택 {!selectedBusinessId && '(필수)'}
+                  </h3>
+                  {!selectedBusinessId && (
+                    <span className="text-xs bg-red-200 text-red-800 px-2 py-1 rounded-full font-medium">
+                      필수 선택
+                    </span>
+                  )}
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="business-select">거래처</Label>
@@ -853,6 +956,56 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
               </div>
             )}
 
+            {/* 거래처 미선택 경고 */}
+            {!selectedBusinessId && formData.source_type === "manual" && (
+              <div className="p-4 bg-red-50 border-2 border-red-300 rounded-lg">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-4 h-4 bg-red-500 rounded-full flex-shrink-0"></div>
+                  <h3 className="text-lg font-semibold text-red-800">거래처 선택 필요</h3>
+                </div>
+                <p className="text-red-700 text-sm mb-2">
+                  주문을 등록하려면 먼저 거래처를 선택해주세요.
+                </p>
+                <p className="text-red-600 text-xs font-medium">
+                  ⚠️ 위의 '거래처 선택' 섹션에서 거래처를 선택하신 후 주문을 진행하세요.
+                </p>
+              </div>
+            )}
+
+            {/* 주문 완료 후 재고 부족 경고 */}
+            {completedOrderStockIssue && (
+              <div className="p-4 bg-red-50 border-2 border-red-300 rounded-lg">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-4 h-4 bg-red-500 rounded-full flex-shrink-0"></div>
+                  <h3 className="text-lg font-semibold text-red-800">재고 부족 주문 등록됨</h3>
+                </div>
+                <p className="text-red-700 text-sm mb-2">
+                  이 주문에 재고가 부족한 어종이 포함되어 있습니다. 주문은 등록되었으나 출고 전에 재고 보충이 필요합니다.
+                </p>
+                <p className="text-red-600 text-xs font-medium">
+                  ⚠️ 재고 관리 페이지에서 해당 어종의 재고를 확인하고 필요시 추가 입고를 진행하세요.
+                </p>
+              </div>
+            )}
+
+            {/* 재고 체크 중 경고 메시지 */}
+            {(stockWarnings.length > 0 || tempStockInfo.warnings.length > 0) && (
+              <div className="p-4 bg-orange-50 border border-orange-300 rounded-lg">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-4 h-4 bg-orange-500 rounded-full flex-shrink-0"></div>
+                  <h3 className="text-lg font-semibold text-orange-800">재고 부족 경고</h3>
+                </div>
+                <div className="space-y-1">
+                  {[...stockWarnings, ...tempStockInfo.warnings].map((warning, index) => (
+                    <p key={index} className="text-orange-700 text-sm">• {warning}</p>
+                  ))}
+                </div>
+                <p className="text-orange-600 text-xs font-medium mt-2">
+                  ⚠️ 재고가 부족하지만 주문은 등록 가능합니다.
+                </p>
+              </div>
+            )}
+
             {/* 탭 콘텐츠 영역 */}
             <div className="min-h-[300px]">
               <Tabs value={formData.source_type} onValueChange={(value: string) => handleInputChange("source_type", value)}>
@@ -870,8 +1023,8 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
                         memo: orderData.memo || prev.memo,
                         items: orderData.items?.map((item: any, index: number) => ({
                           id: Date.now() + index,
-                          fish_type: item.fish_type_id,
-                          item_name_snapshot: fishTypes.find((f) => f.id === item.fish_type_id)?.name || '',
+                                  fish_type: item.fish_type,
+        item_name_snapshot: fishTypes.find((f) => f.id === item.fish_type)?.name || '',
                           quantity: item.quantity,
                           unit_price: item.unit_price || 0,
                           unit: item.unit,
@@ -916,8 +1069,8 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
                         memo: orderData.memo || prev.memo,
                         items: orderData.items?.map((item: any, index: number) => ({
                           id: Date.now() + index,
-                          fish_type: item.fish_type_id,
-                          item_name_snapshot: fishTypes.find((f) => f.id === item.fish_type_id)?.name || '',
+                                  fish_type: item.fish_type,
+        item_name_snapshot: fishTypes.find((f) => f.id === item.fish_type)?.name || '',
                           quantity: item.quantity,
                           unit_price: item.unit_price || 0,
                           unit: item.unit,
@@ -938,6 +1091,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
                     onRemoveItem={removeItem}
                     items={formData.items}
                     fishTypes={fishTypes}
+                    onItemChange={checkTempStock}
                   />
                 </TabsContent>
                 
@@ -963,8 +1117,8 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
                         memo: orderData.memo || prev.memo,
                         items: orderData.items?.map((item: any, index: number) => ({
                           id: Date.now() + index,
-                          fish_type: item.fish_type_id,
-                          item_name_snapshot: fishTypes.find((f) => f.id === item.fish_type_id)?.name || '',
+                                  fish_type: item.fish_type,
+        item_name_snapshot: fishTypes.find((f) => f.id === item.fish_type)?.name || '',
                           quantity: item.quantity,
                           unit_price: item.unit_price || 0,
                           unit: item.unit,
@@ -1070,12 +1224,20 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
               <Button 
                 type="submit" 
                 disabled={
+                  !selectedBusinessId || 
                   formData.items.length === 0 || 
                   isCheckingStock
                 }
+                className={
+                  (!selectedBusinessId || formData.items.length === 0) 
+                    ? 'opacity-50 cursor-not-allowed' 
+                    : ''
+                }
               >
                 <Save className="h-4 w-4 mr-2" />
-                주문 생성
+                {!selectedBusinessId ? '거래처 선택 필요' : 
+                 formData.items.length === 0 ? '어종 추가 필요' : 
+                 '주문 생성'}
               </Button>
             </div>
           </form>
