@@ -319,11 +319,13 @@ export const inventoryApi = {
   },
 
   // 주문 등록 시 재고 체크
-  checkStock: async (orderItems: Array<{
-    fish_type_id: number;
-    quantity: number;
-    unit: string;
-  }>): Promise<{
+  checkStock: async (data: {
+    order_items: Array<{
+      fish_type_id: number;
+      quantity: number;
+      unit: string;
+    }>;
+  }): Promise<{
     status: 'ok' | 'warning' | 'insufficient' | 'error';
     items: Array<{
       fish_type_id: number;
@@ -343,7 +345,7 @@ export const inventoryApi = {
     }>;
     can_proceed: boolean;
   }> => {
-    const response = await api.post('/inventory/stock-check/', { order_items: orderItems })
+    const response = await api.post('/inventory/stock-check/', data)
     return response.data
   },
 }
