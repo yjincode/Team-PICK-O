@@ -246,7 +246,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
         unit: item.unit || '박스'
       }))
       
-      const stockResult = await inventoryApi.checkStock(stockCheckItems)
+      const stockResult = await inventoryApi.checkStock({ order_items: stockCheckItems })
       console.log('📦 재고 체크 결과:', stockResult)
       
       setStockWarnings(stockResult.warnings || [])
@@ -596,7 +596,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
         unit: tempItem.unit || '박스'
       }]
 
-      const result = await inventoryApi.checkStock(orderItems)
+      const result = await inventoryApi.checkStock({ order_items: orderItems })
       
       setTempStockInfo({
         warnings: result.warnings || [],
@@ -656,7 +656,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
         unit: item.unit || '박스'
       }))
       
-      const stockResult = await inventoryApi.checkStock(stockCheckItems)
+      const stockResult = await inventoryApi.checkStock({ order_items: stockCheckItems })
       
       // 재고 체크 결과를 상태에 저장
       setStockWarnings(stockResult.warnings || [])
