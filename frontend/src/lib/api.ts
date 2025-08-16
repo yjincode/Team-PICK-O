@@ -385,6 +385,17 @@ export const orderApi = {
     const response = await api.patch(`/orders/${id}/status/`, { order_status: status })
     return response.data
   },
+
+  // 주문 출고 처리
+  shipOut: async (id: number): Promise<ApiResponse<{
+    message: string;
+    order_id: number;
+    order_status: string;
+    ship_out_datetime: string;
+  }>> => {
+    const response = await api.post(`/orders/${id}/ship-out/`)
+    return response.data
+  },
 }
 
 // Firebase Auth API

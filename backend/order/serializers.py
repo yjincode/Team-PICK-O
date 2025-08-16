@@ -183,9 +183,46 @@ class OrderListSerializer(serializers.ModelSerializer):
             else:
                 quantity_str = str(int(quantity))
             
-            item_names.append(f"{item.fish_type.name} {quantity_str}{unit}")
+            # 재고 부족 체크
+            stock_issue_indicator = ""
+            try:
+                from django.db.models import Sum
+                from inventory.models import Inventory, StockTransaction
+                from core.middleware import get_user_queryset_filter
+                
+                # 사용자 ID 가져오기 (context에서)
+                request = self.context.get('request')
+                if request and hasattr(request, 'user_id'):
+                    user_filter = {'user_id': request.user_id}
+                    
+                    # 등록된 총 재고량
+                    total_registered_stock = Inventory.objects.filter(
+                        fish_type_id=item.fish_type_id,
+                        **user_filter
+                    ).aggregate(total=Sum('stock_quantity'))['total'] or 0
+                    
+                    # 주문으로 차감된 재고량 (quantity_change는 음수)
+                    total_ordered = StockTransaction.objects.filter(
+                        fish_type_id=item.fish_type_id,
+                        user_id=request.user_id,
+                        transaction_type='order'
+                    ).aggregate(total=Sum('quantity_change'))['total'] or 0
+                    
+                    # 실제 가용 재고 = 등록된 재고 + 차감된 재고 (음수이므로 실질적으로 빼기)
+                    total_stock = total_registered_stock + total_ordered
+                    
+                    # 재고 부족 시 느낌표 추가
+                    if quantity > total_stock:
+                        stock_issue_indicator = "❗"
+                        
+            except Exception as e:
+                # 재고 체크 실패 시 무시 (에러가 있어도 주문 목록은 표시되어야 함)
+                pass
+            
+            item_names.append(f"{stock_issue_indicator}{item.fish_type.name} {quantity_str}{unit}")
         
-        return ", ".join(item_names[:3]) + ("..." if len(item_names) > 3 else "")
+        # 줄바꿈으로 구분하여 반환 (프론트엔드에서 처리)
+        return "\n".join(item_names)
     
     def get_payment(self, obj):
         """주문의 결제 정보를 반환합니다"""

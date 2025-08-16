@@ -19,6 +19,8 @@ interface FishStock {
   unit: string;
   status: string;
   updated_at: string;
+  fish_type_id?: number;
+  ordered_quantity?: number; // 주문된 수량
 }
 
 // 상태 매핑 함수
@@ -47,6 +49,33 @@ const FishStockList: React.FC = () => {
   const [inventories, setInventories] = useState<FishStock[]>([])
   const [loading, setLoading] = useState(false)
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
+  const [orderQuantities, setOrderQuantities] = useState<{[key: number]: number}>({}) // 어종별 주문 수량
+
+  // 주문 수량 계산 (StockTransaction 기반)
+  const calculateOrderQuantities = async () => {
+    try {
+      // 각 어종별 주문 수량을 계산하기 위해 체크 API 사용
+      const stockCheckItems = inventories.map(inv => ({
+        fish_type_id: inv.fish_type_id || inv.id,
+        quantity: 0, // 0으로 설정하여 기존 주문량만 확인
+        unit: inv.unit
+      }))
+      
+      if (stockCheckItems.length === 0) return
+      
+      const stockResult = await inventoryApi.checkStock({order_items: stockCheckItems})
+      const quantities: {[key: number]: number} = {}
+      
+      stockResult.items?.forEach((item: any) => {
+        const orderedQuantity = (item.requested_quantity || 0) - (item.available_stock || 0) + (item.shortage || 0)
+        quantities[item.fish_type_id] = Math.max(0, orderedQuantity)
+      })
+      
+      setOrderQuantities(quantities)
+    } catch (error) {
+      console.error('주문 수량 계산 실패:', error)
+    }
+  }
 
   // 재고 목록 불러오기
   const loadInventories = async () => {
@@ -72,6 +101,14 @@ const FishStockList: React.FC = () => {
       
       console.log('📊 로드된 재고 개수:', inventoryData.length)
       setInventories(inventoryData)
+      
+      // 재고 목록 업데이트 시 이벤트 발생 (실시간 재고 체크 갱신용)
+      window.dispatchEvent(new CustomEvent('stockUpdated', { 
+        detail: { 
+          action: 'list_updated', 
+          inventoryCount: inventoryData.length 
+        }
+      }))
     } catch (error: any) {
       console.error('재고 목록 로딩 에러:', error)
       setInventories([])
@@ -85,6 +122,13 @@ const FishStockList: React.FC = () => {
   useEffect(() => {
     loadInventories()
   }, [])
+
+  // 재고 목록이 변경되면 주문 수량 계산
+  useEffect(() => {
+    if (inventories.length > 0) {
+      calculateOrderQuantities()
+    }
+  }, [inventories])
 
   // 날짜 포맷팅 함수
   const formatDate = (dateString: string): string => {
@@ -137,8 +181,14 @@ const FishStockList: React.FC = () => {
             {!Array.isArray(inventories) ? '데이터 로딩 중 문제가 발생했습니다.' : '등록된 재고가 없습니다. 재고를 추가해보세요.'}
           </div>
         ) : (
-          inventories.map((stock) => (
-          <Card key={stock.id} className="shadow-sm hover:shadow-md transition-shadow">
+          inventories.map((stock) => {
+            const fishTypeId = stock.fish_type_id || stock.id
+            const orderedQuantity = orderQuantities[fishTypeId] || 0
+            const availableStock = stock.stock_quantity - orderedQuantity
+            const isInsufficient = availableStock < 0
+            
+            return (
+          <Card key={stock.id} className={`shadow-sm hover:shadow-md transition-shadow ${isInsufficient ? 'border-2 border-red-500' : ''}`}>
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-2">
@@ -152,8 +202,20 @@ const FishStockList: React.FC = () => {
               {/* 재고 상세 정보 */}
               <div className="grid grid-cols-1 gap-2 text-sm">
                 <div>
-                  <span className="text-gray-500">재고 수량:</span>
+                  <span className="text-gray-500">등록 재고:</span>
                   <div className="font-semibold text-lg">{stock.stock_quantity} {stock.unit}</div>
+                </div>
+                {orderedQuantity > 0 && (
+                  <div>
+                    <span className="text-gray-500">주문 수량:</span>
+                    <div className="font-semibold text-lg text-orange-600">{orderedQuantity} {stock.unit}</div>
+                  </div>
+                )}
+                <div>
+                  <span className="text-gray-500">가용 재고:</span>
+                  <div className={`font-semibold text-lg ${isInsufficient ? 'text-red-600' : 'text-green-600'}`}>
+                    {availableStock} {stock.unit}
+                  </div>
                 </div>
               </div>
               <div className="text-sm text-gray-600">
@@ -176,7 +238,8 @@ const FishStockList: React.FC = () => {
               </div>
             </CardContent>
           </Card>
-        ))
+            )
+          })
         )}
       </div>
 

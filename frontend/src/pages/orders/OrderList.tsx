@@ -393,15 +393,7 @@ const OrderList: React.FC = () => {
                     currentOrders.map((order, index) => (
                       <TableRow key={order.id} className={`hover:bg-gray-50 transition-colors ${order.has_stock_issues ? 'border-l-4 border-l-red-500 bg-red-50/30' : ''}`}>
                         <TableCell className="font-medium text-gray-900">
-                          <div className="flex items-center gap-2">
-                            {order.has_stock_issues && (
-                              <>
-                                <AlertTriangle className="h-4 w-4 text-red-500" />
-                                <span className="sr-only">재고 부족</span>
-                              </>
-                            )}
-                            {startIndex + index + 1}
-                          </div>
+                          {filteredOrders.length - startIndex - index}
                         </TableCell>
                         <TableCell className="font-medium">
                           <div 
@@ -417,8 +409,23 @@ const OrderList: React.FC = () => {
                         <TableCell className="text-gray-600">
                           {order.delivery_datetime ? format(new Date(order.delivery_datetime), "yyyy-MM-dd") : "-"}
                         </TableCell>
-                        <TableCell className="text-gray-600 max-w-[200px] truncate">
-                          {order.items_summary}
+                        <TableCell className="text-gray-600 max-w-[250px]">
+                          <div className="flex items-start gap-2">
+                            {order.has_stock_issues && (
+                              <AlertTriangle className="h-4 w-4 text-red-500 flex-shrink-0 mt-0.5" />
+                            )}
+                            <div className="flex-1 overflow-hidden">
+                              {order.items_summary.split('\n').map((item: string, idx: number) => (
+                                <div 
+                                  key={idx}
+                                  className="truncate text-sm"
+                                  title={item}
+                                >
+                                  {item}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
                         </TableCell>
                         <TableCell className="font-semibold text-gray-900">
                           {formatPrice(order.total_price)}원

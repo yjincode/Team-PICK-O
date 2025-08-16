@@ -59,37 +59,19 @@ const OrderDetail: React.FC = () => {
     
     try {
       setLoading(true)
+      console.log('출고 처리 시작:', order.id)
       
-      // 토큰 가져오기
-      const token = localStorage.getItem('access_token')
-      if (!token) {
-        toast.error('로그인이 필요합니다.')
-        navigate('/login')
-        return
-      }
+      await orderApi.shipOut(order.id)
+      toast.success('출고가 처리되었습니다.')
       
-      const response = await fetch(`/api/v1/orders/${order.id}/ship-out/`, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        }
-      })
+      // 주문 정보 다시 조회하여 업데이트
+      const updatedOrder = await orderApi.getById(parseInt(id!))
+      setOrder(updatedOrder)
+      console.log('출고 처리 완료, 주문 상태 업데이트됨')
       
-      if (response.ok) {
-        toast.success('출고가 처리되었습니다.')
-        const updatedOrder = await orderApi.getById(parseInt(id!))
-        setOrder(updatedOrder)
-      } else if (response.status === 401) {
-        toast.error('인증이 만료되었습니다. 다시 로그인해주세요.')
-        navigate('/login')
-      } else {
-        const errorData = await response.json()
-        toast.error(errorData.error || '출고 처리에 실패했습니다.')
-      }
-    } catch (error) {
+    } catch (error: any) {
       console.error('출고 처리 오류:', error)
-      toast.error('출고 처리 중 오류가 발생했습니다.')
+      toast.error(error.response?.data?.error || '출고 처리 중 오류가 발생했습니다.')
     } finally {
       setLoading(false)
     }
