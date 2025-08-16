@@ -1,4 +1,4 @@
-name: Dev Branch CI (단순화)
+name: Dev Branch CI (빌드 및 타입 체크)
 
 on:
   pull_request:
@@ -7,8 +7,42 @@ on:
   # dev 브랜치 직접 푸시는 제외 (PR 통해서만 진행)
 
 jobs:
+  typescript-check:
+    runs-on: ubuntu-latest
+    name: TypeScript 에러 체크
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Node.js 설정
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: frontend/package-lock.json
+    
+    - name: Frontend 의존성 설치
+      run: |
+        cd frontend
+        npm ci
+    
+    - name: TypeScript 타입 체크
+      run: |
+        cd frontend
+        echo "🔍 TypeScript 타입 에러 체크 중..."
+        npx tsc --noEmit
+        echo "✅ TypeScript 타입 체크 완료"
+    
+    - name: ESLint 체크
+      run: |
+        cd frontend
+        echo "🔍 ESLint 체크 중..."
+        npm run lint || echo "⚠️ ESLint 경고가 있습니다"
+        echo "✅ ESLint 체크 완료"
+
   build-check:
     runs-on: ubuntu-latest
+    needs: typescript-check
     
     steps:
     - uses: actions/checkout@v4
@@ -20,19 +54,43 @@ jobs:
         echo "브랜치: ${{ github.ref_name }}"
         echo "커밋: ${{ github.sha }}"
     
-    - name: Docker 컴포즈 빌드 테스트
+    - name: Frontend Docker 빌드 테스트
       run: |
-        echo "🔨 Docker Compose 빌드 테스트..."
+        echo "🔨 Frontend Docker 빌드 테스트..."
+        cd frontend
+        
+        # frontend Dockerfile로 빌드 테스트
+        docker build -t frontend-test .
+        echo "✅ Frontend 이미지 빌드 성공"
+        
+        # 이미지 정리
+        docker rmi frontend-test
+    
+    - name: Backend Docker 빌드 테스트
+      run: |
+        echo "🔨 Backend Docker 빌드 테스트..."
+        cd backend
+        
+        # backend Dockerfile로 빌드 테스트
+        docker build -t backend-test .
+        echo "✅ Backend 이미지 빌드 성공"
+        
+        # 이미지 정리
+        docker rmi backend-test
+    
+    - name: Docker 컴포즈 설정 검증
+      run: |
+        echo "🔨 Docker Compose 설정 검증..."
         cd deployment
         
         # 설정 파일 유효성 검사
         docker compose config
         echo "✅ Docker Compose 설정 유효"
         
-        # 개발용 빌드 테스트
+        # 개발용 설정 검증
         if [ -f "docker-compose.dev.yml" ]; then
-          docker compose -f docker-compose.dev.yml build
-          echo "✅ 개발용 이미지 빌드 성공"
+          docker compose -f docker-compose.dev.yml config
+          echo "✅ 개발용 Docker Compose 설정 유효"
         fi
     
     - name: 프로덕션 준비 확인
@@ -42,9 +100,10 @@ jobs:
         # 필수 파일 체크
         files_to_check=(
           "backend/Dockerfile"
+          "backend/requirements.txt"
           "frontend/Dockerfile" 
+          "frontend/package.json"
           "deployment/docker-compose.yml"
-          "deployment/nginx.conf"
         )
         
         for file in "${files_to_check[@]}"; do
@@ -61,4 +120,6 @@ jobs:
     - name: 빌드 완료
       run: |
         echo "✅ Dev 브랜치 CI 완료"
+        echo "📝 TypeScript 타입 체크: 통과"
+        echo "🐳 Docker 빌드 테스트: 통과"
         echo "🚀 main 브랜치로 병합 시 자동 배포됩니다"

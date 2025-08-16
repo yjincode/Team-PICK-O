@@ -5,6 +5,36 @@ from django.db import migrations, models
 import django.db.models.deletion
 
 
+def add_user_field_if_not_exists(apps, schema_editor):
+    """user 필드가 없는 경우에만 추가"""
+    from django.db import connection
+    
+    with connection.cursor() as cursor:
+        # user_profile 테이블의 컬럼 목록 확인
+        cursor.execute("""
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name = 'user_profile' AND column_name = 'user_id'
+        """)
+        
+        # user_id 컬럼이 없는 경우에만 추가
+        if not cursor.fetchone():
+            cursor.execute("""
+                ALTER TABLE user_profile 
+                ADD COLUMN user_id bigint NOT NULL UNIQUE 
+                CONSTRAINT user_profile_user_id_8fdce8e2_fk_users_id 
+                REFERENCES users(id) DEFERRABLE INITIALLY DEFERRED
+            """)
+
+
+def reverse_add_user_field(apps, schema_editor):
+    """역방향 마이그레이션: user 필드 제거"""
+    from django.db import connection
+    
+    with connection.cursor() as cursor:
+        cursor.execute("ALTER TABLE user_profile DROP COLUMN IF EXISTS user_id")
+
+
 class Migration(migrations.Migration):
 
     initial = True
@@ -15,9 +45,8 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.AddField(
-            model_name='userprofile',
-            name='user',
-            field=models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, related_name='profile', to=settings.AUTH_USER_MODEL),
+        migrations.RunPython(
+            add_user_field_if_not_exists,
+            reverse_add_user_field,
         ),
     ]
