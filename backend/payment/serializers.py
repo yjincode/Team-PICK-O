@@ -116,8 +116,8 @@ class CancelOrderSerializer(serializers.Serializer):
             order = Order.objects.get(id=value)
         except Order.DoesNotExist:
             raise serializers.ValidationError("존재하지 않는 주문입니다.")
-        if order.status == 'cancelled':
+        if order.order_status == 'cancelled':
             raise serializers.ValidationError("이미 취소된 주문입니다.")
-        if order.status == 'delivered':
+        if order.order_status == 'delivered':
             raise serializers.ValidationError("납품이 완료된 주문은 취소할 수 없습니다.")
         return value

@@ -90,7 +90,11 @@ def register_user(request):
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
         # Discord 웹훅 전송
-        send_discord_notification(user)
+        try:
+            send_discord_notification(user)
+        except Exception as discord_error:
+            print(f"⚠️ Discord 알림 전송 실패: {discord_error}")
+            # Discord 오류는 회원가입을 막지 않음
         
         # 회원가입 완료 후 즉시 JWT 토큰 발급
         token_pair = generate_token_pair(user)
@@ -121,8 +125,10 @@ def register_user(request):
         
     except Exception as e:
         print(f"❌ 회원가입 처리 오류: {e}")
+        import traceback
+        traceback.print_exc()
         return Response({
-            'error': '회원가입 처리 중 오류가 발생했습니다.'
+            'error': f'회원가입 처리 중 오류가 발생했습니다: {str(e)}'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])

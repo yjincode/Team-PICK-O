@@ -144,6 +144,15 @@ const AddInventoryModal: React.FC<AddInventoryModalProps> = ({
       console.log('✅ 재고 추가 성공:', response)
       toast.success('재고가 성공적으로 추가되었습니다')
       
+      // 재고 업데이트 이벤트 발생 (실시간 재고 체크 갱신용)
+      window.dispatchEvent(new CustomEvent('stockUpdated', { 
+        detail: { 
+          action: 'added', 
+          fishTypeId: formData.fish_type_id, 
+          quantity: formData.stock_quantity 
+        }
+      }))
+      
       handleClose()
       onSuccess?.()
     } catch (error: any) {

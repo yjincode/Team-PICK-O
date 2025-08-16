@@ -230,37 +230,51 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
     fetchFishTypes()
   }, [])
 
-  // 주문 아이템이 변경될 때마다 재고 체크
-  useEffect(() => {
-    const checkStockForAllItems = async () => {
-      if (formData.items.length === 0) {
-        setStockWarnings([])
-        setStockErrors([])
-        return
-      }
-
-      try {
-        const stockCheckItems = formData.items.map((item: OrderItem) => ({
-          fish_type_id: item.fish_type,
-          quantity: item.quantity,
-          unit: item.unit || '박스'
-        }))
-        
-        const stockResult = await inventoryApi.checkStock(stockCheckItems)
-        
-        setStockWarnings(stockResult.warnings || [])
-        setStockErrors(stockResult.errors || [])
-        
-      } catch (error) {
-        console.error('재고 체크 실패:', error)
-        setStockWarnings([])
-        setStockErrors([])
-      }
+  // 재고 체크 함수를 별도로 분리 (외부에서 호출 가능)
+  const checkStockForAllItems = async () => {
+    if (formData.items.length === 0) {
+      setStockWarnings([])
+      setStockErrors([])
+      return
     }
 
+    try {
+      console.log('🔍 실시간 재고 체크 시작...')
+      const stockCheckItems = formData.items.map((item: OrderItem) => ({
+        fish_type_id: item.fish_type,
+        quantity: item.quantity,
+        unit: item.unit || '박스'
+      }))
+      
+      const stockResult = await inventoryApi.checkStock(stockCheckItems)
+      console.log('📦 재고 체크 결과:', stockResult)
+      
+      setStockWarnings(stockResult.warnings || [])
+      setStockErrors(stockResult.errors || [])
+      
+    } catch (error) {
+      console.error('재고 체크 실패:', error)
+      setStockWarnings([])
+      setStockErrors([])
+    }
+  }
+
+  // 주문 아이템이 변경될 때마다 재고 체크
+  useEffect(() => {
     // 디바운스를 위해 500ms 지연
     const timeoutId = setTimeout(checkStockForAllItems, 500)
     return () => clearTimeout(timeoutId)
+  }, [formData.items])
+
+  // 전역 이벤트를 통한 재고 체크 갱신 (재고 추가 시 호출)
+  useEffect(() => {
+    const handleStockUpdate = () => {
+      console.log('📦 재고 업데이트 이벤트 수신, 재고 체크 재실행')
+      checkStockForAllItems()
+    }
+
+    window.addEventListener('stockUpdated', handleStockUpdate)
+    return () => window.removeEventListener('stockUpdated', handleStockUpdate)
   }, [formData.items])
 
   // 거래처 목록 가져오기 (JWT 토큰 기반 API 사용)
@@ -326,6 +340,13 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
   })
 
   const handleInputChange = (field: string, value: string) => {
+    // 등록 방법 전환시 재고 알림 초기화
+    if (field === "source_type") {
+      setStockWarnings([])
+      setStockErrors([])
+      setTempStockInfo({warnings: [], errors: []})
+    }
+    
     setFormData((prev: FormData) => ({
       ...prev,
       [field]: value
@@ -730,6 +751,15 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
         const result = await response.json()
         
         if (response.ok && result.data) {
+          // 주문 등록 성공 시 재고 업데이트 이벤트 발생
+          window.dispatchEvent(new CustomEvent('stockUpdated', { 
+            detail: { 
+              action: 'order_created', 
+              orderId: result.data.id,
+              orderItems: orderData.order_items
+            }
+          }))
+          
           // 재고 이슈 확인
           if (result.data.has_stock_issues) {
             setCompletedOrderStockIssue(true)

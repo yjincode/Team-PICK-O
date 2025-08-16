@@ -123,19 +123,102 @@ WSGI_APPLICATION = 'config.wsgi.application'
 
 # Database - PostgreSQL 설정
 
-# 데이터베이스 설정 (환경에 따라 자동 설정)
-DEFAULT_DB_CONFIG = {
-    'ENGINE': 'django.db.backends.postgresql',
-    'NAME': os.getenv('POSTGRES_DB', 'teamPicko'),
-    'USER': os.getenv('POSTGRES_USER', 'postgres'),
-    'PASSWORD': os.getenv('POSTGRES_PASSWORD', 'password'),
-    'HOST': os.getenv('DB_HOST', 'database'),  # 기본값: 도커 컨테이너
-    'PORT': os.getenv('DB_PORT', '5432'),
-    'OPTIONS': {
-        'connect_timeout': 10,
-    },
-}
+# 데이터베이스 연결 우선순위 설정
+# 1차: 팀 공동 로컬서버 (192.168.0.137)
+# 2차: 개인 로컬 도커 데이터베이스 (localhost:5432)
 
+import psycopg2
+
+def get_database_config():
+    """데이터베이스 연결 우선순위에 따라 설정 반환"""
+    
+    # 환경변수로 배포 환경 확인
+    is_production = os.getenv('ENVIRONMENT') == 'production' or os.getenv('DEBUG') == 'False'
+    
+    if is_production:
+        # 배포 환경: EC2 데이터베이스 사용
+        production_config = {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': os.getenv('POSTGRES_DB', 'teamPicko'),
+            'USER': os.getenv('POSTGRES_USER', 'teamPicko'),
+            'PASSWORD': os.getenv('POSTGRES_PASSWORD', '12341234'),
+            'HOST': os.getenv('DB_HOST', 'database'),  # 배포 시 EC2 내부 호스트명
+            'PORT': os.getenv('DB_PORT', '5432'),
+            'OPTIONS': {
+                'connect_timeout': 10,
+            },
+        }
+        print(f"🌐 배포 환경: EC2 데이터베이스 연결")
+        print(f"📊 데이터베이스: {production_config['USER']}@{production_config['HOST']}:{production_config['PORT']}/{production_config['NAME']}")
+        return production_config
+    
+    # 개발 환경: 우선순위에 따른 연결
+    # 1차: 팀 공동 로컬서버 시도
+    team_server_config = {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'teamPicko',
+        'USER': 'teamPicko',
+        'PASSWORD': '12341234',
+        'HOST': '192.168.0.137',
+        'PORT': '5432',
+        'OPTIONS': {
+            'connect_timeout': 5,
+        },
+    }
+    
+    # 2차: 개인 로컬 도커 데이터베이스
+    docker_db_config = {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'teamPicko',
+        'USER': 'teamPicko',
+        'PASSWORD': '12341234',
+        'HOST': 'localhost',
+        'PORT': '5432',
+        'OPTIONS': {
+            'connect_timeout': 5,
+        },
+    }
+    
+    # 1차 연결 시도
+    try:
+        print("🔍 1차: 팀 공동 로컬서버 연결 시도...")
+        conn = psycopg2.connect(
+            host=team_server_config['HOST'],
+            port=team_server_config['PORT'],
+            user=team_server_config['USER'],
+            password=team_server_config['PASSWORD'],
+            database=team_server_config['NAME'],
+            connect_timeout=3
+        )
+        conn.close()
+        print("✅ 1차: 팀 공동 로컬서버 연결 성공!")
+        return team_server_config
+    except Exception as e:
+        print(f"❌ 1차: 팀 공동 로컬서버 연결 실패: {e}")
+    
+    # 2차 연결 시도
+    try:
+        print("🔍 2차: 개인 로컬 도커 데이터베이스 연결 시도...")
+        conn = psycopg2.connect(
+            host=docker_db_config['HOST'],
+            port=docker_db_config['PORT'],
+            user=docker_db_config['USER'],
+            password=docker_db_config['PASSWORD'],
+            database=docker_db_config['NAME'],
+            connect_timeout=3
+        )
+        conn.close()
+        print("✅ 2차: 개인 로컬 도커 데이터베이스 연결 성공!")
+        return docker_db_config
+    except Exception as e:
+        print(f"❌ 2차: 개인 로컬 도커 데이터베이스 연결 실패: {e}")
+    
+    # 둘 다 실패한 경우 기본 설정 반환
+    print("⚠️ 모든 데이터베이스 연결 실패. 기본 설정 사용")
+    return team_server_config
+
+# 데이터베이스 연결 설정 가져오기
+DEFAULT_DB_CONFIG = get_database_config()
 
 # 간단한 데이터베이스 설정
 DATABASES = {
