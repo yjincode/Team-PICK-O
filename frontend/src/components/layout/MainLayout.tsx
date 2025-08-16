@@ -1,8 +1,9 @@
 /**
  * 메인 레이아웃 컴포넌트
  * 데스크톱에서는 사이드바, 모바일에서는 하단 네비게이션을 제공합니다
+ * 사이드바 토글 기능 포함
  */
-import React from 'react';
+import React, { useState } from 'react';
 import Sidebar from './Sidebar';
 import MobileBottomNav from './MobileBottomNav';
 
@@ -11,11 +12,19 @@ interface MainLayoutProps {
 }
 
 const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  const toggleSidebar = () => {
+    setSidebarCollapsed(!sidebarCollapsed);
+  };
+
   return (
     <div className="flex h-screen bg-gray-50">
       {/* 데스크톱: 사이드바 (lg 이상에서만 표시) */}
-      <div className="hidden lg:block w-80 flex-shrink-0">
-        <Sidebar />
+      <div className={`hidden lg:block flex-shrink-0 transition-all duration-300 ${
+        sidebarCollapsed ? 'w-16' : 'w-80'
+      }`}>
+        <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />
       </div>
       
       {/* 모바일: 하단 네비게이션 (lg 미만에서만 표시) */}

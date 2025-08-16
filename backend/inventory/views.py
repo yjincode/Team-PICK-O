@@ -344,28 +344,30 @@ class StockCheckView(View):
                     quantity_str = f"{quantity:g}"
                     total_stock_str = f"{total_stock:g}"
                     shortage_str = f"{shortage:g}"
+                    remaining_stock = total_stock
                     
-                    warning_msg = f"{fish_type.name}: 주문수량 {quantity_str}{unit}, 재고 {total_stock_str}{unit} (부족: {shortage_str}{unit})"
+                    warning_msg = f"🚨 {fish_type.name}: {quantity_str}{unit} 주문시 남은재고 {remaining_stock:g}{unit} (부족: {shortage_str}{unit})"
                     warnings.append(warning_msg)
                     errors.append({
                         'fish_name': fish_type.name,
-                        'message': f'재고가 부족합니다. 주문: {quantity_str}{unit}, 재고: {total_stock_str}{unit}',
+                        'message': f'🚨 재고 부족! {quantity_str}{unit} 주문시 남은재고 {remaining_stock:g}{unit}',
                         'shortage': shortage
                     })
                 elif total_stock == 0:
                     item_result['status'] = 'out_of_stock'
-                    warning_msg = f"{fish_type.name}: 재고가 없습니다"
+                    quantity_str = f"{quantity:g}"
+                    warning_msg = f"❌ {fish_type.name}: {quantity_str}{unit} 주문시 재고 없음 (품절)"
                     warnings.append(warning_msg)
                     errors.append({
                         'fish_name': fish_type.name,
-                        'message': '재고가 없습니다',
+                        'message': f'❌ 품절! {quantity_str}{unit} 주문 불가 (재고 없음)',
                         'shortage': quantity
                     })
                 elif quantity > total_stock * 0.8:  # 재고의 80% 이상 주문 시 경고
                     item_result['status'] = 'warning'
                     quantity_str = f"{quantity:g}"
-                    total_stock_str = f"{total_stock:g}"
-                    warning_msg = f"{fish_type.name}: 재고 부족 주의 (주문: {quantity_str}{unit}, 재고: {total_stock_str}{unit})"
+                    remaining_stock = total_stock - quantity
+                    warning_msg = f"⚠️ {fish_type.name}: {quantity_str}{unit} 주문시 남은재고 {remaining_stock:g}{unit} (재고 부족 주의)"
                     warnings.append(warning_msg)
                 
                 results.append(item_result)
