@@ -65,8 +65,8 @@ const UnpaidList: React.FC = () => {
       {/* 페이지 헤더 */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">미수금 내역</h1>
-          <p className="text-sm sm:text-base text-gray-600 mt-1">미수금 현황 및 관리</p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">고객 주문 내역</h1>
+          <p className="text-sm sm:text-base text-gray-600 mt-1">고객별 주문 내역</p>
         </div>
         <Button className="bg-red-600 hover:bg-red-700 w-full sm:w-auto">
           <AlertTriangle className="h-4 w-4 mr-2" />

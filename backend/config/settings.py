@@ -158,8 +158,8 @@ def get_database_config():
         'ENGINE': 'django.db.backends.postgresql',
         'NAME': 'teamPicko',
         'USER': 'teamPicko',
-        'PASSWORD': '12341234',
-        'HOST': '192.168.0.137',
+        'PASSWORD': os.getenv('DB_PASSWORD'),
+        'HOST': os.getenv('DB_HOST'),
         'PORT': '5432',
         'OPTIONS': {
             'connect_timeout': 5,
