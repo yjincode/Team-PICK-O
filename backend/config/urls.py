@@ -31,6 +31,7 @@ def api_root(request):
             "payments": "/api/v1/payments/", 
             "inventory": "/api/v1/inventory/",
             "fish_registry": "/api/v1/fish-registry/",
+            "sales": "/api/v1/sales/",
         }
     })
 
@@ -77,6 +78,7 @@ urlpatterns = [
     path('api/v1/inventory/', include('inventory.urls')),
     path('api/v1/fish-registry/', include('fish_registry.urls')),
     path('api/v1/transcription/', include('transcription.urls')),
+    path('api/v1/sales/', include('sales.urls')),
     
     # API Documentation
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),

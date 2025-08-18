@@ -16,8 +16,6 @@ interface InventoryFormData {
   fish_type_id: number | null;
   stock_quantity: number;
   unit: string;
-  status: string;
-  aquarium_photo_path: string;
 }
 
 // 어종 타입
@@ -47,9 +45,7 @@ const AddInventoryModal: React.FC<AddInventoryModalProps> = ({
   const [formData, setFormData] = useState<InventoryFormData>({
     fish_type_id: null,
     stock_quantity: 0,
-    unit: "박스", 
-    status: "registered",
-    aquarium_photo_path: ""
+    unit: "박스"
   })
 
   // 어종 목록 불러오기
@@ -98,14 +94,24 @@ const AddInventoryModal: React.FC<AddInventoryModalProps> = ({
     }))
   }
 
+  // 어종 선택 시 단위 자동 설정
+  const handleFishTypeChange = (fishTypeId: string) => {
+    const selectedFishType = fishTypes.find(ft => ft.id === parseInt(fishTypeId))
+    if (selectedFishType) {
+      setFormData(prev => ({
+        ...prev,
+        fish_type_id: selectedFishType.id,
+        unit: selectedFishType.unit || "박스" // 어종의 기본 단위 사용
+      }))
+    }
+  }
+
   // 폼 초기화
   const resetForm = () => {
     setFormData({
       fish_type_id: null,
       stock_quantity: 0,
-      unit: "박스",
-      status: "registered",
-      aquarium_photo_path: ""
+      unit: "박스"
     })
   }
 
@@ -133,31 +139,37 @@ const AddInventoryModal: React.FC<AddInventoryModalProps> = ({
     setLoading(true)
 
     try {
+      // 백엔드에서 중복 처리하므로 단순하게 생성 요청
       const submitData = {
         fish_type_id: formData.fish_type_id!,
         stock_quantity: formData.stock_quantity,
         unit: formData.unit,
-        status: formData.status,
-        ...(formData.aquarium_photo_path && { aquarium_photo_path: formData.aquarium_photo_path })
+        status: "registered"  // 기본 상태를 "등록됨"으로 설정
       }
+      
+      console.log('📤 재고 추가 요청:', submitData)
       const response = await inventoryApi.create(submitData)
       console.log('✅ 재고 추가 성공:', response)
-      toast.success('재고가 성공적으로 추가되었습니다')
       
-      // 재고 업데이트 이벤트 발생 (실시간 재고 체크 갱신용)
-      window.dispatchEvent(new CustomEvent('stockUpdated', { 
-        detail: { 
-          action: 'added', 
-          fishTypeId: formData.fish_type_id, 
-          quantity: formData.stock_quantity 
-        }
-      }))
+      toast.success(`재고가 성공적으로 추가되었습니다: ${formData.stock_quantity}${formData.unit}`)
       
       handleClose()
       onSuccess?.()
     } catch (error: any) {
-      console.error('재고 추가 에러:', error)
-      toast.error(error.response?.data?.message || error.message || '재고 추가에 실패했습니다')
+      console.error('❌ 재고 추가 에러:', error)
+      console.error('❌ 에러 응답:', error.response?.data)
+      console.error('❌ 에러 상태:', error.response?.status)
+      
+      let errorMessage = '재고 추가에 실패했습니다'
+      if (error.response?.data?.error) {
+        errorMessage = error.response.data.error
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message
+      } else if (error.message) {
+        errorMessage = error.message
+      }
+      
+      toast.error(errorMessage)
     } finally {
       setLoading(false)
     }
@@ -210,10 +222,7 @@ const AddInventoryModal: React.FC<AddInventoryModalProps> = ({
             ) : (
               <Select
                 value={formData.fish_type_id?.toString() || ""}
-                onValueChange={(value) => {
-                  console.log('🐟 어종 선택:', value)
-                  handleInputChange('fish_type_id', parseInt(value))
-                }}
+                onValueChange={handleFishTypeChange}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="어종을 선택하세요" />
@@ -248,53 +257,15 @@ const AddInventoryModal: React.FC<AddInventoryModalProps> = ({
             />
           </div>
 
-          {/* 단위 */}
+          {/* 단위 (읽기 전용) */}
           <div className="space-y-2">
             <Label htmlFor="unit">단위</Label>
-            <Select
-              value={formData.unit}
-              onValueChange={(value) => handleInputChange('unit', value)}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="박스">박스</SelectItem>
-                <SelectItem value="kg">kg</SelectItem>
-                <SelectItem value="마리">마리</SelectItem>
-                <SelectItem value="개">개</SelectItem>
-                <SelectItem value="톤">톤</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* 상태 */}
-          <div className="space-y-2">
-            <Label htmlFor="status">상태</Label>
-            <Select
-              value={formData.status}
-              onValueChange={(value) => handleInputChange('status', value)}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="registered">등록됨</SelectItem>
-                <SelectItem value="normal">정상</SelectItem>
-                <SelectItem value="low">부족</SelectItem>
-                <SelectItem value="abnormal">이상</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* 사진 경로 */}
-          <div className="space-y-2">
-            <Label htmlFor="aquarium_photo_path">수족관 사진 경로</Label>
             <Input
-              id="aquarium_photo_path"
-              value={formData.aquarium_photo_path}
-              onChange={(e) => handleInputChange('aquarium_photo_path', e.target.value)}
-              placeholder="사진 경로를 입력하세요 (선택사항)"
+              id="unit"
+              value={formData.unit}
+              readOnly
+              className="bg-gray-50"
+              placeholder="어종 선택 후 자동 설정됩니다"
             />
           </div>
 

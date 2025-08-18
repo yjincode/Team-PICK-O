@@ -332,6 +332,8 @@ export const inventoryApi = {
       fish_name: string;
       requested_quantity: number;
       available_stock: number;
+      ordered_quantity?: number;  // 실제 주문된 수량
+      registered_stock?: number;  // 등록된 재고
       unit: string;
       status: string;
       shortage?: number;
@@ -352,8 +354,15 @@ export const inventoryApi = {
 
 // 주문 관리 API
 export const orderApi = {
-  // 모든 주문 조회 (페이지네이션) - OrderListSerializer 사용
-  getAll: async (params?: { page?: number; page_size?: number }): Promise<ApiResponse<OrderListItem[]>> => {
+  // 모든 주문 조회 (페이지네이션, 필터링) - OrderListSerializer 사용
+  getAll: async (params?: { 
+    page?: number; 
+    page_size?: number;
+    status?: string;
+    payment_status?: string;
+    date?: string;
+    business_id?: string;
+  }): Promise<ApiResponse<OrderListItem[]>> => {
     const response = await api.get('/orders/', { params })
     return response.data
   },
@@ -448,6 +457,58 @@ export const salesApi = {
 
   getAuctionPrediction: async (): Promise<any> => {
     const response = await api.get('/sales/auction-prediction')
+    return response.data
+  },
+
+  // 매출 통계 조회
+  getStats: async (params?: {
+    period_type?: 'month' | 'year';
+    start_date?: string;
+    end_date?: string;
+    selected_period?: string;
+  }): Promise<{
+    total_revenue: number;
+    monthly_average?: number;
+    daily_average?: number;
+    highest_month_revenue?: number;
+    highest_period?: string;
+    growth_rate: number;
+    monthly_data: Array<{
+      month: string;
+      revenue: number;
+      order_count: number;
+    }>;
+    period_type?: string;
+    selected_period?: string;
+  }> => {
+    const response = await api.get('/sales/stats/', { params })
+    return response.data
+  },
+
+  // 일별 매출 조회
+  getDailyRevenue: async (date: string): Promise<{
+    date: string;
+    total_revenue: number;
+    order_count: number;
+    orders: Array<{
+      id: number;
+      business_name: string;
+      total_price: number;
+      order_datetime: string;
+    }>;
+    hourly_data: Array<{
+      hour: number;
+      revenue: number;
+      order_count: number;
+    }>;
+    top_fish_types: Array<{
+      fish_name: string;
+      quantity: number;
+      revenue: number;
+      percentage: number;
+    }>;
+  }> => {
+    const response = await api.get(`/sales/daily/?date=${date}`)
     return response.data
   },
 }
