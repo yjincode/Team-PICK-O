@@ -66,10 +66,10 @@ const VoiceUploadTab: React.FC<VoiceUploadTabProps> = ({
         
         if (response && Array.isArray(response)) {
           businessData = response
-        } else if (response && response.data && Array.isArray(response.data.results)) {
-          businessData = response.data.results
-        } else if (response && response.data && Array.isArray(response.data)) {
-          businessData = response.data
+        } else if (response && Array.isArray(response.results)) {
+          businessData = response.results
+        } else if (response && Array.isArray(response.results)) {
+          businessData = response.results
         }
         
         setBusinesses(businessData)

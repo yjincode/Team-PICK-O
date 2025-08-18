@@ -313,12 +313,9 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
         } else if (response && Array.isArray((response as any).results)) {
           console.log('📁 페이지네이션 응답 형태 (results)')
           businessData = (response as any).results
-        } else if (response && response.data && Array.isArray(response.data.results)) {
-          console.log('📁 페이지네이션 응답 형태 (data.results)')
-          businessData = response.data.results
-        } else if (response && response.data && Array.isArray(response.data)) {
-          console.log('📁 데이터 래핑 응답 형태 (data)')
-          businessData = response.data
+        } else if (response && Array.isArray(response.results)) {
+          console.log('📁 페이지네이션 응답 형태 (results)')
+          businessData = response.results
         } else {
           console.log('❓ 알 수 없는 응답 형태:', response)
         }

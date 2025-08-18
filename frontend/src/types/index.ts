@@ -120,6 +120,25 @@ export interface PaginatedResponse<T> {
   results: T[];
 }
 
+// 실제 백엔드 응답 구조 (Django REST Framework 스타일)
+export interface DjangoApiResponse<T> {
+  count: number;
+  next?: string | null;
+  previous?: string | null;
+  results: T[];
+}
+
+// 주문 목록 API 응답 (페이지네이션 정보 포함)
+export interface OrderListResponse {
+  data: OrderListItem[];
+  pagination?: {
+    total_count: number;
+    total_pages: number;
+    current_page: number;
+    page_size: number;
+  };
+}
+
 // ==================== 결제 관련 타입 ====================
 
 // 결제 정보

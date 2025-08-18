@@ -26,20 +26,8 @@ import {
   PaginationNext,
   PaginationEllipsis,
 } from "../../components/ui/pagination";
-import { OrderListItem } from "@/types"
+import { Business } from "../../types";
 
-// 거래처 데이터 타입 정의
-interface Business {
-  id: number;
-  business_name: string;
-  phone_number: string;
-  address?: string;
-  outstanding_balance: number; // 백엔드에서 동적으로 계산된 미수금
-  // 추가 정보 (실제로는 별도 API에서 가져올 예정)
-  unpaid_amount?: number;
-  status?: string;
-  last_order_date?: string;
-}
 
 interface Order {
   id: number;
@@ -79,7 +67,7 @@ const BusinessList: React.FC = () => {
       setIsLoadingBusinesses(true);
       const res = await businessApi.getAll({ page: pageNum, page_size: pageSize });
       console.log("✅ API 응답:", res);
-      console.log("📊 응답 데이터 - count:", res.data?.count, "results 개수:", res.data?.results?.length);
+      console.log("📊 응답 데이터 - count:", res.count, "results 개수:", res.results?.length);
       // 다양한 응답 구조에 대응
       let data: any = null;
       // 1. res가 바로 {count, results} 구조일 때
@@ -87,15 +75,15 @@ const BusinessList: React.FC = () => {
         data = res as unknown as { results: Business[]; count: number };
       }
       // 2. res.data가 {count, results} 구조일 때
-      else if (res.data && Array.isArray(res.data.results)) {
-        data = res.data as unknown as { results: Business[]; count: number };
+      else if (res && Array.isArray(res.results)) {
+        data = res as unknown as { results: Business[]; count: number };
       }
       if (data) {
         setBusinesses(data.results);
         setCount(data.count || 0);
-      } else if (Array.isArray(res.data)) {
-        setBusinesses(res.data);
-        setCount(res.data.length);
+      } else if (Array.isArray(res.results)) {
+        setBusinesses(res.results);
+        setCount(res.results.length);
       } else if (Array.isArray(res)) {
         setBusinesses(res);
         setCount(res.length);
