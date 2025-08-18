@@ -8,9 +8,9 @@ import { Button } from "../../components/ui/button"
 import { Input } from "../../components/ui/input"
 import { Label } from "../../components/ui/label"
 import { Textarea } from "../../components/ui/textarea"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select"
-import { Plus, Edit, Trash2, Save, X, Fish } from "lucide-react"
+import { Badge } from "../../components/ui/badge"
+import { Plus, Edit, Trash2, Save, X, Fish, Search, Filter, ChevronLeft, ChevronRight, RefreshCw } from "lucide-react"
 import { fishTypeApi } from "../../lib/api"
 import toast from 'react-hot-toast'
 
@@ -44,6 +44,18 @@ const FishItemForm: React.FC = () => {
     notes: "",
   })
 
+  // 페이지네이션 상태
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 6
+
+  // 필터 상태
+  const [searchTerm, setSearchTerm] = useState('')
+  const [unitFilter, setUnitFilter] = useState<string>('all')
+
+  // 필터링된 데이터
+  const [filteredFishTypes, setFilteredFishTypes] = useState<FishType[]>([])
+  const [totalPages, setTotalPages] = useState(0)
+
   // 어종 목록 불러오기
   const fetchFishTypes = async () => {
     try {
@@ -64,6 +76,63 @@ const FishItemForm: React.FC = () => {
   useEffect(() => {
     fetchFishTypes()
   }, [])
+
+  // 필터링 처리 (페이지는 제외)
+  useEffect(() => {
+    console.log('🔍 필터링 시작:', { 
+      totalFishTypes: fishTypes.length, 
+      searchTerm, 
+      unitFilter
+    })
+    
+    let filtered = [...fishTypes]
+    
+    // 검색 필터링
+    if (searchTerm.trim()) {
+      const term = searchTerm.toLowerCase()
+      console.log('🔎 검색어 필터링:', term)
+      filtered = filtered.filter(fishType => 
+        fishType.name.toLowerCase().includes(term) ||
+        (fishType.aliases && fishType.aliases.toLowerCase().includes(term))
+      )
+      console.log('🔎 검색 결과:', filtered.length)
+    }
+    
+    // 단위 필터링
+    if (unitFilter !== 'all') {
+      console.log('📏 단위 필터링:', unitFilter)
+      const beforeFilter = filtered.length
+      filtered = filtered.filter(fishType => fishType.unit === unitFilter)
+      console.log('📏 단위 필터 결과:', filtered.length, '(이전:', beforeFilter, ')')
+    }
+    
+    console.log('✅ 최종 필터 결과:', filtered.length)
+    setFilteredFishTypes(filtered)
+    setTotalPages(Math.ceil(filtered.length / itemsPerPage))
+  }, [fishTypes, searchTerm, unitFilter])
+
+  // 필터가 변경될 때 페이지를 1로 리셋
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchTerm, unitFilter])
+
+  // 현재 페이지의 데이터 계산
+  const getCurrentPageData = (): FishType[] => {
+    const startIndex = (currentPage - 1) * itemsPerPage
+    const endIndex = startIndex + itemsPerPage
+    return filteredFishTypes.slice(startIndex, endIndex)
+  }
+
+  const currentPageData = getCurrentPageData()
+
+  // 사용 가능한 단위 목록 추출
+  const availableUnits = Array.from(new Set(fishTypes.map(fish => fish.unit)))
+  
+  // 디버깅: 사용 가능한 단위 목록 로그
+  useEffect(() => {
+    console.log('📏 사용 가능한 단위 목록:', availableUnits)
+    console.log('📊 어종별 단위:', fishTypes.map(fish => ({ name: fish.name, unit: fish.unit })))
+  }, [fishTypes, availableUnits])
 
   // 폼 초기화
   const resetForm = () => {
@@ -153,15 +222,26 @@ const FishItemForm: React.FC = () => {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">어종 정보 관리</h1>
-            <p className="text-sm sm:text-base text-gray-600 mt-1">수산물 어종 데이터 등록 및 관리</p>
+            <p className="text-sm sm:text-base text-gray-600 mt-1">수산물 어종 데이터 등록 및 관리 ({filteredFishTypes.length}건)</p>
           </div>
-          <Button 
-            onClick={() => setShowForm(true)} 
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700"
-          >
-            <Plus className="h-4 w-4" />
-            새 어종 추가
-          </Button>
+          <div className="flex gap-2">
+            <Button 
+              onClick={fetchFishTypes}
+              variant="outline"
+              size="sm"
+              disabled={loading}
+            >
+              <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+              새로고침
+            </Button>
+            <Button 
+              onClick={() => setShowForm(true)} 
+              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700"
+            >
+              <Plus className="h-4 w-4" />
+              새 어종 추가
+            </Button>
+          </div>
         </div>
       </header>
 
@@ -265,94 +345,230 @@ const FishItemForm: React.FC = () => {
           </Card>
         )}
 
-        {/* 어종 목록 테이블 */}
-        <Card>
+        {/* 검색 및 필터 바 */}
+        <Card className="mb-6">
           <CardHeader>
-            <CardTitle className="flex items-center justify-between">
-              <span>등록된 어종 목록 ({fishTypes.length}개)</span>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Filter className="h-5 w-5" />
+              검색 및 필터
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-gray-50">
-                    <TableHead className="font-semibold text-gray-900">번호</TableHead>
-                    <TableHead className="font-semibold text-gray-900">어종명</TableHead>
-                    <TableHead className="font-semibold text-gray-900">단위</TableHead>
-                    <TableHead className="font-semibold text-gray-900">별칭</TableHead>
-                    <TableHead className="font-semibold text-gray-900">등록일</TableHead>
-                    <TableHead className="font-semibold text-gray-900 text-center">작업</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {loading ? (
-                    <TableRow>
-                      <TableCell colSpan={6} className="text-center py-8">
-                        <div className="flex items-center justify-center gap-2">
-                          <svg className="animate-spin h-6 w-6 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                          </svg>
-                          <span>어종 목록을 불러오는 중입니다...</span>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ) : fishTypes.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={6} className="text-center py-8 text-gray-500">
-                        등록된 어종이 없습니다.
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    fishTypes.map((fishType, index) => (
-                      <TableRow key={fishType.id} className="hover:bg-gray-50 transition-colors">
-                        <TableCell className="font-medium text-gray-900">
-                          {index + 1}
-                        </TableCell>
-                        <TableCell className="font-medium text-blue-600">
-                          {fishType.name}
-                        </TableCell>
-                        <TableCell className="text-gray-600">
-                          {fishType.unit}
-                        </TableCell>
-                        <TableCell className="text-gray-600">
-                          {fishType.aliases || "-"}
-                        </TableCell>
-                        <TableCell className="text-gray-600">
-                          {fishType.created_at 
-                            ? new Date(fishType.created_at).toLocaleDateString('ko-KR')
-                            : "-"
-                          }
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <div className="flex items-center justify-center gap-1">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => startEdit(fishType)}
-                              className="border-blue-600 text-blue-600 hover:bg-blue-50"
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleDelete(fishType.id, fishType.name)}
-                              className="border-red-600 text-red-600 hover:bg-red-50"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {/* 검색 */}
+              <div className="space-y-2">
+                <Label htmlFor="search" className="text-sm font-medium text-gray-700">
+                  어종명/별칭 검색
+                </Label>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <Input
+                    id="search"
+                    type="text"
+                    placeholder="어종명이나 별칭을 입력하세요..."
+                    value={searchTerm}
+                    onChange={(e) => {
+                      console.log('🔎 검색어 변경:', e.target.value)
+                      setSearchTerm(e.target.value)
+                    }}
+                    className="pl-10"
+                  />
+                </div>
+              </div>
+
+              {/* 단위 필터 */}
+              <div className="space-y-2">
+                <Label htmlFor="unit-filter" className="text-sm font-medium text-gray-700">
+                  단위별 필터
+                </Label>
+                <Select value={unitFilter} onValueChange={(value) => {
+                  console.log('📏 단위 필터 변경:', value)
+                  setUnitFilter(value)
+                }}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="전체 단위" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">전체 단위</SelectItem>
+                    {availableUnits.map((unit) => (
+                      <SelectItem key={unit} value={unit}>
+                        {unit}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* 필터 리셋 버튼 */}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-gray-700">
+                  필터 초기화
+                </Label>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    console.log('🔄 필터 리셋')
+                    setSearchTerm('')
+                    setUnitFilter('all')
+                    setCurrentPage(1)
+                  }}
+                  className="w-full"
+                  disabled={searchTerm === '' && unitFilter === 'all'}
+                >
+                  <X className="h-4 w-4 mr-2" />
+                  필터 초기화
+                </Button>
+              </div>
             </div>
           </CardContent>
         </Card>
+
+        {/* 어종 카드 그리드 */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+          {loading ? (
+            <div className="col-span-full flex justify-center items-center py-8">
+              <RefreshCw className="h-6 w-6 animate-spin mr-2" />
+              어종 목록 로딩 중...
+            </div>
+          ) : filteredFishTypes.length === 0 ? (
+            <div className="col-span-full text-center py-8 text-gray-500">
+              {searchTerm || unitFilter !== 'all' ? '검색 조건에 맞는 어종이 없습니다.' : '등록된 어종이 없습니다. 어종을 추가해보세요.'}
+            </div>
+          ) : (
+            currentPageData.map((fishType) => (
+              <Card key={fishType.id} className="shadow-sm hover:shadow-md transition-shadow">
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Fish className="h-5 w-5 text-blue-600" />
+                      <CardTitle className="text-lg text-blue-600">
+                        {fishType.name}
+                      </CardTitle>
+                    </div>
+                    <Badge variant="secondary">
+                      {fishType.unit}
+                    </Badge>
+                  </div>
+                </CardHeader>
+                
+                <CardContent className="space-y-3">
+                  {/* 별칭 */}
+                  {fishType.aliases && (
+                    <div className="text-sm">
+                      <span className="font-medium text-gray-700">별칭: </span>
+                      <span className="text-gray-600">{fishType.aliases}</span>
+                    </div>
+                  )}
+                  
+                  {/* 설명 */}
+                  {fishType.notes && (
+                    <div className="text-sm">
+                      <span className="font-medium text-gray-700">설명: </span>
+                      <span className="text-gray-600">{fishType.notes}</span>
+                    </div>
+                  )}
+                  
+                  {/* 등록일 */}
+                  <div className="text-sm text-gray-500">
+                    등록일: {fishType.created_at 
+                      ? new Date(fishType.created_at).toLocaleDateString('ko-KR')
+                      : "정보 없음"
+                    }
+                  </div>
+                  
+                  {/* 액션 버튼 */}
+                  <div className="flex space-x-2 pt-2">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="flex-1 border-blue-600 text-blue-600 hover:bg-blue-50"
+                      onClick={() => startEdit(fishType)}
+                    >
+                      <Edit className="h-4 w-4 mr-1" />
+                      수정
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="flex-1 border-red-600 text-red-600 hover:bg-red-50"
+                      onClick={() => handleDelete(fishType.id, fishType.name)}
+                    >
+                      <Trash2 className="h-4 w-4 mr-1" />
+                      삭제
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ))
+          )}
+        </div>
+
+        {/* 페이지네이션 */}
+        {totalPages > 1 && (
+          <Card className="mt-6">
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div className="text-sm text-gray-700">
+                  {filteredFishTypes.length > 0 ? (
+                    <>
+                      {(currentPage - 1) * itemsPerPage + 1} - {Math.min(currentPage * itemsPerPage, filteredFishTypes.length)} / {filteredFishTypes.length}건
+                    </>
+                  ) : '0건'}
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                    disabled={currentPage === 1}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                    이전
+                  </Button>
+                  
+                  {(() => {
+                    // 페이지 번호를 최대 5개까지만 표시
+                    const maxVisiblePages = 5
+                    let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2))
+                    let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1)
+                    
+                    // 끝에서부터 계산해서 시작 페이지 조정
+                    if (endPage - startPage + 1 < maxVisiblePages) {
+                      startPage = Math.max(1, endPage - maxVisiblePages + 1)
+                    }
+                    
+                    const pages = []
+                    for (let i = startPage; i <= endPage; i++) {
+                      pages.push(i)
+                    }
+                    
+                    return pages.map(page => (
+                      <Button
+                        key={page}
+                        variant={currentPage === page ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setCurrentPage(page)}
+                        className="w-8 h-8 p-0"
+                      >
+                        {page}
+                      </Button>
+                    ))
+                  })()}
+                  
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                    disabled={currentPage === totalPages}
+                  >
+                    다음
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   )

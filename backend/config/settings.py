@@ -86,6 +86,7 @@ LOCAL_APPS = [
     'fish_registry',
     'transcription',
     'inventory',  # 재고 관리 앱
+    'sales',  # 매출 관리 앱
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -156,10 +157,10 @@ def get_database_config():
     # 1차: 팀 공동 로컬서버 시도
     team_server_config = {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'teamPicko',
-        'USER': 'teamPicko',
+        'NAME': os.getenv('DB_NAME', 'teamPicko'),
+        'USER': os.getenv('DB_USER', 'teamPicko'),
         'PASSWORD': os.getenv('DB_PASSWORD'),
-        'HOST': os.getenv('DB_HOST'),
+        'HOST': os.getenv('DB_HOST', 'database'),
         'PORT': '5432',
         'OPTIONS': {
             'connect_timeout': 5,

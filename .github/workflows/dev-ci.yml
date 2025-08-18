@@ -17,13 +17,15 @@ jobs:
     - name: Node.js 설정
       uses: actions/setup-node@v4
       with:
-        node-version: '18'
+        node-version: '20'
         cache: 'npm'
         cache-dependency-path: frontend/package-lock.json
     
     - name: Frontend 의존성 설치
       run: |
         cd frontend
+        # package-lock.json 동기화 문제 해결
+        npm install --package-lock-only
         npm ci
     
     - name: TypeScript 타입 체크

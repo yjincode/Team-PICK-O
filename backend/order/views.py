@@ -11,6 +11,7 @@ from django.shortcuts import get_object_or_404
 from django.db import transaction
 from django.core.files.storage import default_storage
 from django.utils import timezone
+from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from core.middleware import get_user_queryset_filter
 
 from .serializers import OrderSerializer, OrderListSerializer, OrderDetailSerializer, OrderStatusUpdateSerializer, OrderUpdateSerializer
@@ -679,10 +680,10 @@ class TranscriptionToOrderView(View):
 
 @method_decorator(csrf_exempt, name='dispatch')
 class OrderListView(View):
-    """Django View 기반 주문 목록 - JWT 미들웨어 인증"""
+    """Django View 기반 주문 목록 - JWT 미들웨어 인증 (페이지네이션 지원)"""
     
     def get(self, request):
-        """주문 목록 조회"""
+        """주문 목록 조회 (Django Paginator 사용)"""
         print(f"📝 주문 목록 조회 요청")
         print(f"🆔 request.user_id: {getattr(request, 'user_id', 'NOT SET')}")
         
@@ -693,19 +694,83 @@ class OrderListView(View):
         
         print(f"✅ 사용자 인증 확인: user_id={request.user_id}")
         
-        # 미들웨어에서 설정된 user_id 사용
-        orders = Order.objects.prefetch_related('items__fish_type').filter(**get_user_queryset_filter(request))
+        # 페이지네이션 파라미터
+        page = request.GET.get('page', 1)
+        page_size = int(request.GET.get('page_size', 10))  # 기본 10개씩
         
-        # 상태별 필터링 (선택사항)
+        # 미들웨어에서 설정된 user_id 사용
+        orders_queryset = Order.objects.prefetch_related('items__fish_type').filter(**get_user_queryset_filter(request))
+        
+        # 주문 상태별 필터링
         status_filter = request.GET.get('status')
-        if status_filter:
-            orders = orders.filter(order_status=status_filter)
+        if status_filter and status_filter != 'all':
+            orders_queryset = orders_queryset.filter(order_status=status_filter)
+        
+        # 결제 상태별 필터링 (Payment 모델의 역방향 관계 사용)
+        payment_status_filter = request.GET.get('payment_status')
+        if payment_status_filter and payment_status_filter != 'all':
+            if payment_status_filter == 'paid':
+                # Payment 모델에서 order를 통해 역방향 조회
+                from payment.models import Payment
+                paid_order_ids = Payment.objects.filter(payment_status='paid').values_list('order_id', flat=True)
+                orders_queryset = orders_queryset.filter(id__in=paid_order_ids)
+            elif payment_status_filter == 'pending':
+                # 결제 정보가 없거나 pending 상태
+                from payment.models import Payment
+                pending_order_ids = Payment.objects.filter(payment_status='pending').values_list('order_id', flat=True)
+                orders_queryset = orders_queryset.exclude(id__in=Payment.objects.filter(payment_status='paid').values_list('order_id', flat=True))
+            elif payment_status_filter == 'refunded':
+                from payment.models import Payment
+                refunded_order_ids = Payment.objects.filter(payment_status='refunded').values_list('order_id', flat=True)
+                orders_queryset = orders_queryset.filter(id__in=refunded_order_ids)
+        
+        # 날짜별 필터링
+        date_filter = request.GET.get('date')
+        if date_filter:
+            try:
+                from datetime import datetime
+                filter_date = datetime.strptime(date_filter, '%Y-%m-%d').date()
+                orders_queryset = orders_queryset.filter(order_datetime__date=filter_date)
+            except ValueError:
+                pass  # 잘못된 날짜 형식은 무시
+        
+        # 거래처별 필터링
+        business_filter = request.GET.get('business_id')
+        if business_filter and business_filter != 'all':
+            try:
+                business_id = int(business_filter)
+                orders_queryset = orders_queryset.filter(business_id=business_id)
+            except ValueError:
+                pass  # 잘못된 business_id는 무시
             
         # 최신순 정렬
-        orders = orders.order_by('-order_datetime')
+        orders_queryset = orders_queryset.order_by('-order_datetime')
         
-        serializer = OrderListSerializer(orders, many=True)
-        return JsonResponse(serializer.data, safe=False)
+        # Django Paginator 사용
+        paginator = Paginator(orders_queryset, page_size)
+        
+        try:
+            orders_page = paginator.page(page)
+        except PageNotAnInteger:
+            # 페이지가 정수가 아니면 첫 번째 페이지 반환
+            orders_page = paginator.page(1)
+        except EmptyPage:
+            # 페이지가 범위를 벗어나면 마지막 페이지 반환
+            orders_page = paginator.page(paginator.num_pages)
+        
+        serializer = OrderListSerializer(orders_page.object_list, many=True)
+        
+        return JsonResponse({
+            'data': serializer.data,
+            'pagination': {
+                'page': orders_page.number,
+                'page_size': page_size,
+                'total_count': paginator.count,
+                'total_pages': paginator.num_pages,
+                'has_next': orders_page.has_next(),
+                'has_previous': orders_page.has_previous()
+            }
+        })
 
 
 @method_decorator(csrf_exempt, name='dispatch')
@@ -816,68 +881,93 @@ class OrderCancelView(View):
             return JsonResponse({'error': '주문을 찾을 수 없습니다.'}, status=404)
 
 
-@api_view(['POST'])
-def cancel_order_view(request):
-    """
-    주문 취소 API (DRF 스타일)
-    주문 상태를 'cancelled'로 변경하고 취소 사유 기록
-    """
-    # 사용자 인증 확인
-    if not hasattr(request, 'user_id') or not request.user_id:
-        return Response({
-            'error': '사용자 인증이 필요합니다.'
-        }, status=status.HTTP_401_UNAUTHORIZED)
+@method_decorator(csrf_exempt, name='dispatch')
+class CancelOrderView(View):
+    """Django View 기반 주문 취소 API - JWT 미들웨어 인증"""
     
-    order_id = request.data.get('order_id')
-    cancel_reason = request.data.get('cancel_reason', '')
-    
-    if not order_id:
-        return Response({
-            'error': 'order_id는 필수입니다.'
-        }, status=status.HTTP_400_BAD_REQUEST)
-    
-    try:
-        order = Order.objects.get(id=order_id)
+    def post(self, request):
+        """
+        주문 취소 API
+        주문 상태를 'cancelled'로 변경하고 취소 사유 기록
+        """
+        print(f"❌ 주문 취소 API 요청")
+        print(f"🆔 request.user_id: {getattr(request, 'user_id', 'NOT SET')}")
         
-        # 사용자 권한 확인 - 자신이 생성한 주문만 취소 가능 (임시 주석처리)
-        # if order.user_id != request.user_id:
-        #     return Response({
-        #         'error': '해당 주문을 취소할 권한이 없습니다.'
-        #     }, status=status.HTTP_403_FORBIDDEN)
+        # 미들웨어에서 설정된 사용자 정보 확인
+        if not hasattr(request, 'user_id') or not request.user_id:
+            print(f"❌ 사용자 인증 정보 없음")
+            return JsonResponse({'error': '사용자 인증이 필요합니다.'}, status=401)
         
-        # 이미 취소된 주문인지 확인
-        if order.order_status == 'cancelled':
-            return Response({
-                'error': '이미 취소된 주문입니다.'
-            }, status=status.HTTP_401_UNAUTHORIZED)
+        print(f"✅ 사용자 인증 확인: user_id={request.user_id}")
         
-        # 출고된 주문은 취소 불가
-        if order.order_status == 'delivered':
-            return Response({
-                'error': '출고 완료된 주문은 취소할 수 없습니다.'
-            }, status=status.HTTP_400_BAD_REQUEST)
+        # Django View에서 JSON 데이터 파싱
+        try:
+            if request.content_type and 'application/json' in request.content_type:
+                data = json.loads(request.body)
+            else:
+                data = request.POST.dict()
+            print(f"📝 파싱된 데이터: {data}")
+        except json.JSONDecodeError as e:
+            print(f"❌ JSON 파싱 오류: {e}")
+            return JsonResponse({'error': '잘못된 JSON 형식입니다.'}, status=400)
         
-        # 주문 취소 처리
-        order.order_status = 'cancelled'
-        order.cancel_reason = cancel_reason
-        order.save()
+        order_id = data.get('order_id')
+        cancel_reason = data.get('cancel_reason', '')
         
-        return Response({
-            'message': '주문이 취소되었습니다',
-            'order_id': order.id,
-            'order_status': 'cancelled',
-            'cancel_reason': cancel_reason
-        })
+        if not order_id:
+            return JsonResponse({'error': 'order_id는 필수입니다.'}, status=400)
         
-    except Order.DoesNotExist:
-        return Response({
-            'error': '주문을 찾을 수 없습니다.'
-        }, status=status.HTTP_404_NOT_FOUND)
-    except Exception as e:
-        return Response({
-            'error': '주문 취소 처리 중 오류 발생',
-            'details': str(e)
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        try:
+            # 미들웨어에서 설정된 user_id 사용하여 주문 조회
+            order = Order.objects.get(id=order_id, **get_user_queryset_filter(request))
+            print(f"🔍 주문 조회 성공: order_id={order.id}, 현재 상태={order.order_status}")
+            
+            # 이미 취소된 주문인지 확인
+            if order.order_status == 'cancelled':
+                return JsonResponse({'error': '이미 취소된 주문입니다.'}, status=400)
+            
+            # 출고된 주문은 취소 불가
+            if order.order_status == 'delivered':
+                return JsonResponse({'error': '출고 완료된 주문은 취소할 수 없습니다.'}, status=400)
+            
+            # 주문 취소 처리 (트랜잭션으로 재고도 함께 처리)
+            with transaction.atomic():
+                # 1. 주문 상태 변경
+                order.order_status = 'cancelled'
+                order.cancel_reason = cancel_reason
+                order.save()
+                
+                # 2. 재고 차감 롤백 (StockTransaction에서 해당 주문 기록 제거)
+                from inventory.models import StockTransaction
+                cancelled_transactions = StockTransaction.objects.filter(
+                    order_id=order.id,
+                    user_id=request.user_id,
+                    transaction_type='order'
+                )
+                
+                if cancelled_transactions.exists():
+                    print(f"🔄 재고 차감 롤백: {cancelled_transactions.count()}개 거래 제거")
+                    cancelled_transactions.delete()
+                else:
+                    print(f"ℹ️ 롤백할 재고 거래 없음")
+            
+            print(f"✅ 주문 취소 및 재고 롤백 완료: order_id={order.id}")
+            
+            return JsonResponse({
+                'message': '주문이 취소되었습니다',
+                'order_id': order.id,
+                'order_status': 'cancelled',
+                'cancel_reason': cancel_reason
+            })
+            
+        except Order.DoesNotExist:
+            print(f"❌ 주문을 찾을 수 없음: order_id={order_id}")
+            return JsonResponse({'error': '주문을 찾을 수 없습니다.'}, status=404)
+        except Exception as e:
+            print(f"❌ 주문 취소 처리 오류: {e}")
+            import traceback
+            traceback.print_exc()
+            return JsonResponse({'error': f'주문 취소 처리 중 오류 발생: {str(e)}'}, status=500)
 
 
 @api_view(['POST'])
