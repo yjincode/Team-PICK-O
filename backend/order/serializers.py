@@ -80,28 +80,39 @@ class OrderSerializer(serializers.ModelSerializer):
             quantity = item_data.get('quantity', 0)
             
             if fish_type_id and quantity > 0:
-                # 현재 재고량 계산 (실제 재고 - 주문으로 차감된 재고)
+                print(f"🔍 주문 생성 시 재고 체크: 어종 ID {fish_type_id}, 수량 {quantity}")
+                
+                # 현재 등록된 실제 재고량 (재고 관리에서 등록된 재고)
                 total_registered_stock = Inventory.objects.filter(
                     fish_type_id=fish_type_id,
                     user=user
                 ).aggregate(total=Sum('stock_quantity'))['total'] or 0
                 
-                # 주문으로 차감된 재고량
+                # 기존 주문들로 인해 차감된 재고량 (StockTransaction 추적)
                 total_ordered = StockTransaction.objects.filter(
-                    fish_type=fish_type_id,
+                    fish_type_id=fish_type_id,
                     user=user,
                     transaction_type='order'
                 ).aggregate(total=Sum('quantity_change'))['total'] or 0
                 
-                # 실제 가용 재고 = 등록된 재고 - 주문된 재고 (quantity_change는 음수로 저장됨)
-                available_stock = total_registered_stock + total_ordered  # 음수 더하기이므로 실질적으로는 빼기
+                # 실제 가용 재고 = 등록된 재고 + 차감량 (quantity_change는 음수로 저장됨)
+                available_stock = total_registered_stock + total_ordered
                 
-                print(f"📦 재고 체크: {fish_type_id} - 등록재고: {total_registered_stock}, 주문차감: {total_ordered}, 가용재고: {available_stock}")
+                print(f"📦 재고 상세: 어종 ID {fish_type_id}")
+                print(f"   - 등록된 재고: {total_registered_stock}")
+                print(f"   - 기존 주문 차감: {total_ordered}")
+                print(f"   - 가용 재고: {available_stock}")
+                print(f"   - 이번 주문 수량: {quantity}")
                 
                 # 재고 부족 여부 확인
-                if quantity > available_stock:
+                if available_stock <= 0:
                     has_stock_issues = True
-                    print(f"⚠️ 재고 부족 감지: {fish_type_id} - 주문: {quantity}, 가용: {available_stock}")
+                    print(f"🚫 재고 없음: 어종 ID {fish_type_id}")
+                elif quantity > available_stock:
+                    has_stock_issues = True
+                    print(f"❗ 재고 부족: 어종 ID {fish_type_id} (요청: {quantity}, 가용: {available_stock})")
+                else:
+                    print(f"✅ 재고 충분: 어종 ID {fish_type_id}")
         
         # 주문 생성
         order = Order.objects.create(
@@ -183,41 +194,94 @@ class OrderListSerializer(serializers.ModelSerializer):
             else:
                 quantity_str = str(int(quantity))
             
-            # 재고 부족 체크
+            # 실시간 재고 부족 체크 (실제 재고 관리와 매칭)
             stock_issue_indicator = ""
             try:
                 from django.db.models import Sum
                 from inventory.models import Inventory, StockTransaction
-                from core.middleware import get_user_queryset_filter
                 
                 # 사용자 ID 가져오기 (context에서)
                 request = self.context.get('request')
                 if request and hasattr(request, 'user_id'):
-                    user_filter = {'user_id': request.user_id}
+                    
+                    # 실제 어종 ID 확인 - fish_type ForeignKey를 통해 정확한 ID 가져오기
+                    fish_type_obj = item.fish_type
+                    fish_type_id = fish_type_obj.id
+                    fish_name = fish_type_obj.name
+                    
+                    # ========== 실제 재고 관리 시스템과 실시간 연동 ==========
+                    
+                    # 1. 재고 관리에서 등록된 모든 재고 항목 조회
+                    inventory_items = Inventory.objects.filter(
+                        fish_type_id=fish_type_id,
+                        user_id=request.user_id
+                    )
                     
                     # 등록된 총 재고량
-                    total_registered_stock = Inventory.objects.filter(
-                        fish_type_id=item.fish_type_id,
-                        **user_filter
-                    ).aggregate(total=Sum('stock_quantity'))['total'] or 0
+                    total_registered_stock = inventory_items.aggregate(
+                        total=Sum('stock_quantity')
+                    )['total'] or 0
                     
-                    # 주문으로 차감된 재고량 (quantity_change는 음수)
-                    total_ordered = StockTransaction.objects.filter(
-                        fish_type_id=item.fish_type_id,
+                    # 2. StockTransaction에서 모든 주문으로 인한 차감 기록 조회
+                    stock_transactions = StockTransaction.objects.filter(
+                        fish_type_id=fish_type_id,
                         user_id=request.user_id,
                         transaction_type='order'
-                    ).aggregate(total=Sum('quantity_change'))['total'] or 0
+                    )
                     
-                    # 실제 가용 재고 = 등록된 재고 + 차감된 재고 (음수이므로 실질적으로 빼기)
-                    total_stock = total_registered_stock + total_ordered
+                    # 주문으로 차감된 총량 (음수로 저장됨)
+                    total_ordered_deduction = stock_transactions.aggregate(
+                        total=Sum('quantity_change')
+                    )['total'] or 0
                     
-                    # 재고 부족 시 느낌표 추가
-                    if quantity > total_stock:
-                        stock_issue_indicator = "❗"
+                    # 3. 현재 가용 재고 = 등록된 재고 - 주문 차감량
+                    # (total_ordered_deduction이 음수이므로 덧셈이 실질적으로 뺄셈)
+                    available_stock = total_registered_stock + total_ordered_deduction
+                    
+                    print(f"🔗 실시간 재고-주문 연동 체크")
+                    print(f"   📋 주문: #{obj.id}, 어종: {fish_type_obj.name}({fish_type_id})")
+                    print(f"   📦 재고관리 등록 항목: {inventory_items.count()}개")
+                    print(f"   📊 총 등록 재고: {total_registered_stock} {unit}")
+                    print(f"   📉 주문 차감 기록: {stock_transactions.count()}건")
+                    print(f"   ➖ 총 차감량: {abs(total_ordered_deduction)} {unit}")
+                    print(f"   ✅ 현재 가용량: {available_stock} {unit}")
+                    print(f"   📝 이번 주문: {quantity} {unit}")
+                    
+                    # 4. 재고 연동 상태 및 문제점 진단
+                    inventory_exists = inventory_items.exists()
+                    print(f"   🔗 재고시스템 연동: {'✅ 연결됨' if inventory_exists else '❌ 미연결'}")
+                    
+                    # 5. 실시간 재고 상태 판정
+                    if not inventory_exists:
+                        stock_issue_indicator = "⚫"  # 재고 관리에 미등록
+                        print(f"   ⚫ 재고 관리 시스템에 미등록")
+                    elif total_registered_stock <= 0:
+                        stock_issue_indicator = "⚫"  # 등록된 재고가 0
+                        print(f"   ⚫ 등록된 재고량이 0")
+                    elif available_stock <= 0:
+                        stock_issue_indicator = "🚫"  # 재고 완전 소진
+                        print(f"   🚫 재고 완전 소진")
+                    elif quantity > available_stock:
+                        stock_issue_indicator = "❗"  # 주문량 > 가용재고
+                        shortage = quantity - available_stock
+                        print(f"   ❗ 재고 부족 (부족량: {shortage} {unit})")
+                    elif available_stock <= total_registered_stock * 0.2:
+                        stock_issue_indicator = "⚠️"  # 20% 이하 경고
+                        print(f"   ⚠️ 재고 부족 위험 (20% 이하)")
+                    else:
+                        print(f"   ✅ 재고 충분")
+                    
+                    # 6. 재고 무결성 검증
+                    if available_stock < 0:
+                        print(f"   🚨 재고 무결성 오류: 가용재고가 음수 ({available_stock})")
+                    if total_ordered_deduction > 0:
+                        print(f"   🚨 차감 기록 오류: 차감량이 양수 ({total_ordered_deduction})")
                         
             except Exception as e:
-                # 재고 체크 실패 시 무시 (에러가 있어도 주문 목록은 표시되어야 함)
-                pass
+                print(f"❌ 재고 체크 오류 (어종 {item.fish_type.name}): {e}")
+                import traceback
+                traceback.print_exc()
+                # 재고 체크 실패 시에도 주문 목록은 표시되어야 함
             
             item_names.append(f"{stock_issue_indicator}{item.fish_type.name} {quantity_str}{unit}")
         

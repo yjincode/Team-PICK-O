@@ -3,7 +3,7 @@ from .views import (
     OrderUploadView, OrderListView, OrderDetailView, 
     OrderStatusUpdateView, OrderCancelView,
     TranscriptionStatusView, TranscriptionToOrderView,
-    cancel_order_view, UpdateOrderView, ShipOutOrderView
+    CancelOrderView, update_order_view, ship_out_order_view
 )
 
 urlpatterns = [
@@ -14,8 +14,8 @@ urlpatterns = [
     path('<int:order_id>/status/', OrderStatusUpdateView.as_view(), name='order-status-update'),
     path('<int:order_id>/cancel/', OrderCancelView.as_view(), name='order-cancel'),
     
-    # 주문 취소 API (DRF 스타일)
-    path('cancel/', cancel_order_view, name='order-cancel-api'),
+    # 주문 취소 API (Django View 스타일)
+    path('cancel/', CancelOrderView.as_view(), name='order-cancel-api'),
     
     # 주문 수정 API
     path('<int:order_id>/update/', UpdateOrderView.as_view(), name='order-update'),

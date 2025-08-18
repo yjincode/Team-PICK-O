@@ -8,7 +8,6 @@ import { format } from "date-fns"
 import { ko } from "date-fns/locale"
 import { 
   CalendarDays, 
-  Search, 
   Plus, 
   Eye, 
   CreditCard,
@@ -23,38 +22,44 @@ import {
 import { Badge } from "../../components/ui/badge"
 import { Button } from "../../components/ui/button"
 import { Calendar } from "../../components/ui/calendar"
-import { Input } from "../../components/ui/input"
 import { Label } from "../../components/ui/label"
 import { Popover, PopoverContent, PopoverTrigger } from "../../components/ui/popover"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../components/ui/table"
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card"
-import { OrderListItem } from "../../types"
-import { orderApi, paymentApi } from "../../lib/api"
+import { OrderListItem, Business } from "../../types"
+import { orderApi, paymentApi, businessApi } from "../../lib/api"
 import toast from 'react-hot-toast'
 import OrderForm from "./OrderForm"
 import { OrderStatusBadge, PaymentStatusBadge } from "../../components/common/StatusBadges"
 import { getLabel } from "../../lib/labels"
 import RefundCancelModal from "../../components/modals/RefundCancelModal"
 
-// 금액 포맷팅
+// 금액 포맷팅 (한국 통화 형식, 소수점 없이)
 const formatPrice = (price: number) => {
-  return new Intl.NumberFormat('ko-KR').format(price)
+  // 정수로 변환하여 소수점 제거 후 한국 통화 형식으로 포맷팅
+  return new Intl.NumberFormat('ko-KR', {
+    style: 'decimal',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0
+  }).format(Math.round(price))
 }
 
 const OrderList: React.FC = () => {
   const navigate = useNavigate()
   const [showOrderForm, setShowOrderForm] = useState(false)
   const [orders, setOrders] = useState<OrderListItem[]>([])
-  const [filteredOrders, setFilteredOrders] = useState<OrderListItem[]>([])
   const [date, setDate] = useState<Date>()
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [paymentStatusFilter, setPaymentStatusFilter] = useState<string>("all")
-
-  const [searchQuery, setSearchQuery] = useState<string>("")
+  const [businessFilter, setBusinessFilter] = useState<string>("all")
+  const [businesses, setBusinesses] = useState<Business[]>([])
+  const [businessLoading, setBusinessLoading] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage] = useState(10)
   const [loading, setLoading] = useState(true)
+  const [totalCount, setTotalCount] = useState(0)
+  const [totalPages, setTotalPages] = useState(0)
 
   // 환불/취소 모달 상태
   const [showRefundModal, setShowRefundModal] = useState(false)
@@ -63,16 +68,91 @@ const OrderList: React.FC = () => {
   const [processingRefund, setProcessingRefund] = useState(false)
   const [processingCancel, setProcessingCancel] = useState(false)
 
-  // 주문 목록 가져오기 (orderApi 사용)
+  // 거래처 목록 가져오기
+  useEffect(() => {
+    const fetchBusinesses = async () => {
+      try {
+        setBusinessLoading(true)
+        console.log('🏢 거래처 목록 가져오기 시작...')
+        const response = await businessApi.getAll({ page_size: 1000 }) // 모든 거래처 가져오기
+        
+        console.log('🏢 거래처 API 응답:', response)
+        
+        // Django 페이지네이션 응답 구조에 맞게 파싱
+        if (response.results && Array.isArray(response.results)) {
+          // Django 페이지네이션 응답: {count, next, previous, results}
+          console.log('✅ 거래처 데이터 (Django 페이지네이션):', response.results.length, '개')
+          setBusinesses(response.results)
+        } else if (response.data?.results && Array.isArray(response.data.results)) {
+          // 중첩된 Django 페이지네이션 응답
+          console.log('✅ 거래처 데이터 (중첩 Django 페이지네이션):', response.data.results.length, '개')
+          setBusinesses(response.data.results)
+        } else if (response.data?.data && Array.isArray(response.data.data)) {
+          // API 래퍼된 응답
+          console.log('✅ 거래처 데이터 (API 래퍼):', response.data.data.length, '개')
+          setBusinesses(response.data.data)
+        } else if (response.data && Array.isArray(response.data)) {
+          // 직접 배열 응답
+          console.log('✅ 거래처 데이터 (배열):', response.data.length, '개')
+          setBusinesses(response.data)
+        } else {
+          console.log('❌ 예상하지 못한 거래처 응답 형식:', response)
+          setBusinesses([])
+        }
+      } catch (error) {
+        console.error('❌ 거래처 목록 가져오기 실패:', error)
+        setBusinesses([])
+      } finally {
+        setBusinessLoading(false)
+      }
+    }
+
+    fetchBusinesses()
+  }, [])
+
+  // 주문 목록 가져오기 (orderApi 사용 - 백엔드 페이지네이션, 필터링, 검색)
   useEffect(() => {
     const fetchOrders = async () => {
       try {
         setLoading(true)
-        const response = await orderApi.getAll()
         
-        // API 응답 구조에 따라 적절한 데이터 추출
-        const ordersData = response.data || response || []
-        setOrders(Array.isArray(ordersData) ? ordersData : [])
+        // API 요청 파라미터 구성
+        const params: any = {
+          page: currentPage,
+          page_size: itemsPerPage
+        }
+        
+        // 필터 파라미터 추가
+        if (statusFilter !== 'all') {
+          params.status = statusFilter
+        }
+        
+        if (paymentStatusFilter !== 'all') {
+          params.payment_status = paymentStatusFilter
+        }
+        
+        if (date) {
+          params.date = date.toISOString().split('T')[0] // YYYY-MM-DD 형식
+        }
+        
+        if (businessFilter !== 'all') {
+          params.business_id = businessFilter
+          console.log('🏢 거래처 필터 적용:', businessFilter)
+        }
+        
+        console.log('📋 주문 목록 요청 파라미터:', params)
+        const response = await orderApi.getAll(params)
+        
+        // 백엔드 페이지네이션 응답 처리
+        if (response.pagination) {
+          setOrders(response.data || [])
+          setTotalCount(response.pagination.total_count)
+          setTotalPages(response.pagination.total_pages)
+        } else {
+          // 기존 형식 호환성
+          const ordersData = response.data || response || []
+          setOrders(Array.isArray(ordersData) ? ordersData : [])
+        }
       } catch (error) {
         console.error('주문 목록 가져오기 실패:', error)
         setOrders([])
@@ -82,55 +162,19 @@ const OrderList: React.FC = () => {
     }
 
     fetchOrders()
-  }, [])
+  }, [currentPage, itemsPerPage, statusFilter, paymentStatusFilter, date, businessFilter])
 
-  // 필터링 및 검색 로직
+  // 필터 변경 시 첫 페이지로 이동 (데이터는 위의 useEffect에서 자동으로 새로고침됨)
   useEffect(() => {
-    let filtered = orders
-
-    // 상태별 필터
-    if (statusFilter !== "all") {
-      filtered = filtered.filter(order => order.order_status === statusFilter)
+    if (currentPage !== 1) {
+      setCurrentPage(1)
     }
+  }, [statusFilter, paymentStatusFilter, date, businessFilter])
 
-    // 결제 상태별 필터
-    if (paymentStatusFilter !== "all") {
-      if (paymentStatusFilter === "paid") {
-        filtered = filtered.filter(order => order.payment?.payment_status === "paid")
-      } else if (paymentStatusFilter === "pending") {
-        filtered = filtered.filter(order => !order.payment || order.payment.payment_status === "pending")
-      } else if (paymentStatusFilter === "refunded") {
-        filtered = filtered.filter(order => order.payment?.payment_status === "refunded")
-      }
-    }
-
-    // 날짜별 필터
-    if (date) {
-      filtered = filtered.filter(order => {
-        const orderDate = new Date(order.order_datetime)
-        return orderDate.toDateString() === date.toDateString()
-      })
-    }
-
-    // 검색 필터
-    if (searchQuery) {
-      filtered = filtered.filter(order => {
-        const businessName = order.business?.business_name || ''
-        const itemsSummary = order.items_summary || ''
-        return businessName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-               itemsSummary.toLowerCase().includes(searchQuery.toLowerCase())
-      })
-    }
-
-    setFilteredOrders(filtered)
-    setCurrentPage(1) // 필터 변경 시 첫 페이지로 이동
-  }, [orders, statusFilter, paymentStatusFilter, date, searchQuery])
-
-  // 페이지네이션 계산
-  const totalPages = Math.ceil(filteredOrders.length / itemsPerPage)
+  // 현재 페이지 데이터는 이미 백엔드에서 필터링되어 옴
+  const currentOrders = orders
   const startIndex = (currentPage - 1) * itemsPerPage
-  const endIndex = startIndex + itemsPerPage
-  const currentOrders = filteredOrders.slice(startIndex, endIndex)
+  const endIndex = Math.min(startIndex + itemsPerPage, totalCount)
 
   // 새 주문 처리
   const handleNewOrder = (orderData: any) => {
@@ -144,9 +188,39 @@ const OrderList: React.FC = () => {
     // 주문이 성공적으로 생성되었으므로 전체 목록을 새로고침
     const refreshOrders = async () => {
       try {
-        const response = await orderApi.getAll()
-        const ordersData = response.data || response || []
-        setOrders(Array.isArray(ordersData) ? ordersData : [])
+        // API 요청 파라미터 구성
+        const params: any = {
+          page: currentPage,
+          page_size: itemsPerPage
+        }
+        
+        // 현재 필터 상태 적용
+        if (statusFilter !== 'all') {
+          params.status = statusFilter
+        }
+        
+        if (paymentStatusFilter !== 'all') {
+          params.payment_status = paymentStatusFilter
+        }
+        
+        if (date) {
+          params.date = date.toISOString().split('T')[0]
+        }
+        
+        if (businessFilter !== 'all') {
+          params.business_id = businessFilter
+        }
+        
+        const response = await orderApi.getAll(params)
+        
+        if (response.pagination) {
+          setOrders(response.data || [])
+          setTotalCount(response.pagination.total_count)
+          setTotalPages(response.pagination.total_pages)
+        } else {
+          const ordersData = response.data || response || []
+          setOrders(Array.isArray(ordersData) ? ordersData : [])
+        }
         setShowOrderForm(false)
         toast.success('주문이 성공적으로 등록되었습니다!')
       } catch (error) {
@@ -201,10 +275,38 @@ const OrderList: React.FC = () => {
       toast.success('환불이 성공적으로 처리되었습니다!')
       setShowRefundModal(false)
       
-      // 주문 목록 새로고침
-      const response = await orderApi.getAll()
-      const ordersData = response.data || response || []
-      setOrders(Array.isArray(ordersData) ? ordersData : [])
+      // 주문 목록 새로고침 (현재 필터 상태 유지)
+      const params: any = {
+        page: currentPage,
+        page_size: itemsPerPage
+      }
+      
+      if (statusFilter !== 'all') {
+        params.status = statusFilter
+      }
+      
+      if (paymentStatusFilter !== 'all') {
+        params.payment_status = paymentStatusFilter
+      }
+      
+      if (date) {
+        params.date = date.toISOString().split('T')[0]
+      }
+      
+      if (businessFilter !== 'all') {
+        params.business_id = businessFilter
+      }
+      
+      const response = await orderApi.getAll(params)
+      
+      if (response.pagination) {
+        setOrders(response.data || [])
+        setTotalCount(response.pagination.total_count)
+        setTotalPages(response.pagination.total_pages)
+      } else {
+        const ordersData = response.data || response || []
+        setOrders(Array.isArray(ordersData) ? ordersData : [])
+      }
       
     } catch (error: any) {
       console.error('환불 처리 실패:', error)
@@ -228,10 +330,38 @@ const OrderList: React.FC = () => {
       toast.success('주문이 성공적으로 취소되었습니다!')
       setShowCancelModal(false)
       
-      // 주문 목록 새로고침
-      const response = await orderApi.getAll()
-      const ordersData = response.data || response || []
-      setOrders(Array.isArray(ordersData) ? ordersData : [])
+      // 주문 목록 새로고침 (현재 필터 상태 유지)
+      const params: any = {
+        page: currentPage,
+        page_size: itemsPerPage
+      }
+      
+      if (statusFilter !== 'all') {
+        params.status = statusFilter
+      }
+      
+      if (paymentStatusFilter !== 'all') {
+        params.payment_status = paymentStatusFilter
+      }
+      
+      if (date) {
+        params.date = date.toISOString().split('T')[0]
+      }
+      
+      if (businessFilter !== 'all') {
+        params.business_id = businessFilter
+      }
+      
+      const response = await orderApi.getAll(params)
+      
+      if (response.pagination) {
+        setOrders(response.data || [])
+        setTotalCount(response.pagination.total_count)
+        setTotalPages(response.pagination.total_pages)
+      } else {
+        const ordersData = response.data || response || []
+        setOrders(Array.isArray(ordersData) ? ordersData : [])
+      }
       
     } catch (error: any) {
       console.error('주문 취소 실패:', error)
@@ -271,6 +401,26 @@ const OrderList: React.FC = () => {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {/* 거래처 필터 - 가장 왼쪽 */}
+              <div className="space-y-2">
+                <Label htmlFor="business-filter" className="text-sm font-medium text-gray-700">
+                  거래처
+                </Label>
+                <Select value={businessFilter} onValueChange={setBusinessFilter} disabled={businessLoading}>
+                  <SelectTrigger>
+                    <SelectValue placeholder={businessLoading ? "로딩 중..." : "전체 거래처"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">전체 거래처</SelectItem>
+                    {businesses.map((business) => (
+                      <SelectItem key={business.id} value={business.id.toString()}>
+                        {business.business_name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
               {/* 주문 상태 필터 */}
               <div className="space-y-2">
                 <Label htmlFor="status-filter" className="text-sm font-medium text-gray-700">
@@ -310,7 +460,19 @@ const OrderList: React.FC = () => {
 
               {/* 날짜 필터 */}
               <div className="space-y-2">
-                <Label className="text-sm font-medium text-gray-700">주문일자</Label>
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm font-medium text-gray-700">주문일자</Label>
+                  {date && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setDate(undefined)}
+                      className="h-auto p-1 text-xs text-gray-500 hover:text-gray-700"
+                    >
+                      초기화
+                    </Button>
+                  )}
+                </div>
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button
@@ -326,23 +488,6 @@ const OrderList: React.FC = () => {
                   </PopoverContent>
                 </Popover>
               </div>
-
-              {/* 검색 */}
-              <div className="space-y-2">
-                <Label htmlFor="search" className="text-sm font-medium text-gray-700">
-                  검색
-                </Label>
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                  <Input
-                    id="search"
-                    placeholder="거래처명, 주문번호, 메모"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-10"
-                  />
-                </div>
-              </div>
             </div>
           </CardContent>
         </Card>
@@ -351,7 +496,7 @@ const OrderList: React.FC = () => {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center justify-between">
-              <span>주문 목록 ({filteredOrders.length}건)</span>
+              <span>주문 목록 ({totalCount}건)</span>
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -383,7 +528,7 @@ const OrderList: React.FC = () => {
                         </div>
                       </TableCell>
                     </TableRow>
-                  ) : filteredOrders.length === 0 ? (
+                  ) : orders.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={9} className="text-center py-8 text-gray-500">
                         조회된 주문이 없습니다.
@@ -397,7 +542,7 @@ const OrderList: React.FC = () => {
                         onClick={() => handleViewDetail(order.id)}
                       >
                         <TableCell className="font-medium text-gray-900">
-                          {filteredOrders.length - startIndex - index}
+                          {totalCount - startIndex - index}
                         </TableCell>
                         <TableCell className="font-medium">
                           <div className="font-semibold text-gray-900">
@@ -509,7 +654,7 @@ const OrderList: React.FC = () => {
             {totalPages > 1 && (
               <div className="flex items-center justify-between mt-6">
                 <div className="text-sm text-gray-700">
-                  {startIndex + 1} - {Math.min(endIndex, filteredOrders.length)} / {filteredOrders.length}건
+                  {startIndex + 1} - {endIndex} / {totalCount}건
                 </div>
                 <div className="flex items-center gap-2">
                   <Button
@@ -522,17 +667,34 @@ const OrderList: React.FC = () => {
                     이전
                   </Button>
                   
-                  {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
-                    <Button
-                      key={page}
-                      variant={currentPage === page ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setCurrentPage(page)}
-                      className="w-8 h-8 p-0"
-                    >
-                      {page}
-                    </Button>
-                  ))}
+                  {(() => {
+                    // 페이지 번호를 최대 15개까지만 표시
+                    const maxVisiblePages = 15
+                    let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2))
+                    let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1)
+                    
+                    // 끝에서부터 계산해서 시작 페이지 조정
+                    if (endPage - startPage + 1 < maxVisiblePages) {
+                      startPage = Math.max(1, endPage - maxVisiblePages + 1)
+                    }
+                    
+                    const pages = []
+                    for (let i = startPage; i <= endPage; i++) {
+                      pages.push(i)
+                    }
+                    
+                    return pages.map(page => (
+                      <Button
+                        key={page}
+                        variant={currentPage === page ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setCurrentPage(page)}
+                        className="w-8 h-8 p-0"
+                      >
+                        {page}
+                      </Button>
+                    ))
+                  })()}
                   
                   <Button
                     variant="outline"

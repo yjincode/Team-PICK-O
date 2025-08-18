@@ -86,6 +86,7 @@ LOCAL_APPS = [
     'fish_registry',
     'transcription',
     'inventory',  # 재고 관리 앱
+    'sales',  # 매출 관리 앱
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS

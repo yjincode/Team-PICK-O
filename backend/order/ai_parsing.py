@@ -8,8 +8,7 @@ from django.conf import settings
 # 2. OCR API 연동 (이미지 텍스트 추출)
 # 3. 텍스트 파싱 로직 개선
 
-# OpenAI API 키 설정 (환경변수에서 가져오기)
-# openai.api_key = os.getenv('OPENAI_API_KEY')
+
 
 def parse_audio_to_order_data(file_path):
     """
