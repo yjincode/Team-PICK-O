@@ -83,6 +83,7 @@ export interface OrderListItem {
     id: number;
     business_name: string;
     phone_number: string;
+    businees_id: number;
   };
   total_price: number;
   order_datetime: string;
