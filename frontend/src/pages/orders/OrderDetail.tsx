@@ -189,9 +189,23 @@ const OrderDetail: React.FC = () => {
   }
 
   const handleEditOrder = () => {
+    // 날짜 데이터 안전하게 처리
+    const formatDateForInput = (dateString?: string | null): string => {
+      if (!dateString) return ''
+      try {
+        const date = new Date(dateString)
+        if (isNaN(date.getTime())) return ''
+        // YYYY-MM-DD 형식으로 변환
+        return date.toISOString().split('T')[0]
+      } catch (error) {
+        console.warn('날짜 포맷 실패:', dateString, error)
+        return ''
+      }
+    }
+
     setEditingData({
-      delivery_datetime: order.delivery_datetime || '',
-      ship_out_datetime: order.ship_out_datetime,
+      delivery_datetime: formatDateForInput(order.delivery_datetime),
+      ship_out_datetime: formatDateForInput(order.ship_out_datetime),
       source_type: (order.source_type as "manual" | "voice" | "text") || 'manual',
       memo: order.memo || '',
       is_urgent: order.is_urgent || false,
@@ -234,24 +248,67 @@ const OrderDetail: React.FC = () => {
       const processedData = { ...editingData }
       
       if (processedData.delivery_datetime) {
-        // 납기일을 한국 시간 00:00으로 설정
-        const koreanDate = new Date(processedData.delivery_datetime + 'T00:00:00+09:00')
-        processedData.delivery_datetime = koreanDate.toISOString()
+        try {
+          // 날짜 문자열 검증 및 변환
+          const dateStr = processedData.delivery_datetime.trim()
+          if (dateStr && dateStr !== '' && !dateStr.includes('Invalid')) {
+            // YYYY-MM-DD 형식인지 확인
+            if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+              const koreanDate = new Date(dateStr + 'T00:00:00+09:00')
+              if (!isNaN(koreanDate.getTime())) {
+                processedData.delivery_datetime = koreanDate.toISOString()
+              } else {
+                console.warn('⚠️ 잘못된 납기일 형식:', dateStr)
+                delete processedData.delivery_datetime
+              }
+            } else {
+              // 이미 ISO 형식이거나 다른 형식인 경우
+              const testDate = new Date(dateStr)
+              if (!isNaN(testDate.getTime())) {
+                processedData.delivery_datetime = testDate.toISOString()
+              } else {
+                console.warn('⚠️ 잘못된 납기일 형식:', dateStr)
+                delete processedData.delivery_datetime
+              }
+            }
+          } else {
+            delete processedData.delivery_datetime
+          }
+        } catch (error) {
+          console.warn('⚠️ 납기일 변환 실패:', processedData.delivery_datetime, error)
+          delete processedData.delivery_datetime
+        }
       }
       
       if (processedData.ship_out_datetime) {
-        // 출고일을 한국 시간으로 설정
-        const koreanDate = new Date(processedData.ship_out_datetime + '+09:00')
-        processedData.ship_out_datetime = koreanDate.toISOString()
+        try {
+          const dateStr = processedData.ship_out_datetime.trim()
+          if (dateStr && dateStr !== '' && !dateStr.includes('Invalid')) {
+            const testDate = new Date(dateStr)
+            if (!isNaN(testDate.getTime())) {
+              processedData.ship_out_datetime = testDate.toISOString()
+            } else {
+              console.warn('⚠️ 잘못된 출고일 형식:', dateStr)
+              delete processedData.ship_out_datetime
+            }
+          } else {
+            delete processedData.ship_out_datetime
+          }
+        } catch (error) {
+          console.warn('⚠️ 출고일 변환 실패:', processedData.ship_out_datetime, error)
+          delete processedData.ship_out_datetime
+        }
       }
       
       // 디버깅을 위한 로그 추가
       console.log('📤 원본 데이터:', editingData)
       console.log('📤 처리된 데이터:', processedData)
       console.log('📤 주문 ID:', order.id)
+      console.log('📤 API 엔드포인트: PUT /orders/' + order.id + '/update/')
       
-      // orderApi.update 사용
-      await orderApi.update(order.id, processedData)
+      // orderApi.update 사용 (새로운 엔드포인트: /orders/{id}/update/)
+      const updateResponse = await orderApi.update(order.id, processedData)
+      console.log('📤 업데이트 응답:', updateResponse)
       
       toast.success('주문이 성공적으로 수정되었습니다.')
       const updatedOrder = await orderApi.getById(parseInt(id!))
@@ -352,7 +409,13 @@ const OrderDetail: React.FC = () => {
                          <input
                            type="date"
                            value={editingData?.delivery_datetime || ''}
-                           onChange={(e) => setEditingData({ ...editingData!, delivery_datetime: e.target.value })}
+                           onChange={(e) => {
+                             const value = e.target.value
+                             // 빈 값이거나 유효한 날짜인지 확인
+                             if (value === '' || /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+                               setEditingData({ ...editingData!, delivery_datetime: value })
+                             }
+                           }}
                            className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                            required
                          />
@@ -362,7 +425,13 @@ const OrderDetail: React.FC = () => {
                          <input
                            type="datetime-local"
                            value={editingData?.ship_out_datetime ? editingData.ship_out_datetime.slice(0, 16) : ''}
-                           onChange={(e) => setEditingData({ ...editingData!, ship_out_datetime: e.target.value })}
+                           onChange={(e) => {
+                             const value = e.target.value
+                             // 빈 값이거나 유효한 datetime-local 형식인지 확인
+                             if (value === '' || /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)) {
+                               setEditingData({ ...editingData!, ship_out_datetime: value })
+                             }
+                           }}
                            className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                          />
                        </div>

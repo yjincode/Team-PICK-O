@@ -3,8 +3,8 @@ from .views import (
     OrderUploadView, OrderListView, OrderDetailView, 
     OrderStatusUpdateView, OrderCancelView,
     TranscriptionStatusView, TranscriptionToOrderView,
-    CancelOrderView, update_order_view, ship_out_order_view
-)
+    CancelOrderView, UpdateOrderView, ShipOutOrderView
+)   
 
 urlpatterns = [
     path('upload/', OrderUploadView.as_view(), name='order-upload'),
