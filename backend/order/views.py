@@ -970,112 +970,198 @@ class CancelOrderView(View):
             return JsonResponse({'error': f'주문 취소 처리 중 오류 발생: {str(e)}'}, status=500)
 
 
-@api_view(['POST'])
-def ship_out_order_view(request, order_id):
+@method_decorator(csrf_exempt, name='dispatch')
+class ShipOutOrderView(View):
     """
-    주문 출고 처리 API
+    주문 출고 처리 뷰
     주문 상태를 'ready'에서 'delivered'로 변경하고 ship_out_datetime 설정
     """
-    try:
-        # 사용자 인증 확인
-        if not hasattr(request, 'user_id') or not request.user_id:
-            return Response({
-                'error': '사용자 인증이 필요합니다.'
-            }, status=status.HTTP_401_UNAUTHORIZED)
-        
-        order = Order.objects.get(id=order_id)
-        
-        # 사용자 권한 확인 - 자신이 생성한 주문만 출고 가능 (임시 주석처리)
-        # if order.user_id != request.user_id:
-        #     return Response({
-        #         'error': '해당 주문을 출고할 권한이 없습니다.'
-        #     }, status=status.HTTP_403_FORBIDDEN)
-        
-        # 출고 가능 여부 확인
-        if order.order_status != 'ready':
-            return Response({
-                'error': '출고 준비된 주문만 출고할 수 있습니다.'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
+    
+    def post(self, request, order_id):
+        try:
+            # 사용자 인증 확인
+            if not hasattr(request, 'user_id') or not request.user_id:
+                return JsonResponse({
+                    'error': '사용자 인증이 필요합니다.'
+                }, status=401)
+            
+            order = Order.objects.get(id=order_id)
+            
+            # 사용자 권한 확인 - 자신이 생성한 주문만 출고 가능 (임시 주석처리)
+            # if order.user_id != request.user_id:
+            #     return JsonResponse({
+            #         'error': '해당 주문을 출고할 권한이 없습니다.'
+            #     }, status=403)
+            
+            # 출고 가능 여부 확인
+            if order.order_status != 'ready':
+                return JsonResponse({
+                    'error': '출고 준비된 주문만 출고할 수 있습니다.'
+                }, status=400)
+            
+            # 출고 처리
+            order.order_status = 'delivered'
+            order.ship_out_datetime = timezone.now()
+            order.save()
+            
+            return JsonResponse({
+                'message': '주문이 출고되었습니다',
+                'order_id': order.id,
+                'order_status': 'delivered',
+                'ship_out_datetime': order.ship_out_datetime.isoformat()
+            })
+            
+        except Order.DoesNotExist:
+            return JsonResponse({
+                'error': '주문을 찾을 수 없습니다.'
+            }, status=404)
+        except Exception as e:
+            return JsonResponse({
+                'error': '출고 처리 중 오류 발생',
+                'details': str(e)
+            }, status=500)
 
-        
-        # 출고 처리
-        order.order_status = 'delivered'
-        order.ship_out_datetime = timezone.now()
-        order.save()
-        
-        return Response({
-            'message': '주문이 출고되었습니다',
-            'order_id': order.id,
-            'order_status': 'delivered',
-            'ship_out_datetime': order.ship_out_datetime.isoformat()
-        })
-        
-    except Order.DoesNotExist:
-        return Response({
-            'error': '주문을 찾을 수 없습니다.'
-        }, status=status.HTTP_404_NOT_FOUND)
-    except Exception as e:
-        return Response({
-            'error': '출고 처리 중 오류 발생',
-            'details': str(e)
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-
-@api_view(['PUT', 'PATCH'])
-def update_order_view(request, order_id):
+@method_decorator(csrf_exempt, name='dispatch')
+class UpdateOrderView(View):
     """
-    주문 수정 API
+    주문 수정 뷰
     PUT: 전체 수정, PATCH: 부분 수정
     """
-    try:
-        # 사용자 인증 확인
-        if not hasattr(request, 'user_id') or not request.user_id:
-            return Response({
-                'error': '사용자 인증이 필요합니다.'
-            }, status=status.HTTP_401_UNAUTHORIZED)
-        
-        order = Order.objects.get(id=order_id)
-        
-        # 사용자 권한 확인 - 자신이 생성한 주문만 수정 가능 (임시 주석처리)
-        # if order.user_id != request.user_id:
-        #     return Response({
-        #         'error': '해당 주문을 수정할 권한이 없습니다.'
-        #     }, status=status.HTTP_403_FORBIDDEN)
-        
-        # 주문 수정 가능 여부 확인
-        if order.order_status == 'cancelled':
-            return Response({
-                'error': '취소된 주문은 수정할 수 없습니다.'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-
-        
-        # Serializer로 수정 처리
-        serializer = OrderUpdateSerializer(order, data=request.data, partial=request.method == 'PATCH')
-        
-        if serializer.is_valid():
-            updated_order = serializer.save()
+    
+    def put(self, request, order_id):
+        return self._update_order(request, order_id, partial=False)
+    
+    def patch(self, request, order_id):
+        return self._update_order(request, order_id, partial=True)
+    
+    def _update_order(self, request, order_id, partial=False):
+        try:
+            # 사용자 인증 확인
+            if not hasattr(request, 'user_id') or not request.user_id:
+                return JsonResponse({
+                    'error': '사용자 인증이 필요합니다.'
+                }, status=401)
             
-            return Response({
+            order = Order.objects.get(id=order_id)
+            
+            # 사용자 권한 확인 - 자신이 생성한 주문만 수정 가능 (임시 주문처리)
+            # if order.user_id != request.user_id:
+            #     return JsonResponse({
+            #         'error': '해당 주문을 수정할 권한이 없습니다.'
+            #     }, status=403)
+            
+            # 주문 수정 가능 여부 확인
+            if order.order_status == 'cancelled':
+                return JsonResponse({
+                    'error': '취소된 주문은 수정할 수 없습니다.'
+                }, status=400)
+            
+            # 결제 완료된 주문은 수정 불가
+            if order.payment and order.payment.payment_status == 'paid':
+                return JsonResponse({
+                    'error': '결제가 완료된 주문은 수정할 수 없습니다.'
+                }, status=400)
+            
+            # 요청 데이터 파싱
+            import json
+            data = json.loads(request.body)
+            
+            # 기본 주문 정보 업데이트
+            if 'delivery_datetime' in data:
+                # ISO 문자열을 파싱하여 한국 시간대로 설정
+                from django.utils import timezone
+                import datetime
+                
+                try:
+                    # ISO 문자열을 파싱
+                    dt = datetime.datetime.fromisoformat(data['delivery_datetime'].replace('Z', '+00:00'))
+                    # UTC 시간을 한국 시간대로 변환
+                    korean_tz = timezone.pytz.timezone('Asia/Seoul')
+                    korean_dt = dt.astimezone(korean_tz)
+                    # 날짜만 추출 (시간은 00:00:00으로 설정)
+                    order.delivery_datetime = korean_dt.replace(hour=0, minute=0, second=0, microsecond=0)
+                except Exception as e:
+                    print(f"⚠️ 날짜 파싱 오류: {e}")
+                    # 파싱 실패 시 원본 데이터 사용
+                    order.delivery_datetime = data['delivery_datetime']
+                    
+            if 'ship_out_datetime' in data and data['ship_out_datetime']:
+                # 출고일도 한국 시간대로 설정
+                from django.utils import timezone
+                import datetime
+                
+                try:
+                    dt = datetime.datetime.fromisoformat(data['ship_out_datetime'].replace('Z', '+00:00'))
+                    korean_tz = timezone.pytz.timezone('Asia/Seoul')
+                    order.ship_out_datetime = dt.astimezone(korean_tz)
+                except Exception as e:
+                    print(f"⚠️ 출고일 파싱 오류: {e}")
+                    order.ship_out_datetime = data['ship_out_datetime']
+                    
+            if 'memo' in data:
+                order.memo = data['memo']
+            if 'is_urgent' in data:
+                order.is_urgent = data['is_urgent']
+            
+            # 주문 항목 수정
+            if 'order_items' in data and not partial:
+                # 기존 주문 항목 삭제
+                order.items.all().delete()
+                
+                # 새로운 주문 항목 생성
+                total_price = 0
+                for item_data in data['order_items']:
+                    from fish_registry.models import FishType
+                    
+                    # fish_type_id가 없으면 기본값 사용
+                    fish_type_id = item_data.get('fish_type_id', 1)
+                    try:
+                        fish_type = FishType.objects.get(id=fish_type_id)
+                    except FishType.DoesNotExist:
+                        # 기본 어종이 없으면 첫 번째 어종 사용
+                        fish_type = FishType.objects.first()
+                        if not fish_type:
+                            return JsonResponse({
+                                'error': '등록된 어종이 없습니다.'
+                            }, status=400)
+                    
+                    # 타입 변환 및 검증
+                    quantity = int(float(item_data['quantity']))
+                    unit_price = int(float(item_data['unit_price']))
+                    
+                    from .models import OrderItem
+                    order_item = OrderItem.objects.create(
+                        order=order,
+                        fish_type=fish_type,
+                        quantity=quantity,
+                        unit_price=unit_price,
+                        unit=item_data['unit'],
+                        remarks=item_data.get('remarks', '')
+                    )
+                    total_price += quantity * unit_price
+                
+                order.total_price = total_price
+            
+            order.save()
+            
+            return JsonResponse({
                 'message': '주문이 성공적으로 수정되었습니다',
-                'order_id': updated_order.id,
-                'total_price': updated_order.total_price,
-                'order_status': updated_order.order_status,
-                'business_name': updated_order.business.business_name if updated_order.business else None
+                'order_id': order.id,
+                'total_price': order.total_price,
+                'order_status': order.order_status,
+                'business_name': order.business.business_name if order.business else None
             })
-        else:
-            return Response({
-                'error': '주문 수정 데이터가 올바르지 않습니다',
-                'details': serializer.errors
-            }, status=status.HTTP_400_BAD_REQUEST)
             
-    except Order.DoesNotExist:
-        return Response({
-            'error': '주문을 찾을 수 없습니다.'
-        }, status=status.HTTP_404_NOT_FOUND)
-    except Exception as e:
-        return Response({
-            'error': '주문 수정 처리 중 오류 발생',
-            'details': str(e)
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        except Order.DoesNotExist:
+            return JsonResponse({
+                'error': '주문을 찾을 수 없습니다.'
+            }, status=404)
+        except Exception as e:
+            import traceback
+            print(f"❌ 주문 수정 오류: {e}")
+            print(f"❌ 상세 오류: {traceback.format_exc()}")
+            return JsonResponse({
+                'error': '주문 수정 처리 중 오류 발생',
+                'details': str(e)
+            }, status=500)

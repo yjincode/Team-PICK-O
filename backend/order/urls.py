@@ -18,10 +18,10 @@ urlpatterns = [
     path('cancel/', CancelOrderView.as_view(), name='order-cancel-api'),
     
     # 주문 수정 API
-    path('<int:order_id>/update/', update_order_view, name='order-update'),
+    path('<int:order_id>/update/', UpdateOrderView.as_view(), name='order-update'),
     
     # 주문 출고 API
-    path('<int:order_id>/ship-out/', ship_out_order_view, name='order-ship-out'),
+    path('<int:order_id>/ship-out/', ShipOutOrderView.as_view(), name='order-ship-out'),
     
     # STT 관련 API
     path('transcription/<uuid:transcription_id>/status/', TranscriptionStatusView.as_view(), name='transcription-status'),
