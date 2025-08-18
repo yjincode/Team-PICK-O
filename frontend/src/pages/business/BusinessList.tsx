@@ -15,6 +15,8 @@ import toast, { Toaster } from 'react-hot-toast';
 import { useKakaoPostcode } from "../../hooks/useKakaoPostcode";
 import { KakaoAddress } from "../../types/kakao";
 import { formatPhoneNumber } from "../../utils/phoneFormatter";
+import { formatCurrency } from "@/lib/utils";    
+
 import {
   Pagination,
   PaginationContent,
@@ -24,7 +26,7 @@ import {
   PaginationNext,
   PaginationEllipsis,
 } from "../../components/ui/pagination";
-
+import { OrderListItem } from "@/types"
 
 // 거래처 데이터 타입 정의
 interface Business {
@@ -39,6 +41,19 @@ interface Business {
   last_order_date?: string;
 }
 
+interface Order {
+  id: number;
+  business_id: number;
+  total_price: number;
+  order_datetime: string;
+}
+
+const ordersRes = await orderApi.getAll();
+const ordersData: OrderListItem[] = Array.isArray(ordersRes)
+  ? ordersRes
+  : ordersRes.data || [];
+
+
 const BusinessList: React.FC = () => {
   const [businesses, setBusinesses] = useState<Business[]>([]);
   const [isLoadingBusinesses, setIsLoadingBusinesses] = useState<boolean>(false);
@@ -46,8 +61,12 @@ const BusinessList: React.FC = () => {
   const [page, setPage] = useState(1);
   const [pageSize] = useState(10); // 고정값, 필요시 변경 가능
   const [count, setCount] = useState(0); // 전체 개수
+  const [orders, setOrders] = useState<Order[]>([]);
 
   const { user, isAuthenticated, loading } = useAuth();
+
+  const [showUnpaid, setShowUnpaid] = useState(false);
+  const [selectedBusiness, setSelectedBusiness] = useState<Business | null>(null);
 
   // 거래처 목록을 가져오는 함수 (재사용 가능)
   const fetchBusinesses = async (pageNum = page) => {
@@ -94,16 +113,15 @@ const BusinessList: React.FC = () => {
     }
   };
 
-
   // 주문 및 결제 불러와서 미수금 계산
   const fetchUnpaidStats = async () => {
     try {
       // 주문 목록 (기존 order API 사용)
       const ordersRes = await orderApi.getAll();
-      const orders = Array.isArray(ordersRes) ? ordersRes : ordersRes.data || [];
+      const ordersData = Array.isArray(ordersRes) ? ordersRes : ordersRes.data || [];
       const sumByBusiness: Record<number, { orders: number }> = {};
 
-      for (const o of orders) {
+      for (const o of ordersData) {
         const businessId = o.business_id;
         if (!businessId) continue;
         if (!sumByBusiness[businessId]) sumByBusiness[businessId] = { orders: 0 };
@@ -122,6 +140,35 @@ const BusinessList: React.FC = () => {
     }
   };
 
+  const getOldestOrderDate = (businessId: number, orders: Order[]): string | null => {
+    const businessOrders = orders
+      .filter(order => order.business_id === businessId)
+      .sort((a, b) => new Date(a.order_datetime).getTime() - new Date(b.order_datetime).getTime());
+  
+    return businessOrders.length > 0 ? businessOrders[0].order_datetime : null;
+  };
+
+  const calculateOverdueDays = (orderDate: string | null) => {
+    if (!orderDate) return 0;
+    const orderTime = new Date(orderDate).getTime();
+    const today = new Date().getTime();
+    const diffDays = Math.floor((today - orderTime) / (1000 * 60 * 60 * 24));
+    return diffDays > 0 ? diffDays : 0;
+  };
+
+  // 연체일수 계산 함수 추가
+  const calculateDaysSinceOrder = (orderDate?: string | Date): number => {
+    if (!orderDate) return 0;
+
+    const order = new Date(orderDate);
+    if (isNaN(order.getTime())) return 0;
+
+    const today = new Date();
+    const diffTime = today.getTime() - order.getTime();
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+    return diffDays > 0 ? diffDays : 0;
+  };
 
 
   // AuthContext 로딩이 완료되면 API 호출 (인증 여부와 관계없이)
@@ -148,6 +195,7 @@ const BusinessList: React.FC = () => {
     console.log('🚀 거래처 목록 로드 (인증 상태와 관계없이)');
     setHasInitialized(true);
     fetchBusinesses(1); // 첫 페이지 로드
+    fetchUnpaidStats();
   }, [loading, hasInitialized]);
 
   // 페이지 변경 시 목록 새로고침
@@ -324,7 +372,7 @@ const BusinessList: React.FC = () => {
   const formatCurrency = (amount: number): string => `₩${amount.toLocaleString()}`
 
   const totalPages = Math.max(1, Math.ceil(count / pageSize));
-
+  
   return (
     <div className="flex-1 space-y-4 sm:space-y-6 p-4 sm:p-6 bg-light-blue-gray min-h-screen">
        {/* 모달 */}
@@ -524,6 +572,22 @@ const BusinessList: React.FC = () => {
         </CardContent>
       </Card>
 
+
+  {/* const calculateDaysSinceOrder = (orderDate?: string | Date): number => {
+    if (!orderDate) return 0;
+
+    const order = new Date(orderDate);
+    if (isNaN(order.getTime())) return 0;
+
+    const today = new Date();
+    const diffTime = today.getTime() - order.getTime();
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+    return diffDays > 0 ? diffDays : 0;
+  }; */}
+
+
+
       {/* 거래처 목록 */}
       <div className="space-y-4">
         {isLoadingBusinesses ? (
@@ -534,7 +598,11 @@ const BusinessList: React.FC = () => {
         ) : (
           <>
             {businesses && businesses.length > 0 ? (
-              businesses.map((business) => (
+              businesses.map((business) => {
+                const oldestOrderDate = getOldestOrderDate(business.id, orders);
+                const overdueDays = calculateOverdueDays(oldestOrderDate);
+                
+               return (
                 <Card key={business.id} className="shadow-sm hover:shadow-md transition-shadow">
                   <CardContent className="p-4 sm:p-6">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -547,6 +615,12 @@ const BusinessList: React.FC = () => {
                         {business.address && (
                           <p className="text-sm text-gray-600">{business.address}</p>
                         )}
+                            {/* 연체일수 표시 추가 */}
+                              {overdueDays > 0 && (
+                            <p className="text-sm text-red-600 mt-1">
+                              연체일수: {overdueDays}일
+                            </p>
+                          )}
                       </div>
                       <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-4 items-end sm:items-center">
                         <div className="text-right">
@@ -556,6 +630,12 @@ const BusinessList: React.FC = () => {
                           </p>
                         </div>
                         <div className="flex space-x-2">
+                          <Button variant="outline" size="sm" onClick={() => {
+                              setSelectedBusiness(business);
+                              setShowUnpaid(true);
+                          }}>
+                            <Eye className="h-4 w-4 mr-2" />상세
+                          </Button>
                           <Button variant="outline" size="sm" onClick={() => handleEditClick(business)}>
                             <Edit className="h-4 w-4 mr-2" />수정
                           </Button>
@@ -564,7 +644,7 @@ const BusinessList: React.FC = () => {
                     </div>
                   </CardContent>
                 </Card>
-              ))
+              );})
             ) : (
               <div className="text-center py-8 text-gray-500">
                 거래처가 없습니다.
@@ -631,6 +711,63 @@ const BusinessList: React.FC = () => {
         )}
       </div>
       
+
+
+ {/* 거래처 상세 모달 */}
+ {showUnpaid && selectedBusiness && (
+  <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
+    <div className="bg-white rounded-lg p-6 w-full max-w-md">
+      {/* 헤더 */}
+      <div className="px-4 py-3 bg-gray-100 border-b border-gray-200">
+      <h2 className="text-lg font-bold text-gray-800">거래처 상세</h2>
+      </div>
+
+     {/* 본문 */}
+     <div className="px-6 py-5 space-y-3">
+        <div className="flex justify-between">
+          <span className="text-gray-600 font-medium">상호</span>
+          <span className="text-gray-900">{selectedBusiness.business_name}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-gray-600 font-medium">미수금</span>
+          <span className="text-red-600 font-semibold">
+            {formatCurrency(selectedBusiness.outstanding_balance ?? 0)}
+          </span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-gray-600 font-medium">연체일수</span>
+          <span className="text-gray-900">
+            {calculateDaysSinceOrder(selectedBusiness.last_order_date)}일
+          </span>
+        </div>
+      </div>
+
+  
+      {/* 푸터 버튼 */}
+      <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex justify-end space-x-2">
+        <button
+          onClick={() => {
+            const testDate = "2025-08-10T00:00:00Z"; // 임의의 주문 날짜
+            const days = calculateDaysSinceOrder(testDate);
+            console.log("연체일수 테스트:", days);
+            alert(`테스트: ${days}일`);
+          }}
+          className="px-4 py-2 bg-blue-500 text-white rounded-lg shadow-sm hover:bg-blue-600 transition"
+        >
+          연체일수 테스트
+        </button>
+        <button
+          onClick={() => setShowUnpaid(false)}
+          className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg shadow-sm hover:bg-gray-300 transition"
+        >
+          닫기
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+
+
       {/* 토스트 메시지 컨테이너 */}
       <Toaster 
         position="bottom-right"
@@ -661,7 +798,7 @@ const BusinessList: React.FC = () => {
         }}
       />
     </div>
-  )
-}
+  );
+};
 
 export default BusinessList; 
