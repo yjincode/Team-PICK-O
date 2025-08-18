@@ -156,10 +156,10 @@ def get_database_config():
     # 1차: 팀 공동 로컬서버 시도
     team_server_config = {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'teamPicko',
-        'USER': 'teamPicko',
-        'PASSWORD': '12341234',
-        'HOST': '192.168.0.137',
+        'NAME': os.getenv('DB_NAME', 'teamPicko'),
+        'USER': os.getenv('DB_USER', 'teamPicko'),
+        'PASSWORD': os.getenv('DB_PASSWORD'),
+        'HOST': os.getenv('DB_HOST', 'database'),
         'PORT': '5432',
         'OPTIONS': {
             'connect_timeout': 5,

@@ -259,13 +259,22 @@ class OrderDetailSerializer(serializers.ModelSerializer):
     business_address = serializers.SerializerMethodField()
     items = OrderDetailItemSerializer(many=True, read_only=True)
     
+    # 결제 정보 필드 추가
+    payment_method = serializers.SerializerMethodField()
+    payment_status = serializers.SerializerMethodField()
+    payment_amount = serializers.SerializerMethodField()
+    paid_at = serializers.SerializerMethodField()
+    receipt_url = serializers.SerializerMethodField()
+    
     class Meta:
         model = Order
         fields = [
             'id', 'business_name', 'business_phone', 'business_address',
             'total_price', 'order_datetime', 'delivery_datetime', 'ship_out_datetime',
             'order_status', 'cancel_reason', 'is_urgent', 'source_type', 
-            'transcribed_text', 'memo', 'items'
+            'transcribed_text', 'memo', 'items',
+            # 결제 정보 필드 추가
+            'payment_method', 'payment_status', 'payment_amount', 'paid_at', 'receipt_url'
         ]
     
     def get_business_name(self, obj):
@@ -291,6 +300,51 @@ class OrderDetailSerializer(serializers.ModelSerializer):
             return business.address
         except Business.DoesNotExist:
             return '주소 없음'
+    
+    def get_payment_method(self, obj):
+        """결제 수단 반환"""
+        try:
+            if obj.payment:
+                return obj.payment.method
+            return None
+        except:
+            return None
+    
+    def get_payment_status(self, obj):
+        """결제 상태 반환"""
+        try:
+            if obj.payment:
+                return obj.payment.payment_status
+            return None
+        except:
+            return None
+    
+    def get_payment_amount(self, obj):
+        """결제 금액 반환"""
+        try:
+            if obj.payment:
+                return obj.payment.amount
+            return None
+        except:
+            return None
+    
+    def get_paid_at(self, obj):
+        """결제 완료 시각 반환"""
+        try:
+            if obj.payment and obj.payment.paid_at:
+                return obj.payment.paid_at
+            return None
+        except:
+            return None
+    
+    def get_receipt_url(self, obj):
+        """영수증 URL 반환"""
+        try:
+            if obj.payment and obj.payment.receipt_url:
+                return obj.payment.receipt_url
+            return None
+        except:
+            return None
 
 
 class OrderStatusUpdateSerializer(serializers.ModelSerializer):
@@ -322,7 +376,7 @@ class OrderUpdateSerializer(serializers.ModelSerializer):
         order = self.instance
         
         # 결제 완료된 주문은 수정 불가
-        if order.payment_set.filter(payment_status='paid').exists():
+        if order.payment and order.payment.payment_status == 'paid':
             raise serializers.ValidationError("결제가 완료된 주문은 수정할 수 없습니다.")
         
         # 취소된 주문은 수정 불가

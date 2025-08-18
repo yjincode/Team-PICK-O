@@ -372,7 +372,7 @@ export const orderApi = {
 
   // 주문 정보 수정
   update: async (id: number, order: Partial<Order>): Promise<ApiResponse<Order>> => {
-    const response = await api.put(`/orders/${id}/`, order)
+    const response = await api.put(`/orders/${id}/update/`, order)
     return response.data
   },
 
