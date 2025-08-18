@@ -316,7 +316,7 @@ export async function findBusinessFromVoice(voiceText: string): Promise<Business
     
     // 실제 거래처 목록에서 검색
     const response = await businessApi.getAll({ page: 1, page_size: 100 })
-    const businesses = response.data?.results || []
+    const businesses = response.results || []
     
     // 가장 유사한 거래처 찾기
     for (const extractedName of extractedNames) {

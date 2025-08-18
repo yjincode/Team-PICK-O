@@ -15,6 +15,8 @@ import {
   ARSummary,
   ApiResponse,
   PaginatedResponse,
+  DjangoApiResponse,
+  OrderListResponse,
   RefundRequest,
   RefundResponse,
   CancelOrderRequest,
@@ -204,8 +206,8 @@ api.interceptors.response.use(
 
 // 거래처 관리 API
 export const businessApi = {
-  // 모든 거래처 조회 (페이지네이션 지원)
-  getAll: async (params?: { page?: number; page_size?: number }): Promise<ApiResponse<PaginatedResponse<Business>>> => {
+  // 모든 거래처 조회 (페이지네이션 지원) - 실제 Django 응답 구조
+  getAll: async (params?: { page?: number; page_size?: number }): Promise<DjangoApiResponse<Business>> => {
     const response = await api.get('/business/customers/', { params });
     return response.data;
   },
@@ -362,7 +364,7 @@ export const orderApi = {
     payment_status?: string;
     date?: string;
     business_id?: string;
-  }): Promise<ApiResponse<OrderListItem[]>> => {
+  }): Promise<OrderListResponse> => {
     const response = await api.get('/orders/', { params })
     return response.data
   },

@@ -78,23 +78,11 @@ const OrderList: React.FC = () => {
         
         console.log('🏢 거래처 API 응답:', response)
         
-        // Django 페이지네이션 응답 구조에 맞게 파싱
+        // Django 페이지네이션 응답 구조 처리
         if (response.results && Array.isArray(response.results)) {
           // Django 페이지네이션 응답: {count, next, previous, results}
           console.log('✅ 거래처 데이터 (Django 페이지네이션):', response.results.length, '개')
           setBusinesses(response.results)
-        } else if (response.data?.results && Array.isArray(response.data.results)) {
-          // 중첩된 Django 페이지네이션 응답
-          console.log('✅ 거래처 데이터 (중첩 Django 페이지네이션):', response.data.results.length, '개')
-          setBusinesses(response.data.results)
-        } else if (response.data?.data && Array.isArray(response.data.data)) {
-          // API 래퍼된 응답
-          console.log('✅ 거래처 데이터 (API 래퍼):', response.data.data.length, '개')
-          setBusinesses(response.data.data)
-        } else if (response.data && Array.isArray(response.data)) {
-          // 직접 배열 응답
-          console.log('✅ 거래처 데이터 (배열):', response.data.length, '개')
-          setBusinesses(response.data)
         } else {
           console.log('❌ 예상하지 못한 거래처 응답 형식:', response)
           setBusinesses([])
@@ -150,7 +138,7 @@ const OrderList: React.FC = () => {
           setTotalPages(response.pagination.total_pages)
         } else {
           // 기존 형식 호환성
-          const ordersData = response.data || response || []
+          const ordersData = response.data || []
           setOrders(Array.isArray(ordersData) ? ordersData : [])
         }
       } catch (error) {
@@ -218,7 +206,7 @@ const OrderList: React.FC = () => {
           setTotalCount(response.pagination.total_count)
           setTotalPages(response.pagination.total_pages)
         } else {
-          const ordersData = response.data || response || []
+          const ordersData = response.data || []
           setOrders(Array.isArray(ordersData) ? ordersData : [])
         }
         setShowOrderForm(false)
@@ -304,7 +292,7 @@ const OrderList: React.FC = () => {
         setTotalCount(response.pagination.total_count)
         setTotalPages(response.pagination.total_pages)
       } else {
-        const ordersData = response.data || response || []
+        const ordersData = response.data || []
         setOrders(Array.isArray(ordersData) ? ordersData : [])
       }
       
@@ -359,7 +347,7 @@ const OrderList: React.FC = () => {
         setTotalCount(response.pagination.total_count)
         setTotalPages(response.pagination.total_pages)
       } else {
-        const ordersData = response.data || response || []
+        const ordersData = response.data || []
         setOrders(Array.isArray(ordersData) ? ordersData : [])
       }
       
