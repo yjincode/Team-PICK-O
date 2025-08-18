@@ -536,15 +536,16 @@ const OrderList: React.FC = () => {
                     </TableRow>
                   ) : (
                     currentOrders.map((order, index) => (
-                      <TableRow key={order.id} className={`hover:bg-gray-50 transition-colors ${order.has_stock_issues ? 'border-l-4 border-l-red-500 bg-red-50/30' : ''}`}>
+                      <TableRow 
+                        key={order.id} 
+                        className={`hover:bg-gray-50 transition-colors cursor-pointer ${order.has_stock_issues ? 'border-l-4 border-l-red-500 bg-red-50/30' : ''}`}
+                        onClick={() => handleViewDetail(order.id)}
+                      >
                         <TableCell className="font-medium text-gray-900">
                           {totalCount - startIndex - index}
                         </TableCell>
                         <TableCell className="font-medium">
-                          <div 
-                            className="font-semibold cursor-pointer text-blue-600 hover:text-blue-800 hover:underline"
-                            onClick={() => handleViewDetail(order.id)}
-                          >
+                          <div className="font-semibold text-gray-900">
                             {order.business?.business_name || '거래처명 없음'}
                           </div>
                         </TableCell>
@@ -591,22 +592,15 @@ const OrderList: React.FC = () => {
                         </TableCell>
                         <TableCell className="text-center">
                           <div className="flex items-center justify-center gap-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleViewDetail(order.id)}
-                              className="border-blue-600 text-blue-600 hover:bg-blue-50"
-                            >
-                              <Eye className="h-4 w-4 mr-1" />
-                              상세
-                            </Button>
-
                             {/* 결제 버튼 - 미결제 상태일 때만 표시 */}
                             {(!order.payment || order.payment.payment_status !== 'paid') && (
                               <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => handlePayment(order.id)}
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handlePayment(order.id)
+                                }}
                                 className="border-green-600 text-green-600 hover:bg-green-50"
                               >
                                 <CreditCard className="h-4 w-4 mr-1" />
@@ -619,7 +613,10 @@ const OrderList: React.FC = () => {
                               <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => handleRefund(order.id)}
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleRefund(order.id)
+                                }}
                                 className="border-orange-600 text-orange-600 hover:bg-orange-50"
                               >
                                 <RotateCcw className="h-4 w-4 mr-1" />
@@ -633,7 +630,10 @@ const OrderList: React.FC = () => {
                               <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => handleCancel(order.id)}
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleCancel(order.id)
+                                }}
                                 className="border-red-600 text-red-600 hover:bg-red-50"
                               >
                                 <Ban className="h-4 w-4 mr-1" />

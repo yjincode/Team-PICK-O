@@ -67,6 +67,17 @@ class Order(models.Model):
             except Business.DoesNotExist:
                 self._business_cache = None
         return self._business_cache
+    
+    @property
+    def payment(self):
+        """결제 정보 반환 (가장 최근 결제)"""
+        if not hasattr(self, '_payment_cache'):
+            from payment.models import Payment
+            try:
+                self._payment_cache = Payment.objects.filter(order=self).order_by('-created_at').first()
+            except:
+                self._payment_cache = None
+        return self._payment_cache
 
     class Meta:
         db_table = 'orders'

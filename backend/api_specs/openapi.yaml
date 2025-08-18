@@ -1,0 +1,1757 @@
+openapi: 3.0.3
+info:
+  title: Team PICK-O API
+  description: |
+    수산업 주문/재고/어종 관리 시스템 API 문서
+    
+    ## 인증 방식
+    Bearer Token (JWT) 또는 Firebase ID Token을 사용합니다.
+    
+    ## 상태 코드
+    - **200**: 성공
+    - **201**: 생성 성공  
+    - **400**: 잘못된 요청
+    - **401**: 인증 실패
+    - **403**: 권한 없음
+    - **404**: 리소스 없음
+    - **500**: 서버 오류
+    
+  version: 1.0.0
+  contact:
+    name: Team PICK-O
+servers:
+  - url: http://localhost:8000/api
+    description: 개발 서버
+  - url: https://api.teampicko.com/api
+    description: 운영 서버
+
+security:
+  - BearerAuth: []
+  - FirebaseAuth: []
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    FirebaseAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: Firebase ID Token
+      
+  schemas:
+    # 공통 응답 스키마
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: 오류 메시지
+        detail:
+          type: string
+          description: 상세 오류 내용
+        code:
+          type: string
+          description: 오류 코드
+      example:
+        error: "잘못된 요청입니다"
+        detail: "필수 필드가 누락되었습니다"
+        code: "VALIDATION_ERROR"
+    
+    # 페이지네이션 응답
+    PaginatedResponse:
+      type: object
+      properties:
+        count:
+          type: integer
+          description: 전체 항목 수
+        next:
+          type: string
+          nullable: true
+          description: 다음 페이지 URL
+        previous:
+          type: string
+          nullable: true
+          description: 이전 페이지 URL
+        results:
+          type: array
+          items: {}
+          description: 실제 데이터 배열
+    
+    # 주문 관련 스키마
+    OrderItem:
+      type: object
+      properties:
+        fish_type_id:
+          type: integer
+          description: 어종 ID
+        quantity:
+          type: number
+          format: float
+          description: 주문 수량 (소수점 허용)
+        unit_price:
+          type: number
+          format: decimal
+          nullable: true
+          description: 단가
+        unit:
+          type: string
+          nullable: true
+          description: 단위 (kg, box 등)
+        remarks:
+          type: string
+          nullable: true
+          description: 요청사항
+      required:
+        - fish_type_id
+        - quantity
+      example:
+        fish_type_id: 1
+        quantity: 5.5
+        unit_price: 15000
+        unit: "kg"
+        remarks: "신선한 것으로 부탁드립니다"
+    
+    OrderCreate:
+      type: object
+      properties:
+        business_id:
+          type: integer
+          description: 거래처 ID
+        total_price:
+          type: integer
+          description: 총 주문 금액
+        delivery_datetime:
+          type: string
+          format: date-time
+          nullable: true
+          description: 납기일
+        source_type:
+          type: string
+          enum: [manual, voice, text]
+          description: 주문 방식
+        memo:
+          type: string
+          nullable: true
+          description: 주문 메모
+        is_urgent:
+          type: boolean
+          default: false
+          description: 긴급 주문 여부
+        order_items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderItem'
+          description: 주문 항목 목록
+      required:
+        - business_id
+        - total_price
+        - source_type
+        - order_items
+      example:
+        business_id: 1
+        total_price: 82500
+        delivery_datetime: "2024-01-15T10:00:00Z"
+        source_type: "manual"
+        memo: "오전 배송 부탁드립니다"
+        is_urgent: false
+        order_items:
+          - fish_type_id: 1
+            quantity: 5.5
+            unit_price: 15000
+            unit: "kg"
+    
+    OrderListItem:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: 주문 ID
+        business:
+          type: object
+          properties:
+            id:
+              type: integer
+            business_name:
+              type: string
+            phone_number:
+              type: string
+          description: 거래처 정보
+        total_price:
+          type: integer
+          description: 총 주문 금액
+        order_datetime:
+          type: string
+          format: date-time
+          description: 주문 등록 일시
+        delivery_datetime:
+          type: string
+          format: date-time
+          nullable: true
+          description: 납기일
+        order_status:
+          type: string
+          enum: [placed, ready, delivered, cancelled]
+          description: 주문 상태
+        is_urgent:
+          type: boolean
+          description: 긴급 주문 여부
+        items_summary:
+          type: string
+          description: 주문 항목 요약
+      example:
+        id: 123
+        business:
+          id: 1
+          business_name: "해양수산"
+          phone_number: "010-1234-5678"
+        total_price: 82500
+        order_datetime: "2024-01-10T09:00:00Z"
+        delivery_datetime: "2024-01-15T10:00:00Z"
+        order_status: "placed"
+        is_urgent: false
+        items_summary: "광어 5.5kg, 우럭 3.0kg"
+    
+    OrderDetail:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: 주문 ID
+        business_name:
+          type: string
+          description: 거래처명
+        business_phone:
+          type: string
+          description: 거래처 전화번호
+        business_address:
+          type: string
+          description: 거래처 주소
+        total_price:
+          type: integer
+          description: 총 주문 금액
+        order_datetime:
+          type: string
+          format: date-time
+          description: 주문 등록 일시
+        delivery_datetime:
+          type: string
+          format: date-time
+          nullable: true
+          description: 납기일
+        ship_out_datetime:
+          type: string
+          format: date-time
+          nullable: true
+          description: 출고일
+        order_status:
+          type: string
+          enum: [placed, ready, delivered, cancelled]
+          description: 주문 상태
+        cancel_reason:
+          type: string
+          nullable: true
+          description: 취소 사유
+        is_urgent:
+          type: boolean
+          description: 긴급 주문 여부
+        source_type:
+          type: string
+          enum: [manual, voice, text]
+          description: 주문 방식
+        transcribed_text:
+          type: string
+          nullable: true
+          description: 음성/텍스트에서 파싱된 내용
+        memo:
+          type: string
+          nullable: true
+          description: 주문 메모
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              fish_type_name:
+                type: string
+                description: 어종명
+              item_name_snapshot:
+                type: string
+                nullable: true
+                description: 주문 당시 품목명 스냅샷
+              quantity:
+                type: number
+                format: float
+                description: 주문 수량
+              unit_price:
+                type: number
+                format: decimal
+                nullable: true
+                description: 현재 단가
+              unit_price_snapshot:
+                type: number
+                format: decimal
+                nullable: true
+                description: 주문 당시 단가
+              unit:
+                type: string
+                nullable: true
+                description: 단위
+              remarks:
+                type: string
+                nullable: true
+                description: 요청사항
+          description: 주문 항목 상세 목록
+    
+    # 결제 관련 스키마
+    PaymentCreate:
+      type: object
+      properties:
+        order_id:
+          type: integer
+          description: 주문 ID
+        amount:
+          type: integer
+          description: 결제 금액
+        method:
+          type: string
+          enum: [cash, bank_transfer, card]
+          description: 결제 수단
+        imp_uid:
+          type: string
+          nullable: true
+          description: PG사 결제 고유 ID
+        merchant_uid:
+          type: string
+          nullable: true
+          description: 시스템 결제 ID
+      required:
+        - order_id
+        - amount
+        - method
+      example:
+        order_id: 123
+        amount: 82500
+        method: "card"
+        imp_uid: "imp_123456789"
+        merchant_uid: "order_123_20240110"
+    
+    Payment:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: 결제 ID
+        order:
+          type: integer
+          description: 주문 ID
+        business:
+          type: integer
+          description: 거래처 ID
+        amount:
+          type: integer
+          description: 결제 금액
+        method:
+          type: string
+          enum: [cash, bank_transfer, card]
+          description: 결제 수단
+        payment_status:
+          type: string
+          enum: [pending, paid, refunded]
+          description: 결제 상태
+        paid_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: 결제 완료 시각
+        created_at:
+          type: string
+          format: date-time
+          description: 결제 등록 시각
+        imp_uid:
+          type: string
+          nullable: true
+          description: PG사 결제 고유 ID
+        merchant_uid:
+          type: string
+          nullable: true
+          description: 시스템 결제 ID
+        receipt_url:
+          type: string
+          nullable: true
+          description: 발급된 영수증 URL
+        card_approval_number:
+          type: string
+          nullable: true
+          description: 카드 승인 번호
+        bank_name:
+          type: string
+          nullable: true
+          description: 은행명
+        payer_name:
+          type: string
+          nullable: true
+          description: 입금자명
+        refunded:
+          type: boolean
+          description: 환불 여부
+        refund_reason:
+          type: string
+          nullable: true
+          description: 환불 사유
+    
+    # 재고 관련 스키마
+    InventoryCreate:
+      type: object
+      properties:
+        fish_type_id:
+          type: integer
+          description: 어종 ID
+        stock_quantity:
+          type: number
+          format: float
+          description: 재고 수량
+        unit:
+          type: string
+          description: 단위
+        status:
+          type: string
+          enum: [registered, normal, low, abnormal]
+          default: registered
+          description: 재고 상태
+        aquarium_photo_path:
+          type: string
+          nullable: true
+          description: 사진 경로
+      required:
+        - fish_type_id
+        - stock_quantity
+        - unit
+      example:
+        fish_type_id: 1
+        stock_quantity: 25.5
+        unit: "kg"
+        status: "normal"
+    
+    Inventory:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: 재고 ID
+        fish_type_id:
+          type: integer
+          description: 어종 ID
+        fish_type_name:
+          type: string
+          description: 어종명
+        stock_quantity:
+          type: number
+          format: float
+          description: 재고 수량
+        unit:
+          type: string
+          description: 단위
+        status:
+          type: string
+          enum: [registered, normal, low, abnormal]
+          description: 재고 상태
+        aquarium_photo_path:
+          type: string
+          nullable: true
+          description: 사진 경로
+        updated_at:
+          type: string
+          format: date-time
+          description: 수정 시각
+      example:
+        id: 1
+        fish_type_id: 1
+        fish_type_name: "광어"
+        stock_quantity: 25.5
+        unit: "kg"
+        status: "normal"
+        aquarium_photo_path: "/media/photos/tank1.jpg"
+        updated_at: "2024-01-10T14:30:00Z"
+    
+    InventoryLog:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: 입출고 이력 ID
+        inventory_id:
+          type: integer
+          description: 재고 ID
+        fish_type_id:
+          type: integer
+          description: 어종 ID
+        fish_type_name:
+          type: string
+          description: 어종명
+        type:
+          type: string
+          enum: [in, out]
+          description: 입출고 구분
+        change:
+          type: number
+          format: float
+          description: 수량 변화량
+        before_quantity:
+          type: number
+          format: float
+          description: 이전 수량
+        after_quantity:
+          type: number
+          format: float
+          description: 이후 수량
+        unit:
+          type: string
+          description: 단위
+        source_type:
+          type: string
+          enum: [manual, AI, YOLO]
+          description: 처리 방식
+        memo:
+          type: string
+          nullable: true
+          description: 설명
+        created_at:
+          type: string
+          format: date-time
+          description: 생성 시각
+      example:
+        id: 1
+        inventory_id: 1
+        fish_type_id: 1
+        fish_type_name: "광어"
+        type: "out"
+        change: -5.5
+        before_quantity: 31.0
+        after_quantity: 25.5
+        unit: "kg"
+        source_type: "manual"
+        memo: "주문 #123 출고"
+        created_at: "2024-01-10T14:30:00Z"
+    
+    # 어종 관련 스키마
+    FishTypeCreate:
+      type: object
+      properties:
+        name:
+          type: string
+          description: 어종명
+        aliases:
+          type: string
+          nullable: true
+          description: 별칭 (쉼표로 구분)
+        scientific_name:
+          type: string
+          nullable: true
+          description: 학명
+        unit:
+          type: string
+          description: 기본 단위
+        notes:
+          type: string
+          nullable: true
+          description: 설명
+      required:
+        - name
+        - unit
+      example:
+        name: "광어"
+        aliases: "넙치, 플라운더"
+        scientific_name: "Paralichthys olivaceus"
+        unit: "kg"
+        notes: "양식 광어, 자연산 구분 가능"
+    
+    FishType:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: 어종 ID
+        name:
+          type: string
+          description: 어종명
+        aliases:
+          type: string
+          nullable: true
+          description: 별칭
+        scientific_name:
+          type: string
+          nullable: true
+          description: 학명
+        unit:
+          type: string
+          description: 기본 단위
+        notes:
+          type: string
+          nullable: true
+          description: 설명
+        created_at:
+          type: string
+          format: date-time
+          description: 생성 시각
+      example:
+        id: 1
+        name: "광어"
+        aliases: "넙치, 플라운더"
+        scientific_name: "Paralichthys olivaceus"
+        unit: "kg"
+        notes: "양식 광어, 자연산 구분 가능"
+        created_at: "2024-01-01T00:00:00Z"
+
+paths:
+  # 주문 API
+  /orders/upload/:
+    post:
+      tags:
+        - 주문 관리
+      summary: 주문 업로드 (음성/이미지/텍스트)
+      description: |
+        다양한 방식으로 주문을 업로드합니다.
+        - **voice**: 음성 파일 업로드 후 STT 처리
+        - **image**: 이미지 업로드 후 OCR 처리  
+        - **text**: 텍스트 직접 입력
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                source_type:
+                  type: string
+                  enum: [voice, image, text]
+                  description: 입력 방식
+                file:
+                  type: string
+                  format: binary
+                  description: 음성/이미지 파일 (voice, image일 때 필수)
+                text_input:
+                  type: string
+                  description: 텍스트 입력 (text일 때 필수)
+                business_id:
+                  type: integer
+                  description: 거래처 ID (선택사항)
+              required:
+                - source_type
+      responses:
+        '201':
+          description: 업로드 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  transcription_id:
+                    type: string
+                    format: uuid
+                    description: STT/OCR 작업 ID
+                  status:
+                    type: string
+                    enum: [processing, completed]
+                  order_id:
+                    type: integer
+                    nullable: true
+                    description: 즉시 주문 생성된 경우
+              examples:
+                voice_upload:
+                  summary: 음성 업로드 응답
+                  value:
+                    message: "음성 파일이 업로드되었습니다. STT 처리 중..."
+                    transcription_id: "550e8400-e29b-41d4-a716-446655440000"
+                    status: "processing"
+                text_input:
+                  summary: 텍스트 입력 응답
+                  value:
+                    message: "주문이 성공적으로 생성되었습니다."
+                    order_id: 123
+                    status: "completed"
+        '400':
+          description: 잘못된 요청
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "필수 파라미터가 누락되었습니다"
+                detail: "source_type이 voice일 때 file이 필요합니다"
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /orders/:
+    get:
+      tags:
+        - 주문 관리
+      summary: 주문 목록 조회
+      description: 사용자의 주문 목록을 페이지네이션으로 조회합니다.
+      parameters:
+        - name: page
+          in: query
+          description: 페이지 번호
+          schema:
+            type: integer
+            default: 1
+        - name: page_size
+          in: query
+          description: 페이지당 항목 수
+          schema:
+            type: integer
+            default: 20
+        - name: status
+          in: query
+          description: 주문 상태 필터
+          schema:
+            type: string
+            enum: [placed, ready, delivered, cancelled]
+        - name: business_id
+          in: query
+          description: 거래처 ID 필터
+          schema:
+            type: integer
+        - name: start_date
+          in: query
+          description: 시작 날짜 (YYYY-MM-DD)
+          schema:
+            type: string
+            format: date
+        - name: end_date
+          in: query
+          description: 종료 날짜 (YYYY-MM-DD)
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: 주문 목록 조회 성공
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedResponse'
+                  - type: object
+                    properties:
+                      results:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/OrderListItem'
+              example:
+                count: 50
+                next: "http://localhost:8000/api/orders/?page=2"
+                previous: null
+                results:
+                  - id: 123
+                    business:
+                      id: 1
+                      business_name: "해양수산"
+                      phone_number: "010-1234-5678"
+                    total_price: 82500
+                    order_datetime: "2024-01-10T09:00:00Z"
+                    delivery_datetime: "2024-01-15T10:00:00Z"
+                    order_status: "placed"
+                    is_urgent: false
+                    items_summary: "광어 5.5kg, 우럭 3.0kg"
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    post:
+      tags:
+        - 주문 관리
+      summary: 새 주문 생성
+      description: 수동으로 새로운 주문을 생성합니다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrderCreate'
+      responses:
+        '201':
+          description: 주문 생성 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderDetail'
+        '400':
+          description: 잘못된 요청 데이터
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "유효성 검사 실패"
+                detail: "어종 ID가 존재하지 않습니다"
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /orders/{order_id}/:
+    get:
+      tags:
+        - 주문 관리
+      summary: 주문 상세 조회
+      description: 특정 주문의 상세 정보를 조회합니다.
+      parameters:
+        - name: order_id
+          in: path
+          required: true
+          description: 주문 ID
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 주문 상세 조회 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderDetail'
+        '404':
+          description: 주문을 찾을 수 없음
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "주문을 찾을 수 없습니다"
+                detail: "ID 123에 해당하는 주문이 존재하지 않습니다"
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /orders/{order_id}/status/:
+    patch:
+      tags:
+        - 주문 관리
+      summary: 주문 상태 변경
+      description: 주문의 상태를 변경합니다.
+      parameters:
+        - name: order_id
+          in: path
+          required: true
+          description: 주문 ID
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                order_status:
+                  type: string
+                  enum: [placed, ready, delivered, cancelled]
+                  description: 변경할 주문 상태
+              required:
+                - order_status
+            example:
+              order_status: "ready"
+      responses:
+        '200':
+          description: 상태 변경 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  order_status:
+                    type: string
+              example:
+                message: "주문 상태가 변경되었습니다"
+                order_status: "ready"
+        '400':
+          description: 잘못된 상태 값
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /orders/{order_id}/cancel/:
+    post:
+      tags:
+        - 주문 관리
+      summary: 주문 취소
+      description: 주문을 취소하고 취소 사유를 기록합니다.
+      parameters:
+        - name: order_id
+          in: path
+          required: true
+          description: 주문 ID
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                cancel_reason:
+                  type: string
+                  description: 취소 사유
+              required:
+                - cancel_reason
+            example:
+              cancel_reason: "고객 요청으로 인한 취소"
+      responses:
+        '200':
+          description: 주문 취소 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  order_status:
+                    type: string
+              example:
+                message: "주문이 취소되었습니다"
+                order_status: "cancelled"
+        '400':
+          description: 취소할 수 없는 주문
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "이미 출고된 주문은 취소할 수 없습니다"
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  # 결제 API
+  /payments/toss/confirm/:
+    post:
+      tags:
+        - 결제 관리
+      summary: 토스 결제 승인
+      description: 토스 페이먼츠 결제를 승인하고 완료 처리합니다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                paymentKey:
+                  type: string
+                  description: 토스 결제 키
+                orderId:
+                  type: string
+                  description: 주문 ID
+                amount:
+                  type: integer
+                  description: 결제 금액
+              required:
+                - paymentKey
+                - orderId
+                - amount
+            example:
+              paymentKey: "tgen_202401101234567890"
+              orderId: "order_123_20240110"
+              amount: 82500
+      responses:
+        '200':
+          description: 결제 승인 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  payment_id:
+                    type: integer
+                  status:
+                    type: string
+              example:
+                message: "결제가 성공적으로 완료되었습니다"
+                payment_id: 456
+                status: "paid"
+        '400':
+          description: 잘못된 결제 정보
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "결제 승인 실패"
+                detail: "결제 키가 유효하지 않습니다"
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  # 재고 API
+  /inventory/:
+    get:
+      tags:
+        - 재고 관리
+      summary: 재고 목록 조회
+      description: 사용자의 재고 목록을 조회합니다.
+      parameters:
+        - name: fish_type_id
+          in: query
+          description: 어종 ID 필터
+          schema:
+            type: integer
+        - name: status
+          in: query
+          description: 재고 상태 필터
+          schema:
+            type: string
+            enum: [registered, normal, low, abnormal]
+      responses:
+        '200':
+          description: 재고 목록 조회 성공
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Inventory'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    post:
+      tags:
+        - 재고 관리
+      summary: 새 재고 등록
+      description: 새로운 어종의 재고를 등록합니다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InventoryCreate'
+      responses:
+        '201':
+          description: 재고 등록 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Inventory'
+        '400':
+          description: 잘못된 요청 또는 중복 재고
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "해당 어종의 재고가 이미 존재합니다"
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /inventory/{inventory_id}/:
+    get:
+      tags:
+        - 재고 관리
+      summary: 재고 상세 조회
+      description: 특정 재고의 상세 정보를 조회합니다.
+      parameters:
+        - name: inventory_id
+          in: path
+          required: true
+          description: 재고 ID
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 재고 상세 조회 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Inventory'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    patch:
+      tags:
+        - 재고 관리
+      summary: 재고 정보 수정
+      description: 재고 수량이나 상태를 수정합니다.
+      parameters:
+        - name: inventory_id
+          in: path
+          required: true
+          description: 재고 ID
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                stock_quantity:
+                  type: number
+                  format: float
+                  description: 재고 수량
+                status:
+                  type: string
+                  enum: [registered, normal, low, abnormal]
+                  description: 재고 상태
+                aquarium_photo_path:
+                  type: string
+                  nullable: true
+                  description: 사진 경로
+            example:
+              stock_quantity: 20.0
+              status: "low"
+      responses:
+        '200':
+          description: 재고 수정 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Inventory'
+        '400':
+          description: 잘못된 요청 데이터
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    delete:
+      tags:
+        - 재고 관리
+      summary: 재고 삭제
+      description: 재고를 삭제합니다.
+      parameters:
+        - name: inventory_id
+          in: path
+          required: true
+          description: 재고 ID
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: 재고 삭제 성공
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /inventory/{inventory_id}/logs/:
+    get:
+      tags:
+        - 재고 관리
+      summary: 특정 재고의 입출고 이력 조회
+      description: 특정 재고의 입출고 이력을 조회합니다.
+      parameters:
+        - name: inventory_id
+          in: path
+          required: true
+          description: 재고 ID
+          schema:
+            type: integer
+        - name: type
+          in: query
+          description: 입출고 구분 필터
+          schema:
+            type: string
+            enum: [in, out]
+        - name: start_date
+          in: query
+          description: 시작 날짜 (YYYY-MM-DD)
+          schema:
+            type: string
+            format: date
+        - name: end_date
+          in: query
+          description: 종료 날짜 (YYYY-MM-DD)
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: 입출고 이력 조회 성공
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/InventoryLog'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /inventory/logs/:
+    get:
+      tags:
+        - 재고 관리
+      summary: 전체 입출고 이력 조회
+      description: 사용자의 모든 재고 입출고 이력을 조회합니다.
+      parameters:
+        - name: type
+          in: query
+          description: 입출고 구분 필터
+          schema:
+            type: string
+            enum: [in, out]
+        - name: fish_type_id
+          in: query
+          description: 어종 ID 필터
+          schema:
+            type: integer
+        - name: start_date
+          in: query
+          description: 시작 날짜 (YYYY-MM-DD)
+          schema:
+            type: string
+            format: date
+        - name: end_date
+          in: query
+          description: 종료 날짜 (YYYY-MM-DD)
+          schema:
+            type: string
+            format: date
+        - name: page
+          in: query
+          description: 페이지 번호
+          schema:
+            type: integer
+            default: 1
+        - name: page_size
+          in: query
+          description: 페이지당 항목 수
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: 입출고 이력 조회 성공
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedResponse'
+                  - type: object
+                    properties:
+                      results:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/InventoryLog'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /inventory/fish-types/:
+    get:
+      tags:
+        - 재고 관리
+      summary: 재고 등록용 어종 목록 조회
+      description: 재고 등록 시 사용할 수 있는 어종 목록을 조회합니다.
+      responses:
+        '200':
+          description: 어종 목록 조회 성공
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: integer
+                    name:
+                      type: string
+                    unit:
+                      type: string
+                    aliases:
+                      type: string
+                      nullable: true
+              example:
+                - id: 1
+                  name: "광어"
+                  unit: "kg"
+                  aliases: "넙치, 플라운더"
+                - id: 2
+                  name: "우럭"
+                  unit: "kg"
+                  aliases: "볼락"
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  # 어종 API
+  /fish-registry/fish-types/:
+    get:
+      tags:
+        - 어종 관리
+      summary: 어종 목록 조회
+      description: 사용자의 어종 목록을 조회합니다.
+      parameters:
+        - name: search
+          in: query
+          description: 어종명 검색
+          schema:
+            type: string
+        - name: unit
+          in: query
+          description: 단위 필터
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 어종 목록 조회 성공
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/FishType'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    post:
+      tags:
+        - 어종 관리
+      summary: 새 어종 등록
+      description: 새로운 어종을 등록합니다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FishTypeCreate'
+      responses:
+        '201':
+          description: 어종 등록 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FishType'
+        '400':
+          description: 잘못된 요청 또는 중복 어종
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "이미 동일한 이름의 어종이 존재합니다"
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /fish-registry/fish-types/{fish_type_id}/:
+    get:
+      tags:
+        - 어종 관리
+      summary: 어종 상세 조회
+      description: 특정 어종의 상세 정보를 조회합니다.
+      parameters:
+        - name: fish_type_id
+          in: path
+          required: true
+          description: 어종 ID
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 어종 상세 조회 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FishType'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    patch:
+      tags:
+        - 어종 관리
+      summary: 어종 정보 수정
+      description: 어종 정보를 수정합니다.
+      parameters:
+        - name: fish_type_id
+          in: path
+          required: true
+          description: 어종 ID
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: 어종명
+                aliases:
+                  type: string
+                  nullable: true
+                  description: 별칭
+                scientific_name:
+                  type: string
+                  nullable: true
+                  description: 학명
+                unit:
+                  type: string
+                  description: 기본 단위
+                notes:
+                  type: string
+                  nullable: true
+                  description: 설명
+            example:
+              name: "광어"
+              aliases: "넙치, 플라운더, 가자미"
+              notes: "양식 광어, 자연산 구분 필요"
+      responses:
+        '200':
+          description: 어종 수정 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FishType'
+        '400':
+          description: 잘못된 요청 데이터
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    delete:
+      tags:
+        - 어종 관리
+      summary: 어종 삭제
+      description: 어종을 삭제합니다. (참조하는 재고나 주문이 있으면 삭제할 수 없습니다)
+      parameters:
+        - name: fish_type_id
+          in: path
+          required: true
+          description: 어종 ID
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: 어종 삭제 성공
+        '400':
+          description: 삭제할 수 없음 (참조 데이터 존재)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "이 어종을 참조하는 재고나 주문이 있어 삭제할 수 없습니다"
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  # STT 관련 API
+  /orders/transcription/{transcription_id}/status/:
+    get:
+      tags:
+        - STT/OCR 처리
+      summary: 음성/이미지 처리 상태 확인
+      description: 업로드된 음성/이미지 파일의 STT/OCR 처리 상태를 확인합니다.
+      parameters:
+        - name: transcription_id
+          in: path
+          required: true
+          description: 처리 작업 ID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: 처리 상태 조회 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                    description: 처리 작업 ID
+                  status:
+                    type: string
+                    enum: [processing, completed, failed]
+                    description: 처리 상태
+                  result_text:
+                    type: string
+                    nullable: true
+                    description: STT/OCR 결과 텍스트
+                  error_message:
+                    type: string
+                    nullable: true
+                    description: 오류 메시지 (실패 시)
+                  created_at:
+                    type: string
+                    format: date-time
+                    description: 작업 시작 시간
+                  completed_at:
+                    type: string
+                    format: date-time
+                    nullable: true
+                    description: 작업 완료 시간
+              examples:
+                processing:
+                  summary: 처리 중
+                  value:
+                    id: "550e8400-e29b-41d4-a716-446655440000"
+                    status: "processing"
+                    result_text: null
+                    error_message: null
+                    created_at: "2024-01-10T09:00:00Z"
+                    completed_at: null
+                completed:
+                  summary: 처리 완료
+                  value:
+                    id: "550e8400-e29b-41d4-a716-446655440000"
+                    status: "completed"
+                    result_text: "광어 5킬로, 우럭 3킬로 주문합니다"
+                    error_message: null
+                    created_at: "2024-01-10T09:00:00Z"
+                    completed_at: "2024-01-10T09:02:30Z"
+                failed:
+                  summary: 처리 실패
+                  value:
+                    id: "550e8400-e29b-41d4-a716-446655440000"
+                    status: "failed"
+                    result_text: null
+                    error_message: "음성이 명확하지 않아 인식할 수 없습니다"
+                    created_at: "2024-01-10T09:00:00Z"
+                    completed_at: "2024-01-10T09:02:30Z"
+        '404':
+          description: 처리 작업을 찾을 수 없음
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "처리 작업을 찾을 수 없습니다"
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /orders/transcription/{transcription_id}/create-order/:
+    post:
+      tags:
+        - STT/OCR 처리
+      summary: STT/OCR 결과로 주문 생성
+      description: STT/OCR 처리가 완료된 텍스트를 기반으로 주문을 생성합니다.
+      parameters:
+        - name: transcription_id
+          in: path
+          required: true
+          description: 처리 작업 ID
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                business_id:
+                  type: integer
+                  description: 거래처 ID
+                manual_corrections:
+                  type: string
+                  nullable: true
+                  description: 수동으로 수정된 텍스트 (선택사항)
+              required:
+                - business_id
+            example:
+              business_id: 1
+              manual_corrections: "광어 5.5킬로, 우럭 3킬로 주문합니다"
+      responses:
+        '201':
+          description: 주문 생성 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  order_id:
+                    type: integer
+                  parsed_items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        fish_name:
+                          type: string
+                        quantity:
+                          type: number
+                        unit:
+                          type: string
+                    description: 파싱된 주문 항목들
+              example:
+                message: "주문이 성공적으로 생성되었습니다"
+                order_id: 124
+                parsed_items:
+                  - fish_name: "광어"
+                    quantity: 5.5
+                    unit: "kg"
+                  - fish_name: "우럭"
+                    quantity: 3.0
+                    unit: "kg"
+        '400':
+          description: 잘못된 요청 또는 파싱 실패
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "텍스트에서 주문 정보를 파싱할 수 없습니다"
+                detail: "인식된 어종이 데이터베이스에 존재하지 않습니다"
+        '404':
+          description: 처리 작업을 찾을 수 없음
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+components:
+  responses:
+    UnauthorizedError:
+      description: 인증 실패
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "인증이 필요합니다"
+            detail: "유효한 토큰을 제공해주세요"
+            code: "AUTHENTICATION_REQUIRED"
+
+    ForbiddenError:
+      description: 권한 없음
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "권한이 없습니다"
+            detail: "이 리소스에 접근할 권한이 없습니다"
+            code: "PERMISSION_DENIED"
+
+    NotFoundError:
+      description: 리소스를 찾을 수 없음
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "리소스를 찾을 수 없습니다"
+            detail: "요청한 ID에 해당하는 데이터가 존재하지 않습니다"
+            code: "NOT_FOUND"
+
+    InternalServerError:
+      description: 서버 내부 오류
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "서버 내부 오류가 발생했습니다"
+            detail: "잠시 후 다시 시도해주세요"
+            code: "INTERNAL_SERVER_ERROR"
+
+tags:
+  - name: 주문 관리
+    description: 주문 등록, 조회, 수정, 삭제 관련 API
+  - name: 결제 관리
+    description: 결제 처리 및 승인 관련 API
+  - name: 재고 관리
+    description: 재고 등록, 조회, 수정, 입출고 이력 관리 API
+  - name: 어종 관리
+    description: 어종 등록, 조회, 수정, 삭제 관련 API
+  - name: STT/OCR 처리
+    description: 음성/이미지 처리 및 주문 변환 관련 API
+
