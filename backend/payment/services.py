@@ -367,53 +367,51 @@ class PaymentService:
     @staticmethod
     @transaction.atomic
     def restore_stock_on_cancel(order):
-        """주문 취소시 재고 복원 처리"""
+        """주문 취소/환불시 주문수량만 감소 (재고수량은 건드리지 않음)"""
         try:
-            from inventory.models import StockTransaction
+            from inventory.models import Inventory
+            from django.db.models import F
             
-            logger.info(f"주문 취소에 따른 재고 복원 시작: 주문 {order.id}")
+            logger.info(f"주문 취소에 따른 주문수량 감소 시작: 주문 {order.id}")
             
-            # 1. 해당 주문으로 차감된 재고 트랜잭션들을 찾아서 복원
+            # 주문 항목별로 주문수량만 감소
             order_items = order.items.all()
             restored_items = []
             
             for item in order_items:
-                # 해당 주문 항목에 대한 차감 트랜잭션 조회
-                deduction_transactions = StockTransaction.objects.filter(
-                    fish_type_id=item.fish_type_id,
-                    user_id=order.user_id,
-                    transaction_type='order',
-                    quantity_change__lt=0,  # 음수 (차감된 것들)
-                    order_item_id=item.id if hasattr(item, 'id') else None
-                )
+                quantity = item.quantity
+                fish_type_id = item.fish_type_id
                 
-                total_deducted = sum(abs(t.quantity_change) for t in deduction_transactions)
+                # 해당 어종의 첫 번째 재고의 주문수량만 감소 (재고수량은 건드리지 않음)
+                inventory = Inventory.objects.filter(
+                    fish_type_id=fish_type_id,
+                    user_id=order.user_id
+                ).first()
                 
-                if total_deducted > 0:
-                    # 복원 트랜잭션 생성 (양수로 복원)
-                    StockTransaction.objects.create(
-                        fish_type_id=item.fish_type_id,
-                        user_id=order.user_id,
-                        transaction_type='cancel_restore',  # 취소 복원 타입
-                        quantity_change=total_deducted,  # 양수로 복원
-                        memo=f"주문 취소에 따른 재고 복원 - 주문 #{order.id}, {item.fish_type.name}"
-                    )
+                if inventory:
+                    old_ordered = inventory.ordered_quantity
+                    
+                    inventory.ordered_quantity = F('ordered_quantity') - quantity
+                    inventory.save()
+                    inventory.refresh_from_db()  # F 표현식 갱신
                     
                     restored_items.append({
                         'fish_type': item.fish_type.name,
-                        'quantity': total_deducted,
+                        'quantity': quantity,
                         'unit': item.unit
                     })
                     
-                    logger.info(f"재고 복원: {item.fish_type.name} {total_deducted}{item.unit}")
+                    logger.info(f"주문수량 감소: {item.fish_type.name} - 주문수량:{old_ordered}→{inventory.ordered_quantity} (-{quantity})")
+                else:
+                    logger.warning(f"주문수량 감소 실패: {item.fish_type.name} - 재고 없음")
             
-            logger.info(f"재고 복원 완료: 주문 {order.id}, 복원 항목 {len(restored_items)}개")
+            logger.info(f"주문수량 감소 완료: 주문 {order.id}, 처리 항목 {len(restored_items)}개")
             
             return restored_items
             
         except Exception as e:
-            logger.error(f"재고 복원 실패: 주문 {order.id}, 오류: {e}")
-            # 재고 복원 실패해도 주문 취소는 진행되도록 에러를 발생시키지 않음
+            logger.error(f"주문수량 감소 실패: 주문 {order.id}, 오류: {e}")
+            # 주문수량 감소 실패해도 주문 취소는 진행되도록 에러를 발생시키지 않음
             return []
     
     @staticmethod

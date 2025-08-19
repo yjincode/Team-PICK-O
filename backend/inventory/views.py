@@ -57,13 +57,8 @@ class InventoryListCreateView(View):
             # 시리얼라이저 데이터 생성
             inventory_serialized = InventoryListSerializer(inventory).data
             
-            # 기본 필드만 추가 (단순화)
-            inventory_serialized['available_stock'] = inventory.stock_quantity  # 실제 재고 = 가용 재고
-            inventory_serialized['ordered_quantity'] = 0  # 별도 계산 필요 없음 (이미 차감됨)
-            inventory_serialized['needed_quantity'] = 0  # 필요 없음
-            inventory_serialized['has_orders'] = False  # 별도 확인 필요 없음
-            inventory_serialized['is_sufficient'] = inventory.stock_quantity > 0
-            inventory_serialized['stock_ratio'] = 100.0 if inventory.stock_quantity > 0 else 0.0
+            # 단순한 재고 정보만 추가
+            inventory_serialized['ordered_quantity'] = inventory.ordered_quantity
             
             inventory_data.append(inventory_serialized)
         
@@ -118,11 +113,7 @@ class InventoryListCreateView(View):
             print(f"✅ 새 재고 생성 완료: {inventory.fish_type.name} - {inventory.stock_quantity}")
             
             inventory_data = InventoryListSerializer(inventory).data
-            inventory_data['available_stock'] = inventory.stock_quantity
-            inventory_data['ordered_quantity'] = 0
-            inventory_data['needed_quantity'] = 0
-            inventory_data['has_orders'] = False
-            inventory_data['is_sufficient'] = inventory.stock_quantity > 0
+            inventory_data['ordered_quantity'] = inventory.ordered_quantity
             
             return JsonResponse(inventory_data, status=201)
         return JsonResponse(serializer.errors, status=400)
@@ -202,39 +193,8 @@ class InventoryDetailView(View):
                         updated_by=user
                     )
                 
-                # 수정된 재고에 실시간 주문 연동 정보 추가
-                from django.db.models import Sum
-                from .models import StockTransaction
-                from order.models import OrderItem
-                
-                # StockTransaction에서 차감량 조회
-                ordered_deduction = StockTransaction.objects.filter(
-                    fish_type_id=inventory.fish_type_id,
-                    user_id=request.user_id,
-                    transaction_type='order'
-                ).aggregate(total=Sum('quantity_change'))['total'] or 0
-                
-                # 실제 주문량 검증
-                actual_orders = OrderItem.objects.filter(
-                    fish_type_id=inventory.fish_type_id,
-                    order__user_id=request.user_id
-                ).aggregate(total=Sum('quantity'))['total'] or 0
-                
-                # 가용 재고 계산
-                available_stock = inventory.stock_quantity + ordered_deduction
-                
-                print(f"📦 재고 수정 후 연동 체크: {inventory.fish_type.name}")
-                print(f"   📊 수정된 재고: {inventory.stock_quantity}")
-                print(f"   📉 주문 차감: {ordered_deduction}")
-                print(f"   📋 실제 주문 (검증): {actual_orders}")
-                print(f"   ✅ 가용 재고: {available_stock}")
-                
+                # 단순한 재고 수정 응답
                 inventory_data = serializer.data
-                inventory_data['ordered_quantity'] = abs(ordered_deduction) if ordered_deduction < 0 else 0
-                inventory_data['available_stock'] = available_stock
-                inventory_data['needed_quantity'] = max(0, abs(ordered_deduction) - inventory.stock_quantity)
-                inventory_data['has_orders'] = abs(ordered_deduction) > 0
-                inventory_data['is_sufficient'] = available_stock >= 0
                 
                 return JsonResponse(inventory_data)
             return JsonResponse(serializer.errors, status=400)
@@ -363,44 +323,28 @@ class StockCheckView(View):
                 continue
                 
             try:
-                # 어종별 실시간 재고량 계산 (등록된 재고 - 주문으로 차감된 재고)
+                # 단순한 재고수량 조회
                 from django.db.models import Sum
-                from .models import StockTransaction
                 
-                # 등록된 총 재고량
-                total_registered_stock = Inventory.objects.filter(
+                # 해당 어종의 재고수량 조회
+                total_stock = Inventory.objects.filter(
                     fish_type_id=fish_type_id,
                     **get_user_queryset_filter(request)
                 ).aggregate(total=Sum('stock_quantity'))['total'] or 0
                 
-                # 주문으로 차감된 재고량 (quantity_change는 음수)
-                total_ordered = StockTransaction.objects.filter(
-                    fish_type_id=fish_type_id,
-                    user_id=request.user_id,
-                    transaction_type='order'
-                ).aggregate(total=Sum('quantity_change'))['total'] or 0
-                
-                # 실제 가용 재고 = 등록된 재고 + 차감된 재고 (음수이므로 실질적으로 빼기)
-                total_stock = total_registered_stock + total_ordered
-                
                 # 어종 정보 가져오기
                 fish_type = FishType.objects.get(id=fish_type_id, **get_user_queryset_filter(request))
-                
-                # 실제 주문된 수량 (StockTransaction에서 계산)
-                actual_ordered_quantity = abs(total_ordered) if total_ordered < 0 else 0
                 
                 item_result = {
                     'fish_type_id': fish_type_id,
                     'fish_name': fish_type.name,
                     'requested_quantity': quantity,
-                    'available_stock': total_stock,
-                    'ordered_quantity': actual_ordered_quantity,  # 실제 주문된 수량 추가
-                    'registered_stock': total_registered_stock,   # 등록된 재고 추가
+                    'current_stock': total_stock,
                     'unit': unit,
                     'status': 'ok'
                 }
                 
-                # 재고 부족 체크
+                # 재고 부족 체크 (재고수량 기준)
                 if quantity > total_stock:
                     shortage = quantity - total_stock
                     item_result['status'] = 'insufficient'
@@ -410,13 +354,12 @@ class StockCheckView(View):
                     quantity_str = f"{quantity:g}"
                     total_stock_str = f"{total_stock:g}"
                     shortage_str = f"{shortage:g}"
-                    remaining_stock = total_stock
                     
-                    warning_msg = f"🚨 {fish_type.name}: {quantity_str}{unit} 주문시 남은재고 {remaining_stock:g}{unit} (부족: {shortage_str}{unit})"
+                    warning_msg = f"🚨 {fish_type.name}: {quantity_str}{unit} 주문시 남은재고 {total_stock:g}{unit} (부족: {shortage_str}{unit})"
                     warnings.append(warning_msg)
                     errors.append({
                         'fish_name': fish_type.name,
-                        'message': f'🚨 재고 부족! {quantity_str}{unit} 주문시 남은재고 {remaining_stock:g}{unit}',
+                        'message': f'🚨 재고 부족! {quantity_str}{unit} 주문시 남은재고 {total_stock:g}{unit}',
                         'shortage': shortage
                     })
                 elif total_stock == 0:

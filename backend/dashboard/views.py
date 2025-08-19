@@ -41,35 +41,11 @@ class DashboardStatsView(APIView):
                 order_datetime__date=today
             ).count()
             
-            # 2. 실시간 재고 부족 어종 수 계산
-            from inventory.models import StockTransaction
-            
-            # 모든 어종별 실시간 재고 계산
-            all_fish_types = Inventory.objects.filter(user_id=user_id).values('fish_type').distinct()
-            low_stock_count = 0
-            
-            for fish_type_info in all_fish_types:
-                fish_type_id = fish_type_info['fish_type']
-                
-                # 등록된 재고
-                registered_stock = Inventory.objects.filter(
-                    fish_type_id=fish_type_id,
-                    user_id=user_id
-                ).aggregate(total=Sum('stock_quantity'))['total'] or 0
-                
-                # 주문으로 차감된 재고
-                ordered_stock = StockTransaction.objects.filter(
-                    fish_type_id=fish_type_id,
-                    user_id=user_id,
-                    transaction_type='order'
-                ).aggregate(total=Sum('quantity_change'))['total'] or 0
-                
-                # 실제 가용 재고 = 등록된 재고 + 주문차감 (음수)
-                available_stock = registered_stock + ordered_stock
-                
-                # 재고가 10 이하이면 부족으로 카운트
-                if available_stock <= 10:
-                    low_stock_count += 1
+            # 2. 재고 부족 어종 수 계산 (재고수량 <= 10)
+            low_stock_count = Inventory.objects.filter(
+                user_id=user_id,
+                stock_quantity__lte=10
+            ).count()
             
             # 3. 전체 미수금 합계 (각 거래처별로 계산해서 합산)
             businesses = Business.objects.filter(user_id=user_id)
@@ -156,51 +132,23 @@ class DashboardLowStockView(APIView):
             
             user_id = request.user_id
             
-            # 실시간 재고 부족 어종 조회
-            from inventory.models import StockTransaction
+            # 재고 부족 어종 조회 (재고수량 <= 10)
+            low_stock_inventories = Inventory.objects.filter(
+                user_id=user_id,
+                stock_quantity__lte=10
+            ).select_related('fish_type')
             
-            # 모든 어종별 실시간 재고 계산
-            all_inventories = Inventory.objects.filter(user_id=user_id).select_related('fish_type')
-            stock_summary = {}
+            stock_summary = []
+            for inventory in low_stock_inventories:
+                stock_summary.append({
+                    'fish_name': inventory.fish_type.name,
+                    'stock_quantity': inventory.stock_quantity,
+                    'ordered_quantity': inventory.ordered_quantity,
+                    'unit': inventory.unit,
+                    'status': 'out_of_stock' if inventory.stock_quantity <= 0 else 'low'
+                })
             
-            for inventory in all_inventories:
-                fish_type_id = inventory.fish_type.id
-                fish_name = inventory.fish_type.name
-                
-                if fish_name not in stock_summary:
-                    # 등록된 총 재고량
-                    registered_stock = Inventory.objects.filter(
-                        fish_type_id=fish_type_id,
-                        user_id=user_id
-                    ).aggregate(total=Sum('stock_quantity'))['total'] or 0
-                    
-                    # 주문으로 차감된 재고량
-                    ordered_stock = StockTransaction.objects.filter(
-                        fish_type_id=fish_type_id,
-                        user_id=user_id,
-                        transaction_type='order'
-                    ).aggregate(total=Sum('quantity_change'))['total'] or 0
-                    
-                    # 실제 가용 재고
-                    available_stock = registered_stock + ordered_stock
-                    
-                    # 재고가 10 이하인 경우에만 추가
-                    if available_stock <= 10:
-                        # 주문된 수량 계산 (음수이므로 절댓값)
-                        ordered_quantity = abs(ordered_stock) if ordered_stock else 0
-                        shortage = max(0, ordered_quantity - registered_stock) if available_stock < 0 else 0
-                        
-                        stock_summary[fish_name] = {
-                            'fish_name': fish_name,
-                            'registered_stock': registered_stock,  # 등록된 재고
-                            'ordered_quantity': ordered_quantity,  # 주문된 수량  
-                            'available_stock': available_stock,    # 가용 재고
-                            'shortage': shortage,                  # 부족 수량
-                            'unit': inventory.unit,
-                            'status': 'out_of_stock' if available_stock <= 0 else 'low'
-                        }
-            
-            return Response(list(stock_summary.values()))
+            return Response(stock_summary)
             
         except Exception as e:
             return Response({

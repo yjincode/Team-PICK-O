@@ -835,6 +835,52 @@ class OrderStatusUpdateView(View):
             
             if serializer.is_valid():
                 print(f"✅ Serializer 유효성 검증 성공")
+                
+                # ready 상태로 변경시 재고 부족 검증
+                new_status = serializer.validated_data.get('order_status')
+                if new_status == 'ready':
+                    print(f"🔍 출고 준비 상태 변경 - 재고 부족 검증 시작")
+                    
+                    from inventory.models import Inventory
+                    insufficient_items = []
+                    
+                    for order_item in order.items.all():
+                        fish_type_id = order_item.fish_type_id
+                        quantity = order_item.quantity
+                        
+                        # 해당 어종의 현재 재고수량 확인
+                        inventory = Inventory.objects.filter(
+                            fish_type_id=fish_type_id,
+                            user_id=order.user_id
+                        ).first()
+                        
+                        if not inventory:
+                            insufficient_items.append({
+                                'fish_name': order_item.fish_type.name,
+                                'required_quantity': quantity,
+                                'current_stock': 0,
+                                'shortage': quantity,
+                                'unit': order_item.unit
+                            })
+                        elif inventory.stock_quantity < quantity:
+                            shortage = quantity - inventory.stock_quantity
+                            insufficient_items.append({
+                                'fish_name': order_item.fish_type.name,
+                                'required_quantity': quantity,
+                                'current_stock': inventory.stock_quantity,
+                                'shortage': shortage,
+                                'unit': order_item.unit
+                            })
+                    
+                    # 재고 부족시 상세 정보와 함께 에러 반환
+                    if insufficient_items:
+                        return JsonResponse({
+                            'error': '재고가 부족하여 출고 준비 상태로 변경할 수 없습니다.',
+                            'error_type': 'insufficient_stock',
+                            'insufficient_items': insufficient_items,
+                            'total_shortage_count': len(insufficient_items)
+                        }, status=400)
+                
                 serializer.save()
                 return JsonResponse({
                     'message': '주문 상태가 변경되었습니다.',
@@ -937,43 +983,33 @@ class CancelOrderView(View):
                 order.cancel_reason = cancel_reason
                 order.save()
                 
-                # 2. 실제 재고 복원 (새로운 방식)
-                from inventory.models import Inventory, StockTransaction
+                # 2. 주문수량만 감소 (재고수량은 건드리지 않음)
+                from inventory.models import Inventory
                 from django.db.models import F
                 
                 order_items = order.items.all()
-                print(f"🔄 재고 복원 시작: {order_items.count()}개 아이템")
+                print(f"🔄 주문수량 감소 시작: {order_items.count()}개 아이템")
                 
                 for order_item in order_items:
                     quantity = order_item.quantity
                     fish_type_id = order_item.fish_type_id
                     
-                    # 해당 어종의 첫 번째 재고에 복원 (FIFO 역순)
+                    # 해당 어종의 첫 번째 재고의 주문수량만 감소 (재고수량은 건드리지 않음)
                     inventory = Inventory.objects.filter(
                         fish_type_id=fish_type_id,
                         user_id=request.user_id
                     ).first()
                     
                     if inventory:
-                        old_stock = inventory.stock_quantity
-                        inventory.stock_quantity = F('stock_quantity') + quantity
+                        old_ordered = inventory.ordered_quantity
+                        
+                        inventory.ordered_quantity = F('ordered_quantity') - quantity
                         inventory.save()
                         inventory.refresh_from_db()  # F 표현식 갱신
                         
-                        print(f"✅ 재고 복원: {order_item.fish_type.name} - {old_stock} → {inventory.stock_quantity} (+{quantity})")
+                        print(f"✅ 주문수량 감소: {order_item.fish_type.name} - 주문수량:{old_ordered}→{inventory.ordered_quantity} (-{quantity})")
                     else:
-                        print(f"⚠️ 재고 복원 실패: {order_item.fish_type.name} - 재고 없음")
-                
-                # StockTransaction 로그 기록 삭제 (선택사항)
-                cancelled_transactions = StockTransaction.objects.filter(
-                    order_id=order.id,
-                    user_id=request.user_id,
-                    transaction_type='order'
-                )
-                
-                if cancelled_transactions.exists():
-                    print(f"📝 로그 삭제: {cancelled_transactions.count()}개 거래 기록")
-                    cancelled_transactions.delete()
+                        print(f"⚠️ 주문수량 감소 실패: {order_item.fish_type.name} - 재고 없음")
             
             print(f"✅ 주문 취소 및 재고 롤백 완료: order_id={order.id}")
             
@@ -1023,10 +1059,83 @@ class ShipOutOrderView(View):
                     'error': '출고 준비된 주문만 출고할 수 있습니다.'
                 }, status=400)
             
-            # 출고 처리
-            order.order_status = 'delivered'
-            order.ship_out_datetime = timezone.now()
-            order.save()
+            # 재고 부족 검증 (출고 전 검사)
+            from inventory.models import Inventory
+            insufficient_items = []
+            
+            for order_item in order.items.all():
+                fish_type_id = order_item.fish_type_id
+                quantity = order_item.quantity
+                
+                # 해당 어종의 현재 재고수량 확인
+                inventory = Inventory.objects.filter(
+                    fish_type_id=fish_type_id,
+                    user_id=order.user_id
+                ).first()
+                
+                if not inventory:
+                    insufficient_items.append({
+                        'fish_name': order_item.fish_type.name,
+                        'required_quantity': quantity,
+                        'current_stock': 0,
+                        'shortage': quantity,
+                        'unit': order_item.unit
+                    })
+                elif inventory.stock_quantity < quantity:
+                    shortage = quantity - inventory.stock_quantity
+                    insufficient_items.append({
+                        'fish_name': order_item.fish_type.name,
+                        'required_quantity': quantity,
+                        'current_stock': inventory.stock_quantity,
+                        'shortage': shortage,
+                        'unit': order_item.unit
+                    })
+            
+            # 재고 부족시 상세 정보와 함께 에러 반환
+            if insufficient_items:
+                return JsonResponse({
+                    'error': '재고가 부족하여 출고할 수 없습니다.',
+                    'error_type': 'insufficient_stock',
+                    'insufficient_items': insufficient_items,
+                    'total_shortage_count': len(insufficient_items)
+                }, status=400)
+            
+            # 출고 처리 (트랜잭션으로 재고도 함께 처리)
+            with transaction.atomic():
+                # 1. 주문 상태 변경
+                order.order_status = 'delivered'
+                order.ship_out_datetime = timezone.now()
+                order.save()
+                
+                # 2. 재고수량 감소, 주문수량 감소 (출고 완료시 실제 재고 차감)
+                from inventory.models import Inventory
+                from django.db.models import F
+                
+                order_items = order.items.all()
+                print(f"📦 출고 완료 - 재고차감 시작: {order_items.count()}개 아이템")
+                
+                for order_item in order_items:
+                    quantity = order_item.quantity
+                    fish_type_id = order_item.fish_type_id
+                    
+                    # 해당 어종의 첫 번째 재고의 재고수량과 주문수량 모두 감소
+                    inventory = Inventory.objects.filter(
+                        fish_type_id=fish_type_id,
+                        user_id=order.user_id
+                    ).first()
+                    
+                    if inventory:
+                        old_stock = inventory.stock_quantity
+                        old_ordered = inventory.ordered_quantity
+                        
+                        inventory.stock_quantity = F('stock_quantity') - quantity
+                        inventory.ordered_quantity = F('ordered_quantity') - quantity
+                        inventory.save()
+                        inventory.refresh_from_db()  # F 표현식 갱신
+                        
+                        print(f"✅ 출고 완료 재고차감: {order_item.fish_type.name} - 재고:{old_stock}→{inventory.stock_quantity}, 주문:{old_ordered}→{inventory.ordered_quantity} (-{quantity})")
+                    else:
+                        print(f"⚠️ 재고차감 실패: {order_item.fish_type.name} - 재고 없음")
             
             return JsonResponse({
                 'message': '주문이 출고되었습니다',
