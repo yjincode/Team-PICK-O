@@ -1,7 +1,9 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
 """
 수산물 샘플 데이터 생성 스크립트 (개선된 버전)
 실행: python manage.py shell < sample_data.py
+또는 윈도우: python manage.py shell -c "exec(open('sample_data.py', encoding='utf-8').read())"
 """
 
 import os
