@@ -102,52 +102,14 @@ def create_sample_data():
         else:
             print(f"🔄 기존 어종: {fish_type.name}")
     
-    # 3. 재고 데이터 생성 (중복 방지)
-    print("📦 재고 데이터 생성 중...")
+    # 3. 주문 데이터 먼저 생성 (재고 등록 이전 - 음수 재고 상황 구현)
+    print("📋 주문 데이터 생성 중 (재고 없는 상태에서)...")
     
-    # 현재 날짜부터 3년 전까지의 랜덤 날짜 생성 함수
-    def random_date_in_last_3_years():
-        end_date = timezone.now()
-        start_date = end_date - timedelta(days=3*365)  # 3년
-        time_between = end_date - start_date
-        days_between = time_between.days
-        random_days = random.randrange(days_between)
-        return start_date + timedelta(days=random_days)
-    
-    for fish_type in fish_type_objects:
-        # 각 어종당 1-3개의 재고 아이템 생성 (중복 방지)
-        num_inventory_items = random.randint(1, 3)
-        
-        for i in range(num_inventory_items):
-            # 중복 체크
-            existing_inventory = Inventory.objects.filter(
-                fish_type=fish_type,
-                user=user
-            ).first()
-            
-            if existing_inventory:
-                print(f"🔄 기존 재고: {fish_type.name}")
-                continue
-                
-            stock_quantity = random.randint(50, 500)
-            
-            inventory = Inventory.objects.create(
-                user=user,
-                fish_type=fish_type,
-                stock_quantity=stock_quantity,
-                unit=fish_type.unit,
-                status='normal',
-                updated_at=random_date_in_last_3_years()
-            )
-            print(f"✅ 재고 생성: {fish_type.name} - {stock_quantity}{fish_type.unit}")
-    
-    # 4. 주문 데이터 생성 (최근 5주는 미결제, 나머지는 결제완료/취소)
-    print("📋 주문 데이터 생성 중...")
-    
-    # 5주 전 날짜 계산
+    # 날짜 기준점들
     five_weeks_ago = timezone.now() - timedelta(weeks=5)
+    two_weeks_ago = timezone.now() - timedelta(weeks=2)
     
-    # 주문 상태 및 결제 상태 설정 (현실적 비율)
+    # 주문 상태 및 결제 상태 설정
     def get_order_payment_status(order_date):
         if order_date >= five_weeks_ago:
             # 최근 5주 - 미결제 상태
@@ -162,18 +124,13 @@ def create_sample_data():
             else:  # 90% 배송완료
                 return 'delivered', 'paid'
     
-    # 3년간 주문 생성 (대폭 증가)
+    # 3000-4000개 주문 생성
     orders_created = 0
-    target_orders = random.randint(2000, 2500)  # 목표 주문 수 (2000-2500개)
+    target_orders = random.randint(3000, 4000)
     
-    # 재고가 있는 어종만 필터링
-    available_fish_types = []
-    for fish_type in fish_type_objects:
-        inventory = Inventory.objects.filter(fish_type=fish_type, user=user).first()
-        if inventory:
-            available_fish_types.append(fish_type)
-    
-    print(f"📋 재고가 있는 어종: {len(available_fish_types)}개")
+    # 모든 어종 사용 (재고 없어도 주문 가능)
+    available_fish_types = fish_type_objects
+    print(f"📋 사용 가능한 어종: {len(available_fish_types)}개 (재고 무관)")
     
     for _ in range(target_orders):
         # 등록일 랜덤 생성 (3년치)
@@ -194,7 +151,6 @@ def create_sample_data():
         business = random.choice(business_objects)
         
         # 주문 생성 (auto_now_add 강제 우회 - 모델 필드 임시 수정)
-        # auto_now_add 필드를 임시로 비활성화
         order_datetime_field = Order._meta.get_field('order_datetime')
         original_auto_now_add = order_datetime_field.auto_now_add
         order_datetime_field.auto_now_add = False
@@ -215,8 +171,8 @@ def create_sample_data():
             # auto_now_add 원상복구
             order_datetime_field.auto_now_add = original_auto_now_add
         
-        # 주문 아이템 생성 (재고가 있는 어종만 사용)
-        num_items = random.randint(2, 5)
+        # 주문 아이템 생성 (2주 이후 주문은 재고에 영향 없음)
+        num_items = random.randint(2, 5)  # 아이템 수 복구
         total_price = 0
         
         selected_fish_types = random.sample(available_fish_types, min(num_items, len(available_fish_types)))
@@ -224,24 +180,25 @@ def create_sample_data():
         for fish_type in selected_fish_types:
             # 단위별로 적절한 수량과 가격 설정
             if fish_type.unit == 'kg':
-                quantity = random.randint(5, 50)  # 5-50kg
-                unit_price = Decimal(str(random.randint(5000, 25000)))  # kg당 5천-2만5천원
+                quantity = random.randint(5, 50)
+                unit_price = Decimal(str(random.randint(5000, 25000)))
             elif fish_type.unit == '마리':
-                quantity = random.randint(2, 20)  # 2-20마리
-                unit_price = Decimal(str(random.randint(15000, 80000)))  # 마리당 1만5천-8만원
+                quantity = random.randint(2, 20)
+                unit_price = Decimal(str(random.randint(15000, 80000)))
             elif fish_type.unit == '박스':
-                quantity = random.randint(1, 10)  # 1-10박스
-                unit_price = Decimal(str(random.randint(30000, 150000)))  # 박스당 3만-15만원
+                quantity = random.randint(1, 10)
+                unit_price = Decimal(str(random.randint(30000, 150000)))
             elif fish_type.unit == '개':
-                quantity = random.randint(10, 100)  # 10-100개
-                unit_price = Decimal(str(random.randint(1000, 5000)))  # 개당 1천-5천원
+                quantity = random.randint(10, 100)
+                unit_price = Decimal(str(random.randint(1000, 5000)))
             elif fish_type.unit == '포':
-                quantity = random.randint(5, 30)  # 5-30포
-                unit_price = Decimal(str(random.randint(8000, 25000)))  # 포당 8천-2만5천원
+                quantity = random.randint(5, 30)
+                unit_price = Decimal(str(random.randint(8000, 25000)))
             else:
                 quantity = random.randint(5, 50)
                 unit_price = Decimal(str(random.randint(5000, 25000)))
             
+            # 주문 아이템 생성 (재고 체크 없이)
             order_item = OrderItem.objects.create(
                 order=order,
                 fish_type=fish_type,
@@ -253,15 +210,15 @@ def create_sample_data():
             
             total_price += quantity * unit_price
             
-            # StockTransaction 생성 (재고 추적)
+            # StockTransaction 로그 기록 (재고 차감 없이 기록만)
             StockTransaction.objects.create(
                 user=user,
                 fish_type=fish_type,
                 order=order,
                 transaction_type='order',
-                quantity_change=-quantity,  # 음수로 저장 (차감)
+                quantity_change=-quantity,
                 unit=fish_type.unit,
-                notes=f"주문 #{order.id}로 인한 재고 차감"
+                notes=f"주문 #{order.id} (재고 등록 이전 주문)"
             )
         
         # 총 가격 업데이트
@@ -329,8 +286,139 @@ def create_sample_data():
             print(f"📋 주문 생성 진행률: {orders_created}/{target_orders}")
     
     print(f"✅ 주문 생성 완료: 총 {orders_created}개")
-    print(f"📊 최근 5주 미결제 주문: {Order.objects.filter(order_datetime__gte=five_weeks_ago).count()}개")
-    print(f"📊 이전 결제완료/취소 주문: {Order.objects.filter(order_datetime__lt=five_weeks_ago).count()}개")
+    
+    # 4. 재고 데이터 등록 (주문 생성 후 - 2주 전 입고 기준)
+    print("📦 재고 데이터 등록 중 (주문 생성 후)...")
+    
+    # 2주 전 날짜 계산 (재고 입고일)
+    two_weeks_ago = timezone.now() - timedelta(weeks=2)
+    
+    # 재고 입고일 랜덤 생성 함수 (2주 전 ± 3일)
+    def random_stock_arrival_date():
+        base_date = two_weeks_ago
+        random_days = random.randint(-3, 3)  # ±3일 범위
+        return base_date + timedelta(days=random_days)
+    
+    from django.db.models import Sum
+    
+    # 각 어종별로 누적 주문량 계산 후 재고 등록
+    for fish_type in fish_type_objects:
+        # 기존 재고가 있는지 확인 (중복 방지)
+        existing_inventory = Inventory.objects.filter(
+            fish_type=fish_type,
+            user=user
+        ).first()
+        
+        if existing_inventory:
+            print(f"🔄 기존 재고 있음: {fish_type.name}")
+            continue
+            
+        # 해당 어종의 총 주문량 계산
+        total_ordered = StockTransaction.objects.filter(
+            fish_type=fish_type,
+            user=user,
+            transaction_type='order'
+        ).aggregate(total=Sum('quantity_change'))['total'] or 0
+        
+        # 절댓값으로 변환 (quantity_change는 음수)
+        total_ordered_abs = abs(total_ordered)
+        
+        # 단위별로 적절한 초기 재고량 설정 (주문량보다 많게)
+        if fish_type.unit == 'kg':
+            base_stock = random.randint(200, 1000)
+        elif fish_type.unit == '마리':
+            base_stock = random.randint(50, 300)
+        elif fish_type.unit == '박스':
+            base_stock = random.randint(20, 100)
+        elif fish_type.unit == '개':
+            base_stock = random.randint(500, 2000)
+        elif fish_type.unit == '포':
+            base_stock = random.randint(100, 500)
+        else:
+            base_stock = random.randint(100, 500)
+        
+        # 최종 재고 = 기본 재고량 (주문량이 차감될 예정)
+        # 일부 어종은 의도적으로 부족하게 만들어서 음수 상황 테스트
+        if random.random() < 0.3:  # 30% 확률로 재고 부족 상황
+            final_stock = max(10, int(total_ordered_abs * 0.7))  # 주문량의 70%만 재고
+        else:
+            final_stock = base_stock
+        
+        # auto_now 필드 강제 우회 (DB 직접 업데이트 방식)
+        stock_date = random_stock_arrival_date()
+        
+        # 1단계: 일단 재고 생성 (현재 시간으로)
+        inventory = Inventory.objects.create(
+            user=user,
+            fish_type=fish_type,
+            stock_quantity=final_stock,
+            unit=fish_type.unit,
+            status='normal'
+        )
+        
+        # 2단계: raw SQL로 updated_at 필드 직접 수정 (auto_now 무시)
+        from django.db import connection
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "UPDATE inventories SET updated_at = %s WHERE id = %s",
+                [stock_date, inventory.id]
+            )
+        
+        # inventory 객체 새로고침
+        inventory.refresh_from_db()
+        
+        print(f"✅ 재고 등록: {fish_type.name} - {final_stock}{fish_type.unit} (입고일: {inventory.updated_at.strftime('%Y-%m-%d')}, 총주문량: {total_ordered_abs})")
+    
+    # 5. 이제 OrderSerializer를 통해 재고 차감 실행
+    print("🔄 주문에 따른 재고 자동 차감 중...")
+    
+    # 최근 2주 이내 주문들만 실제 재고 차감
+    recent_orders = Order.objects.filter(
+        user=user,
+        order_datetime__gte=two_weeks_ago
+    )
+    
+    processed_orders = 0
+    for order in recent_orders:
+        for order_item in order.items.all():
+            fish_type = order_item.fish_type
+            quantity = order_item.quantity
+            
+            # 해당 어종의 재고들 조회 (FIFO 방식)
+            inventories = Inventory.objects.filter(
+                fish_type=fish_type,
+                user=user,
+                stock_quantity__gt=0
+            ).order_by('-stock_quantity')
+            
+            # 재고에서 차감
+            remaining_quantity = quantity
+            for inventory in inventories:
+                if remaining_quantity <= 0:
+                    break
+                
+                deduct_amount = min(remaining_quantity, inventory.stock_quantity)
+                inventory.stock_quantity -= deduct_amount
+                inventory.save()
+                remaining_quantity -= deduct_amount
+            
+        processed_orders += 1
+        if processed_orders % 50 == 0:
+            print(f"   📊 재고 차감 진행: {processed_orders}/{recent_orders.count()}")
+    
+    print(f"✅ 재고 차감 완료: {processed_orders}개 주문 처리")
+    
+    # 통계 정보
+    total_orders = Order.objects.filter(user=user).count()
+    recent_unpaid = Order.objects.filter(user=user, order_datetime__gte=five_weeks_ago).count()
+    older_paid = Order.objects.filter(user=user, order_datetime__lt=five_weeks_ago).count()
+    recent_2weeks = Order.objects.filter(user=user, order_datetime__gte=two_weeks_ago).count()
+    
+    print(f"📊 통계:")
+    print(f"   - 최근 5주 미결제: {recent_unpaid}개")
+    print(f"   - 이전 결제완료/취소: {older_paid}개") 
+    print(f"   - 최근 2주 주문 (재고 영향): {recent_2weeks}개")
+    print(f"   - 2주 이전 주문 (재고 무관): {total_orders - recent_2weeks}개")
     
     # 결제 데이터 요약
     paid_payments = Payment.objects.filter(payment_status='paid').count()

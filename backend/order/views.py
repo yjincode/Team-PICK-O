@@ -937,8 +937,34 @@ class CancelOrderView(View):
                 order.cancel_reason = cancel_reason
                 order.save()
                 
-                # 2. 재고 차감 롤백 (StockTransaction에서 해당 주문 기록 제거)
-                from inventory.models import StockTransaction
+                # 2. 실제 재고 복원 (새로운 방식)
+                from inventory.models import Inventory, StockTransaction
+                from django.db.models import F
+                
+                order_items = order.items.all()
+                print(f"🔄 재고 복원 시작: {order_items.count()}개 아이템")
+                
+                for order_item in order_items:
+                    quantity = order_item.quantity
+                    fish_type_id = order_item.fish_type_id
+                    
+                    # 해당 어종의 첫 번째 재고에 복원 (FIFO 역순)
+                    inventory = Inventory.objects.filter(
+                        fish_type_id=fish_type_id,
+                        user_id=request.user_id
+                    ).first()
+                    
+                    if inventory:
+                        old_stock = inventory.stock_quantity
+                        inventory.stock_quantity = F('stock_quantity') + quantity
+                        inventory.save()
+                        inventory.refresh_from_db()  # F 표현식 갱신
+                        
+                        print(f"✅ 재고 복원: {order_item.fish_type.name} - {old_stock} → {inventory.stock_quantity} (+{quantity})")
+                    else:
+                        print(f"⚠️ 재고 복원 실패: {order_item.fish_type.name} - 재고 없음")
+                
+                # StockTransaction 로그 기록 삭제 (선택사항)
                 cancelled_transactions = StockTransaction.objects.filter(
                     order_id=order.id,
                     user_id=request.user_id,
@@ -946,10 +972,8 @@ class CancelOrderView(View):
                 )
                 
                 if cancelled_transactions.exists():
-                    print(f"🔄 재고 차감 롤백: {cancelled_transactions.count()}개 거래 제거")
+                    print(f"📝 로그 삭제: {cancelled_transactions.count()}개 거래 기록")
                     cancelled_transactions.delete()
-                else:
-                    print(f"ℹ️ 롤백할 재고 거래 없음")
             
             print(f"✅ 주문 취소 및 재고 롤백 완료: order_id={order.id}")
             
