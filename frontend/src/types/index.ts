@@ -30,7 +30,8 @@ export interface FishType {
 export interface Inventory {
   id: number;
   fish_type_id: number;
-  stock_quantity: number;
+  stock_quantity: number;   // 재고 수량
+  ordered_quantity?: number; // 주문 수량 (기본값 0)
   unit?: string;
   status?: string;
   aquarium_photo_path?: string;
