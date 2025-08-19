@@ -30,7 +30,8 @@ export interface FishType {
 export interface Inventory {
   id: number;
   fish_type_id: number;
-  stock_quantity: number;
+  stock_quantity: number;   // 재고 수량
+  ordered_quantity?: number; // 주문 수량 (기본값 0)
   unit?: string;
   status?: string;
   aquarium_photo_path?: string;
@@ -83,6 +84,7 @@ export interface OrderListItem {
     id: number;
     business_name: string;
     phone_number: string;
+    businees_id: number;
   };
   total_price: number;
   order_datetime: string;
@@ -117,6 +119,25 @@ export interface PaginatedResponse<T> {
   next?: string | null;
   previous?: string | null;
   results: T[];
+}
+
+// 실제 백엔드 응답 구조 (Django REST Framework 스타일)
+export interface DjangoApiResponse<T> {
+  count: number;
+  next?: string | null;
+  previous?: string | null;
+  results: T[];
+}
+
+// 주문 목록 API 응답 (페이지네이션 정보 포함)
+export interface OrderListResponse {
+  data: OrderListItem[];
+  pagination?: {
+    total_count: number;
+    total_pages: number;
+    current_page: number;
+    page_size: number;
+  };
 }
 
 // ==================== 결제 관련 타입 ====================
@@ -184,12 +205,14 @@ export interface ARSummary {
 export interface RefundRequest {
   orderId: number;
   refundReason: string;
+  refundReasonDetail?: string;
 }
 
 // 주문 취소 요청
 export interface CancelOrderRequest {
   orderId: number;
   cancelReason: string;
+  cancelReasonDetail?: string;
 }
 
 // 환불 응답
@@ -199,6 +222,7 @@ export interface RefundResponse {
   status: 'refunded';
   refundAmount: number;
   refundReason: string;
+  refundReasonDetail?: string;
 }
 
 // 주문 취소 응답
@@ -206,6 +230,25 @@ export interface CancelOrderResponse {
   orderId: number;
   status: 'cancelled';
   cancelReason: string;
+  cancelReasonDetail?: string;
+}
+
+// ==================== 문서 발급 요청 관련 타입 ====================
+
+// 문서 발급 요청
+export interface DocumentRequest {
+  orderId: number;
+  documentType: 'tax_invoice' | 'cash_receipt';
+  receiptType?: 'individual' | 'business';  // 현금영수증용
+  identifier: string;  // 사업자등록번호 또는 휴대폰번호
+  specialRequest?: string;
+}
+
+// 문서 발급 응답
+export interface DocumentRequestResponse {
+  message: string;
+  document_request_id: number;
+  status: string;
 }
 
 // ==================== 폼 데이터 관련 타입 ====================

@@ -44,6 +44,20 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
     initializeAuth()
   }, [])
 
+  // 토큰 상태 변화 감지 (토큰이 제거되면 사용자 로그아웃)
+  useEffect(() => {
+    const checkTokenStatus = () => {
+      if (user && !TokenManager.isAuthenticated()) {
+        console.log('🔄 토큰 만료/제거 감지 - 자동 로그아웃')
+        setUser(null)
+      }
+    }
+
+    // 1초마다 토큰 상태 체크
+    const interval = setInterval(checkTokenStatus, 1000)
+    return () => clearInterval(interval)
+  }, [user])
+
   const initializeAuth = async () => {
     try {
       setLoading(true)

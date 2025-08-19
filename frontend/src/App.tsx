@@ -14,6 +14,9 @@ import SettlementForm from './pages/business/SettlementForm';
 import OrderList from './pages/orders/OrderList';
 import OrderDetail from './pages/orders/OrderDetail';
 import PaymentPage from './pages/orders/PaymentPage';
+import TaxInvoicePage from './pages/orders/TaxInvoicePage';
+import CashReceiptPage from './pages/orders/CashReceiptPage';
+import OrderConfirmationPage from './pages/orders/OrderConfirmationPage';
 
 import AiLogList from './pages/orders/AiLogList';
 import FishStockList from './pages/inventory/FishStockList';
@@ -107,6 +110,42 @@ const App: React.FC = () => {
             <PrivateRoute>
               <MainLayout>
                 <PaymentPage />
+              </MainLayout>
+            </PrivateRoute>
+          } 
+        />
+
+        {/* 세금계산서 페이지 */}
+        <Route 
+          path="/tax-invoice/:id" 
+          element={
+            <PrivateRoute>
+              <MainLayout>
+                <TaxInvoicePage />
+              </MainLayout>
+            </PrivateRoute>
+          } 
+        />
+
+        {/* 현금영수증 페이지 */}
+        <Route 
+          path="/cash-receipt/:id" 
+          element={
+            <PrivateRoute>
+              <MainLayout>
+                <CashReceiptPage />
+              </MainLayout>
+            </PrivateRoute>
+          } 
+        />
+
+        {/* 주문확인서 페이지 */}
+        <Route 
+          path="/order-confirmation/:id" 
+          element={
+            <PrivateRoute>
+              <MainLayout>
+                <OrderConfirmationPage />
               </MainLayout>
             </PrivateRoute>
           } 

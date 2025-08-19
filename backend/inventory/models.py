@@ -16,6 +16,7 @@ class Inventory(models.Model):
     fish_type = models.ForeignKey('fish_registry.FishType', on_delete=models.CASCADE, verbose_name="어종")
     
     stock_quantity = models.FloatField(default=0, verbose_name="재고 수량")
+    ordered_quantity = models.FloatField(default=0, verbose_name="주문 수량") 
     unit = models.CharField(max_length=20, verbose_name="단위")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='registered', verbose_name="상태")
     aquarium_photo_path = models.TextField(blank=True, null=True, verbose_name="사진 경로")
@@ -27,7 +28,7 @@ class Inventory(models.Model):
         verbose_name_plural = '재고들'
 
     def __str__(self):
-        return f"{self.fish_type.name} - {self.stock_quantity} {self.unit}"
+        return f"{self.fish_type.name} - 재고:{self.stock_quantity} 주문:{self.ordered_quantity} {self.unit}"
 
 
 class InventoryLog(models.Model):

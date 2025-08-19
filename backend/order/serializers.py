@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Order, OrderItem
+from .models import Order, OrderItem, DocumentRequest
 
 
 class OrderItemSerializer(serializers.ModelSerializer):
@@ -39,6 +39,9 @@ class OrderSerializer(serializers.ModelSerializer):
             'memo',
             'order_status',
             'cancel_reason',
+            'cancel_reason_detail',
+            'refund_reason',
+            'refund_reason_detail',
             'is_urgent',
             'last_updated_at',
             'order_items'
@@ -51,12 +54,15 @@ class OrderSerializer(serializers.ModelSerializer):
             'transcribed_text': {'required': False},
             'memo': {'required': False},
             'cancel_reason': {'required': False},
+            'cancel_reason_detail': {'required': False},
+            'refund_reason': {'required': False},
+            'refund_reason_detail': {'required': False},
             'is_urgent': {'required': False},
             'last_updated_at': {'required': False}
         }
 
     def create(self, validated_data):
-        print(f"🏗️ OrderSerializer.create() 호출됨 - 새 버전 4.0 (재고 추적 포함)")
+        print(f"🏗️ OrderSerializer.create() 호출됨 - 재고수량 차감, 주문수량 증가")
         print(f"📦 validated_data keys: {list(validated_data.keys())}")
         
         order_items_data = validated_data.pop('order_items')
@@ -64,76 +70,48 @@ class OrderSerializer(serializers.ModelSerializer):
         
         print(f"🏢 추출된 business_id: {business_id}")
         
-        # 재고 체크 및 재고 이슈 플래그 설정
-        has_stock_issues = False
-        
-        # inventoryApi.checkStock과 동일한 로직으로 재고 체크
-        from inventory.models import Inventory, StockTransaction
-        from fish_registry.models import FishType
-        from django.db.models import Sum
+        from inventory.models import Inventory
         from business.models import User
+        from django.db import transaction
+        from django.db.models import F
         
         user = User.objects.get(id=validated_data.get('user_id'))
         
-        for item_data in order_items_data:
-            fish_type_id = item_data.get('fish_type_id')
-            quantity = item_data.get('quantity', 0)
+        # 트랜잭션으로 주문 생성, 재고수량 차감, 주문수량 증가
+        with transaction.atomic():
+            # 주문 생성
+            order = Order.objects.create(
+                business_id=business_id,
+                **validated_data
+            )
             
-            if fish_type_id and quantity > 0:
-                # 현재 재고량 계산 (실제 재고 - 주문으로 차감된 재고)
-                total_registered_stock = Inventory.objects.filter(
+            print(f"🎯 생성된 주문 ID: {order.id}, user_id: {order.user_id}")
+            print(f"🏪 생성된 주문 거래처: {order.business.business_name}")
+
+            # 주문 항목 생성, 재고수량 차감, 주문수량 증가
+            for item_data in order_items_data:
+                fish_type_id = item_data.pop('fish_type_id')
+                quantity = item_data.get('quantity', 0)
+                
+                # 주문 항목 생성
+                order_item = OrderItem.objects.create(order=order, fish_type_id=fish_type_id, **item_data)
+                
+                # 해당 어종의 첫 번째 재고의 주문수량만 증가 (재고수량은 건드리지 않음)
+                inventory = Inventory.objects.filter(
                     fish_type_id=fish_type_id,
                     user=user
-                ).aggregate(total=Sum('stock_quantity'))['total'] or 0
+                ).first()
                 
-                # 주문으로 차감된 재고량
-                total_ordered = StockTransaction.objects.filter(
-                    fish_type=fish_type_id,
-                    user=user,
-                    transaction_type='order'
-                ).aggregate(total=Sum('quantity_change'))['total'] or 0
-                
-                # 실제 가용 재고 = 등록된 재고 - 주문된 재고 (quantity_change는 음수로 저장됨)
-                available_stock = total_registered_stock + total_ordered  # 음수 더하기이므로 실질적으로는 빼기
-                
-                print(f"📦 재고 체크: {fish_type_id} - 등록재고: {total_registered_stock}, 주문차감: {total_ordered}, 가용재고: {available_stock}")
-                
-                # 재고 부족 여부 확인
-                if quantity > available_stock:
-                    has_stock_issues = True
-                    print(f"⚠️ 재고 부족 감지: {fish_type_id} - 주문: {quantity}, 가용: {available_stock}")
-        
-        # 주문 생성
-        order = Order.objects.create(
-            business_id=business_id,
-            has_stock_issues=has_stock_issues,  # 재고 이슈 플래그 설정
-            **validated_data
-        )
-        
-        print(f"🎯 생성된 주문 ID: {order.id}, user_id: {order.user_id}, 재고이슈: {has_stock_issues}")
-        print(f"🏪 생성된 주문 거래처: {order.business.business_name}")
-
-        # 주문 항목 생성 및 재고 차감 기록
-        for item_data in order_items_data:
-            fish_type_id = item_data.pop('fish_type_id')
-            quantity = item_data.get('quantity', 0)
-            unit = item_data.get('unit', '')
-            
-            # 주문 항목 생성
-            order_item = OrderItem.objects.create(order=order, fish_type_id=fish_type_id, **item_data)
-            
-            # 재고 거래 기록 생성 (주문으로 인한 차감)
-            if quantity > 0:
-                StockTransaction.objects.create(
-                    user=user,
-                    fish_type_id=fish_type_id,
-                    order=order,
-                    transaction_type='order',
-                    quantity_change=-quantity,  # 음수로 저장 (차감)
-                    unit=unit,
-                    notes=f"주문 #{order.id}로 인한 재고 차감"
-                )
-                print(f"📝 재고 거래 기록: {fish_type_id} - {quantity} {unit} 차감")
+                if inventory:
+                    old_ordered = inventory.ordered_quantity
+                    
+                    inventory.ordered_quantity = F('ordered_quantity') + quantity
+                    inventory.save()
+                    inventory.refresh_from_db()  # F 표현식 갱신
+                    
+                    print(f"✅ 주문수량 증가: {order_item.fish_type.name} - 주문수량:{old_ordered}→{inventory.ordered_quantity} (+{quantity})")
+                else:
+                    print(f"⚠️ 재고 없음: {order_item.fish_type.name} - 재고 항목이 없어 처리 불가")
 
         return order
 
@@ -183,41 +161,36 @@ class OrderListSerializer(serializers.ModelSerializer):
             else:
                 quantity_str = str(int(quantity))
             
-            # 재고 부족 체크
+            # 재고 부족 경고 표시 (재고수량 기준)
             stock_issue_indicator = ""
             try:
                 from django.db.models import Sum
-                from inventory.models import Inventory, StockTransaction
-                from core.middleware import get_user_queryset_filter
+                from inventory.models import Inventory
                 
                 # 사용자 ID 가져오기 (context에서)
                 request = self.context.get('request')
                 if request and hasattr(request, 'user_id'):
-                    user_filter = {'user_id': request.user_id}
+                    fish_type_obj = item.fish_type
+                    fish_type_id = fish_type_obj.id
                     
-                    # 등록된 총 재고량
-                    total_registered_stock = Inventory.objects.filter(
-                        fish_type_id=item.fish_type_id,
-                        **user_filter
+                    # 해당 어종의 재고수량 조회
+                    current_stock = Inventory.objects.filter(
+                        fish_type_id=fish_type_id,
+                        user_id=request.user_id
                     ).aggregate(total=Sum('stock_quantity'))['total'] or 0
                     
-                    # 주문으로 차감된 재고량 (quantity_change는 음수)
-                    total_ordered = StockTransaction.objects.filter(
-                        fish_type_id=item.fish_type_id,
-                        user_id=request.user_id,
-                        transaction_type='order'
-                    ).aggregate(total=Sum('quantity_change'))['total'] or 0
-                    
-                    # 실제 가용 재고 = 등록된 재고 + 차감된 재고 (음수이므로 실질적으로 빼기)
-                    total_stock = total_registered_stock + total_ordered
-                    
-                    # 재고 부족 시 느낌표 추가
-                    if quantity > total_stock:
-                        stock_issue_indicator = "❗"
+                    # 재고 상태 판정
+                    if current_stock <= 0:
+                        stock_issue_indicator = "🚫"  # 재고 없음 (빨간색)
+                    elif current_stock <= 10:
+                        stock_issue_indicator = "❗"  # 재고 부족 (주황색)
+                    elif current_stock <= 20:
+                        stock_issue_indicator = "⚠️"  # 재고 주의 (노란색)
+                    # 재고가 충분하면 표시 없음
                         
             except Exception as e:
-                # 재고 체크 실패 시 무시 (에러가 있어도 주문 목록은 표시되어야 함)
-                pass
+                print(f"❌ 재고 체크 오류 (어종 {item.fish_type.name}): {e}")
+                # 재고 체크 실패 시에도 주문 목록은 표시되어야 함
             
             item_names.append(f"{stock_issue_indicator}{item.fish_type.name} {quantity_str}{unit}")
         
@@ -259,13 +232,22 @@ class OrderDetailSerializer(serializers.ModelSerializer):
     business_address = serializers.SerializerMethodField()
     items = OrderDetailItemSerializer(many=True, read_only=True)
     
+    # 결제 정보 필드 추가
+    payment_method = serializers.SerializerMethodField()
+    payment_status = serializers.SerializerMethodField()
+    payment_amount = serializers.SerializerMethodField()
+    paid_at = serializers.SerializerMethodField()
+    receipt_url = serializers.SerializerMethodField()
+    
     class Meta:
         model = Order
         fields = [
             'id', 'business_name', 'business_phone', 'business_address',
             'total_price', 'order_datetime', 'delivery_datetime', 'ship_out_datetime',
             'order_status', 'cancel_reason', 'is_urgent', 'source_type', 
-            'transcribed_text', 'memo', 'items'
+            'transcribed_text', 'memo', 'items',
+            # 결제 정보 필드 추가
+            'payment_method', 'payment_status', 'payment_amount', 'paid_at', 'receipt_url'
         ]
     
     def get_business_name(self, obj):
@@ -291,6 +273,51 @@ class OrderDetailSerializer(serializers.ModelSerializer):
             return business.address
         except Business.DoesNotExist:
             return '주소 없음'
+    
+    def get_payment_method(self, obj):
+        """결제 수단 반환"""
+        try:
+            if obj.payment:
+                return obj.payment.method
+            return None
+        except:
+            return None
+    
+    def get_payment_status(self, obj):
+        """결제 상태 반환"""
+        try:
+            if obj.payment:
+                return obj.payment.payment_status
+            return None
+        except:
+            return None
+    
+    def get_payment_amount(self, obj):
+        """결제 금액 반환"""
+        try:
+            if obj.payment:
+                return obj.payment.amount
+            return None
+        except:
+            return None
+    
+    def get_paid_at(self, obj):
+        """결제 완료 시각 반환"""
+        try:
+            if obj.payment and obj.payment.paid_at:
+                return obj.payment.paid_at
+            return None
+        except:
+            return None
+    
+    def get_receipt_url(self, obj):
+        """영수증 URL 반환"""
+        try:
+            if obj.payment and obj.payment.receipt_url:
+                return obj.payment.receipt_url
+            return None
+        except:
+            return None
 
 
 class OrderStatusUpdateSerializer(serializers.ModelSerializer):
@@ -322,7 +349,7 @@ class OrderUpdateSerializer(serializers.ModelSerializer):
         order = self.instance
         
         # 결제 완료된 주문은 수정 불가
-        if order.payment_set.filter(payment_status='paid').exists():
+        if order.payment and order.payment.payment_status == 'paid':
             raise serializers.ValidationError("결제가 완료된 주문은 수정할 수 없습니다.")
         
         # 취소된 주문은 수정 불가
@@ -332,30 +359,89 @@ class OrderUpdateSerializer(serializers.ModelSerializer):
         return data
     
     def update(self, instance, validated_data):
-        """주문 정보 및 항목 수정"""
+        """주문 정보 및 항목 수정 (재고 연동)"""
         order_items_data = validated_data.pop('order_items', [])
         
-        # 주문 기본 정보 업데이트
-        for attr, value in validated_data.items():
-            setattr(instance, attr, value)
+        from inventory.models import Inventory
+        from django.db.models import F
+        from django.db import transaction
         
-        # 총액 재계산을 위해 임시 저장
-        instance.save()
-        
-        # 기존 주문 항목 삭제
-        instance.items.all().delete()
-        
-        # 새로운 주문 항목 생성
-        for item_data in order_items_data:
-            fish_type_id = item_data.pop('fish_type_id')
-            OrderItem.objects.create(order=instance, fish_type_id=fish_type_id, **item_data)
-        
-        # 총액 재계산
-        total_price = sum(
-            item.quantity * item.unit_price 
-            for item in instance.items.all()
-        )
-        instance.total_price = total_price
-        instance.save()
+        with transaction.atomic():
+            # 1. 기존 주문 항목들의 주문수량 감소 (원복)
+            for existing_item in instance.items.all():
+                inventory = Inventory.objects.filter(
+                    fish_type_id=existing_item.fish_type_id,
+                    user_id=instance.user_id
+                ).first()
+                
+                if inventory:
+                    inventory.ordered_quantity = F('ordered_quantity') - existing_item.quantity
+                    inventory.save()
+                    print(f"🔄 기존 주문수량 감소: {existing_item.fish_type.name} (-{existing_item.quantity})")
+            
+            # 2. 주문 기본 정보 업데이트
+            for attr, value in validated_data.items():
+                setattr(instance, attr, value)
+            
+            # 총액 재계산을 위해 임시 저장
+            instance.save()
+            
+            # 3. 기존 주문 항목 삭제
+            instance.items.all().delete()
+            
+            # 4. 새로운 주문 항목 생성 및 주문수량 증가
+            for item_data in order_items_data:
+                fish_type_id = item_data.pop('fish_type_id')
+                quantity = item_data.get('quantity', 0)
+                
+                # 주문 항목 생성
+                OrderItem.objects.create(order=instance, fish_type_id=fish_type_id, **item_data)
+                
+                # 주문수량 증가
+                inventory = Inventory.objects.filter(
+                    fish_type_id=fish_type_id,
+                    user_id=instance.user_id
+                ).first()
+                
+                if inventory:
+                    inventory.ordered_quantity = F('ordered_quantity') + quantity
+                    inventory.save()
+                    print(f"✅ 새 주문수량 증가: {inventory.fish_type.name} (+{quantity})")
+            
+            # 5. 총액 재계산
+            total_price = sum(
+                item.quantity * item.unit_price 
+                for item in instance.items.all()
+            )
+            instance.total_price = total_price
+            instance.save()
         
         return instance
+
+
+class DocumentRequestSerializer(serializers.ModelSerializer):
+    """문서 발급 요청 시리얼라이저"""
+    
+    class Meta:
+        model = DocumentRequest
+        fields = [
+            'id',
+            'order',
+            'user',
+            'document_type',
+            'receipt_type',
+            'identifier',
+            'special_request',
+            'status',
+            'created_at',
+            'completed_at'
+        ]
+        read_only_fields = ['id', 'user', 'status', 'created_at', 'completed_at']
+    
+    def create(self, validated_data):
+        # 현재 로그인한 사용자 정보 추가
+        request = self.context.get('request')
+        if request and hasattr(request, 'user_id'):
+            validated_data['user_id'] = request.user_id
+        
+        return super().create(validated_data)

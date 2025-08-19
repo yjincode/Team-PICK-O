@@ -94,14 +94,26 @@ class InventoryCreateSerializer(serializers.ModelSerializer):
         return value
         
     def validate(self, data):
-        """해당 어종의 재고가 이미 존재하는지 확인"""
-        fish_type_id = data.get('fish_type_id')
-        if fish_type_id and Inventory.objects.filter(fish_type_id=fish_type_id).exists():
-            raise serializers.ValidationError("해당 어종의 재고가 이미 존재합니다.")
+        """기본 검증만 수행 (중복 어종 검증 제거 - 프론트엔드에서 처리)"""
         return data
 
     def create(self, validated_data):
         fish_type_id = validated_data.pop('fish_type_id')
         fish_type = FishType.objects.get(id=fish_type_id)
-        inventory = Inventory.objects.create(fish_type=fish_type, **validated_data)
-        return inventory
+        user_id = validated_data.get('user_id')  # views.py에서 전달
+        
+        # 같은 어종의 기존 재고가 있는지 확인
+        existing_inventory = Inventory.objects.filter(
+            fish_type_id=fish_type_id, 
+            user_id=user_id
+        ).first()
+        
+        if existing_inventory:
+            # 기존 재고가 있으면 수량을 더함
+            existing_inventory.stock_quantity += validated_data['stock_quantity']
+            existing_inventory.save()
+            return existing_inventory
+        else:
+            # 새로운 재고 생성
+            inventory = Inventory.objects.create(fish_type=fish_type, **validated_data)
+            return inventory

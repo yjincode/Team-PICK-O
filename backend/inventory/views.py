@@ -47,8 +47,23 @@ class InventoryListCreateView(View):
             
         queryset = queryset.order_by('-updated_at')
         
-        serializer = InventoryListSerializer(queryset, many=True)
-        return JsonResponse(serializer.data, safe=False)
+        # 단순한 재고 데이터 조회 (새로운 방식)
+        print(f"📦 단순 재고 조회 시작 (총 {queryset.count()}개)")
+        
+        inventory_data = []
+        for inventory in queryset:
+            print(f"📦 재고 조회: {inventory.fish_type.name} - 현재 재고: {inventory.stock_quantity}")
+            
+            # 시리얼라이저 데이터 생성
+            inventory_serialized = InventoryListSerializer(inventory).data
+            
+            # 단순한 재고 정보만 추가
+            inventory_serialized['ordered_quantity'] = inventory.ordered_quantity
+            
+            inventory_data.append(inventory_serialized)
+        
+        print(f"✅ 재고 조회 완료: {len(inventory_data)}개 반환")
+        return JsonResponse(inventory_data, safe=False)
     
     def post(self, request):
         """재고 생성"""
@@ -94,10 +109,13 @@ class InventoryListCreateView(View):
                 updated_by=user
             )
             
-            return JsonResponse(
-                InventoryListSerializer(inventory).data,
-                status=201
-            )
+            # 단순한 재고 생성 응답 (새로운 방식)
+            print(f"✅ 새 재고 생성 완료: {inventory.fish_type.name} - {inventory.stock_quantity}")
+            
+            inventory_data = InventoryListSerializer(inventory).data
+            inventory_data['ordered_quantity'] = inventory.ordered_quantity
+            
+            return JsonResponse(inventory_data, status=201)
         return JsonResponse(serializer.errors, status=400)
 
 
@@ -175,7 +193,10 @@ class InventoryDetailView(View):
                         updated_by=user
                     )
                 
-                return JsonResponse(serializer.data)
+                # 단순한 재고 수정 응답
+                inventory_data = serializer.data
+                
+                return JsonResponse(inventory_data)
             return JsonResponse(serializer.errors, status=400)
         except Inventory.DoesNotExist:
             return JsonResponse({'error': '재고를 찾을 수 없습니다.'}, status=404)
@@ -302,25 +323,14 @@ class StockCheckView(View):
                 continue
                 
             try:
-                # 어종별 실시간 재고량 계산 (등록된 재고 - 주문으로 차감된 재고)
+                # 단순한 재고수량 조회
                 from django.db.models import Sum
-                from .models import StockTransaction
                 
-                # 등록된 총 재고량
-                total_registered_stock = Inventory.objects.filter(
+                # 해당 어종의 재고수량 조회
+                total_stock = Inventory.objects.filter(
                     fish_type_id=fish_type_id,
                     **get_user_queryset_filter(request)
                 ).aggregate(total=Sum('stock_quantity'))['total'] or 0
-                
-                # 주문으로 차감된 재고량 (quantity_change는 음수)
-                total_ordered = StockTransaction.objects.filter(
-                    fish_type_id=fish_type_id,
-                    user_id=request.user_id,
-                    transaction_type='order'
-                ).aggregate(total=Sum('quantity_change'))['total'] or 0
-                
-                # 실제 가용 재고 = 등록된 재고 + 차감된 재고 (음수이므로 실질적으로 빼기)
-                total_stock = total_registered_stock + total_ordered
                 
                 # 어종 정보 가져오기
                 fish_type = FishType.objects.get(id=fish_type_id, **get_user_queryset_filter(request))
@@ -329,12 +339,12 @@ class StockCheckView(View):
                     'fish_type_id': fish_type_id,
                     'fish_name': fish_type.name,
                     'requested_quantity': quantity,
-                    'available_stock': total_stock,
+                    'current_stock': total_stock,
                     'unit': unit,
                     'status': 'ok'
                 }
                 
-                # 재고 부족 체크
+                # 재고 부족 체크 (재고수량 기준)
                 if quantity > total_stock:
                     shortage = quantity - total_stock
                     item_result['status'] = 'insufficient'
@@ -344,13 +354,12 @@ class StockCheckView(View):
                     quantity_str = f"{quantity:g}"
                     total_stock_str = f"{total_stock:g}"
                     shortage_str = f"{shortage:g}"
-                    remaining_stock = total_stock
                     
-                    warning_msg = f"🚨 {fish_type.name}: {quantity_str}{unit} 주문시 남은재고 {remaining_stock:g}{unit} (부족: {shortage_str}{unit})"
+                    warning_msg = f"🚨 {fish_type.name}: {quantity_str}{unit} 주문시 남은재고 {total_stock:g}{unit} (부족: {shortage_str}{unit})"
                     warnings.append(warning_msg)
                     errors.append({
                         'fish_name': fish_type.name,
-                        'message': f'🚨 재고 부족! {quantity_str}{unit} 주문시 남은재고 {remaining_stock:g}{unit}',
+                        'message': f'🚨 재고 부족! {quantity_str}{unit} 주문시 남은재고 {total_stock:g}{unit}',
                         'shortage': shortage
                     })
                 elif total_stock == 0:

@@ -184,6 +184,8 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
   const [stockErrors, setStockErrors] = useState<any[]>([])
   const [isCheckingStock, setIsCheckingStock] = useState<boolean>(false)
   const [tempStockInfo, setTempStockInfo] = useState<{warnings: string[], errors: any[]}>({warnings: [], errors: []})
+  const [showStockDetails, setShowStockDetails] = useState<boolean>(false)
+  const [detailedStockInfo, setDetailedStockInfo] = useState<any[]>([])
   
   // 주문 완료 후 재고 이슈 상태
   const [completedOrderStockIssue, setCompletedOrderStockIssue] = useState<boolean>(false)
@@ -249,8 +251,22 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
       const stockResult = await inventoryApi.checkStock({ order_items: stockCheckItems })
       console.log('📦 재고 체크 결과:', stockResult)
       
-      setStockWarnings(stockResult.warnings || [])
-      setStockErrors(stockResult.errors || [])
+      // 실시간으로 재고 상태에 따라 경고/에러 업데이트
+      const currentWarnings = stockResult.warnings || []
+      const currentErrors = stockResult.errors || []
+      
+      // 재고가 충분하면 경고 메시지 제거
+      if (stockResult.status === 'ok') {
+        setStockWarnings([])
+        setStockErrors([])
+        setDetailedStockInfo([])
+        console.log('✅ 모든 어종 재고 충분')
+      } else {
+        setStockWarnings(currentWarnings)
+        setStockErrors(currentErrors)
+        setDetailedStockInfo(stockResult.items || []) // 상세 재고 정보 저장
+        console.log('⚠️ 재고 부족 어종 있음:', { warnings: currentWarnings, errors: currentErrors, items: stockResult.items })
+      }
       
     } catch (error) {
       console.error('재고 체크 실패:', error)
@@ -297,12 +313,9 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
         } else if (response && Array.isArray((response as any).results)) {
           console.log('📁 페이지네이션 응답 형태 (results)')
           businessData = (response as any).results
-        } else if (response && response.data && Array.isArray(response.data.results)) {
-          console.log('📁 페이지네이션 응답 형태 (data.results)')
-          businessData = response.data.results
-        } else if (response && response.data && Array.isArray(response.data)) {
-          console.log('📁 데이터 래핑 응답 형태 (data)')
-          businessData = response.data
+        } else if (response && Array.isArray(response.results)) {
+          console.log('📁 페이지네이션 응답 형태 (results)')
+          businessData = response.results
         } else {
           console.log('❓ 알 수 없는 응답 형태:', response)
         }
@@ -1176,46 +1189,183 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
               />
             </div>
 
-            {/* 재고 경고 메시지 */}
+            {/* 재고 상태 메시지 */}
+            {formData.items.length > 0 && (
+              <div className="space-y-2">
+                {/* 재고 충분 (모든 어종 문제없음) */}
+                {stockWarnings.length === 0 && stockErrors.length === 0 && (
+                  <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                    <div className="flex items-center">
+                      <svg className="h-5 w-5 text-green-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                      </svg>
+                      <h4 className="text-green-800 font-medium">✅ 재고 충분</h4>
+                      <span className="ml-auto text-green-600 text-xs">모든 어종 재고가 충분합니다</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+            
+            {/* 재고 부족/경고 메시지 */}
             {(stockWarnings.length > 0 || stockErrors.length > 0) && (
               <div className="space-y-2">
-                {/* 재고 부족 정보 */}
+                {/* 심각한 재고 부족 (품절/부족) */}
                 {stockErrors.length > 0 && (
-                  <div className="p-4 bg-orange-50 border border-orange-200 rounded-lg">
-                    <div className="flex items-center mb-2">
-                      <svg className="h-5 w-5 text-orange-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+                    <div className="flex items-center mb-3">
+                      <svg className="h-5 w-5 text-red-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
                       </svg>
-                      <h4 className="text-orange-800 font-medium">재고 부족 알림</h4>
+                      <h4 className="text-red-800 font-semibold">🚨 재고 부족 경고</h4>
                     </div>
-                    <div className="space-y-1">
+                    <div className="space-y-2">
                       {stockErrors.map((error, index) => (
-                        <div key={index} className="text-orange-700 text-sm">
-                          • {error.message}
+                        <div key={index} className="bg-white p-3 rounded border-l-4 border-red-400">
+                          <div className="flex justify-between items-start">
+                            <div className="flex-1">
+                              <p className="text-red-800 font-medium text-sm">
+                                🐟 {error.fish_name || '알 수 없는 어종'}
+                              </p>
+                              <p className="text-red-700 text-sm mt-1">
+                                {error.message}
+                              </p>
+                            </div>
+                            {error.shortage && (
+                              <div className="ml-3">
+                                <span className="inline-block bg-red-100 text-red-800 text-xs px-2 py-1 rounded font-medium">
+                                  부족: {error.shortage}
+                                </span>
+                              </div>
+                            )}
+                          </div>
                         </div>
                       ))}
                     </div>
-                    <div className="mt-2 text-orange-600 text-xs">
-                      💡 재고가 부족하지만 주문은 진행할 수 있습니다.
+                    <div className="mt-3 p-2 bg-red-100 rounded text-xs text-red-700">
+                      💡 재고가 부족하지만 주문 등록은 가능합니다. 출고 전 재고 보충이 필요합니다.
+                    </div>
+                    
+                    {/* 상세 재고 정보 보기 버튼 */}
+                    <div className="mt-3">
+                      <Button 
+                        type="button" 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => setShowStockDetails(!showStockDetails)}
+                        className="w-full text-red-700 border-red-300 hover:bg-red-50"
+                      >
+                        {showStockDetails ? '재고 상세 정보 숨기기' : '재고 상세 정보 보기'} 
+                        <svg className={`ml-2 h-4 w-4 transition-transform ${showStockDetails ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </Button>
                     </div>
                   </div>
                 )}
                 
-                {/* 재고 경고 */}
+                {/* 상세 재고 정보 (확장 가능) */}
+                {showStockDetails && detailedStockInfo.length > 0 && (
+                  <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                    <h5 className="text-gray-800 font-semibold mb-3 text-sm">📊 전체 어종별 재고 현황</h5>
+                    <div className="space-y-3">
+                      {detailedStockInfo.map((item, index) => (
+                        <div key={index} className="bg-white p-3 rounded border">
+                          <div className="flex justify-between items-start mb-2">
+                            <div className="flex-1">
+                              <h6 className="font-medium text-gray-900 text-sm">
+                                🐟 {item.fish_name}
+                              </h6>
+                              <div className="flex gap-4 mt-1">
+                                <span className="text-xs text-gray-600">
+                                  주문 요청: <span className="font-medium text-blue-600">{item.requested_quantity} {item.unit}</span>
+                                </span>
+                                <span className="text-xs text-gray-600">
+                                  가용 재고: <span className={`font-medium ${item.available_stock >= item.requested_quantity ? 'text-green-600' : 'text-red-600'}`}>
+                                    {item.available_stock} {item.unit}
+                                  </span>
+                                </span>
+                                {item.ordered_quantity > 0 && (
+                                  <span className="text-xs text-gray-600">
+                                    기존 주문: <span className="font-medium text-orange-600">{item.ordered_quantity} {item.unit}</span>
+                                  </span>
+                                )}
+                                {item.registered_stock && (
+                                  <span className="text-xs text-gray-600">
+                                    등록 재고: <span className="font-medium text-gray-600">{item.registered_stock} {item.unit}</span>
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <span className={`inline-block px-2 py-1 rounded text-xs font-medium ${
+                                item.status === 'ok' 
+                                  ? 'bg-green-100 text-green-800' 
+                                  : item.status === 'warning'
+                                  ? 'bg-yellow-100 text-yellow-800'
+                                  : item.status === 'insufficient' || item.status === 'out_of_stock'
+                                  ? 'bg-red-100 text-red-800'
+                                  : 'bg-gray-100 text-gray-800'
+                              }`}>
+                                {item.status === 'ok' && '충분'}
+                                {item.status === 'warning' && '주의'}
+                                {item.status === 'insufficient' && '부족'}
+                                {item.status === 'out_of_stock' && '품절'}
+                              </span>
+                            </div>
+                          </div>
+                          
+                          {/* 재고 진행률 바 */}
+                          <div className="mt-2">
+                            <div className="flex justify-between text-xs text-gray-500 mb-1">
+                              <span>재고 사용률</span>
+                              <span>
+                                {item.available_stock > 0 
+                                  ? Math.round((item.requested_quantity / item.available_stock) * 100) 
+                                  : 100}%
+                              </span>
+                            </div>
+                            <div className="w-full bg-gray-200 rounded-full h-2">
+                              <div 
+                                className={`h-2 rounded-full transition-all ${
+                                  item.status === 'ok' 
+                                    ? 'bg-green-500' 
+                                    : item.status === 'warning'
+                                    ? 'bg-yellow-500'
+                                    : 'bg-red-500'
+                                }`}
+                                style={{ 
+                                  width: `${item.available_stock > 0 
+                                    ? Math.min((item.requested_quantity / item.available_stock) * 100, 100) 
+                                    : 100}%` 
+                                }}
+                              ></div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                
+                {/* 재고 주의 경고 (충분하지만 주의 필요) */}
                 {stockWarnings.length > 0 && stockErrors.length === 0 && (
                   <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
                     <div className="flex items-center mb-2">
                       <svg className="h-5 w-5 text-yellow-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                       </svg>
-                      <h4 className="text-yellow-800 font-medium">재고 주의</h4>
+                      <h4 className="text-yellow-800 font-medium">⚠️ 재고 주의</h4>
                     </div>
                     <div className="space-y-1">
                       {stockWarnings.map((warning, index) => (
-                        <div key={index} className="text-yellow-700 text-sm">
+                        <div key={index} className="bg-white p-2 rounded border-l-3 border-yellow-400 text-yellow-700 text-sm">
                           • {warning}
                         </div>
                       ))}
+                    </div>
+                    <div className="mt-2 text-yellow-600 text-xs">
+                      💡 재고가 부족할 수 있으니 주의해주세요.
                     </div>
                   </div>
                 )}

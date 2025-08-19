@@ -57,12 +57,21 @@ class Business(models.Model):
     def outstanding_balance(self):
         """동적으로 미수금 계산 - 결제되지 않은 주문의 총액"""
         from order.models import Order
+        from payment.models import Payment
+        from django.db.models import Q, Exists, OuterRef
         
-        # 취소되지 않았지만 아직 결제가 완료되지 않은 주문들의 총액을 계산
+        # 결제가 완료된 주문들과 환불된 주문들의 ID를 찾기
+        paid_or_refunded_order_ids = Payment.objects.filter(
+            business_id=self.id,
+            payment_status__in=['paid', 'refunded']
+        ).values_list('order_id', flat=True)
+        
+        # 취소되지 않았고 결제가 완료되지 않은 주문들의 총액을 계산
         unpaid_total = Order.objects.filter(
             business_id=self.id,
             order_status__in=['placed', 'ready', 'delivered']  # 취소되지 않은 주문들
-            # 추후 payment_status 필드가 추가되면 payment_status='unpaid' 조건도 추가
+        ).exclude(
+            id__in=paid_or_refunded_order_ids  # 결제 완료 및 환불된 주문 제외
         ).aggregate(total=models.Sum('total_price'))['total'] or 0
         
         return float(unpaid_total)

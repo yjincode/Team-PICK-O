@@ -15,11 +15,15 @@ import {
   ARSummary,
   ApiResponse,
   PaginatedResponse,
+  DjangoApiResponse,
+  OrderListResponse,
   RefundRequest,
   RefundResponse,
   CancelOrderRequest,
   CancelOrderResponse,
-  OrderListItem
+  OrderListItem,
+  DocumentRequest,
+  DocumentRequestResponse
 } from '../types'
 
 
@@ -129,10 +133,14 @@ api.interceptors.request.use(
       console.log('🔄 액세스 토큰 갱신 필요')
       accessToken = await refreshAccessToken()
 
-      // 갱신에 실패한 경우 로그인 페이지로 리다이렉트
+      // 갱신에 실패한 경우 토큰 제거만 하고 조용히 처리
       if (!accessToken) {
-        window.location.href = '/login'
-        return Promise.reject(new Error('토큰 갱신 실패'))
+        console.log('🚫 토큰 갱신 실패 - 인증되지 않은 요청')
+        return Promise.reject({ 
+          name: 'AuthenticationError',
+          message: '인증이 필요합니다',
+          config: config
+        })
       }
     }
 
@@ -191,10 +199,9 @@ api.interceptors.response.use(
         error.config.headers.Authorization = `Bearer ${newAccessToken}`;
         return api(error.config);
       } else {
-        // 토큰 갱신 실패 시 로그인 페이지로 리다이렉트
-        console.log('🚫 토큰 갱신 실패 - 로그인 페이지로 이동');
+        // 토큰 갱신 실패 시 토큰 제거만 하고 리다이렉트는 AuthContext에 맡김
+        console.log('🚫 토큰 갱신 실패 - AuthContext에서 처리');
         TokenManager.removeTokens();
-        window.location.href = '/login';
       }
     }
 
@@ -204,8 +211,8 @@ api.interceptors.response.use(
 
 // 거래처 관리 API
 export const businessApi = {
-  // 모든 거래처 조회 (페이지네이션 지원)
-  getAll: async (params?: { page?: number; page_size?: number }): Promise<ApiResponse<PaginatedResponse<Business>>> => {
+  // 모든 거래처 조회 (페이지네이션 지원) - 실제 Django 응답 구조
+  getAll: async (params?: { page?: number; page_size?: number }): Promise<DjangoApiResponse<Business>> => {
     const response = await api.get('/business/customers/', { params });
     return response.data;
   },
@@ -332,6 +339,8 @@ export const inventoryApi = {
       fish_name: string;
       requested_quantity: number;
       available_stock: number;
+      ordered_quantity?: number;  // 실제 주문된 수량
+      registered_stock?: number;  // 등록된 재고
       unit: string;
       status: string;
       shortage?: number;
@@ -352,8 +361,15 @@ export const inventoryApi = {
 
 // 주문 관리 API
 export const orderApi = {
-  // 모든 주문 조회 (페이지네이션) - OrderListSerializer 사용
-  getAll: async (params?: { page?: number; page_size?: number }): Promise<ApiResponse<OrderListItem[]>> => {
+  // 모든 주문 조회 (페이지네이션, 필터링) - OrderListSerializer 사용
+  getAll: async (params?: { 
+    page?: number; 
+    page_size?: number;
+    status?: string;
+    payment_status?: string;
+    date?: string;
+    business_id?: string;
+  }): Promise<OrderListResponse> => {
     const response = await api.get('/orders/', { params })
     return response.data
   },
@@ -372,7 +388,7 @@ export const orderApi = {
 
   // 주문 정보 수정
   update: async (id: number, order: Partial<Order>): Promise<ApiResponse<Order>> => {
-    const response = await api.put(`/orders/${id}/`, order)
+    const response = await api.put(`/orders/${id}/update/`, order)
     return response.data
   },
 
@@ -429,8 +445,18 @@ export const authApi = {
 
   // 현재 사용자 정보 조회
   getCurrentUser: async (): Promise<ApiResponse<any>> => {
-    const response = await api.get('/auth/me')
-    return response.data
+    const userInfo = getUserInfoFromToken()
+    if (userInfo) {
+      return {
+        success: true,
+        data: userInfo
+      }
+    } else {
+      return {
+        success: false,
+        data: null
+      }
+    }
   },
 }
 
@@ -448,6 +474,58 @@ export const salesApi = {
 
   getAuctionPrediction: async (): Promise<any> => {
     const response = await api.get('/sales/auction-prediction')
+    return response.data
+  },
+
+  // 매출 통계 조회
+  getStats: async (params?: {
+    period_type?: 'month' | 'year';
+    start_date?: string;
+    end_date?: string;
+    selected_period?: string;
+  }): Promise<{
+    total_revenue: number;
+    monthly_average?: number;
+    daily_average?: number;
+    highest_month_revenue?: number;
+    highest_period?: string;
+    growth_rate: number;
+    monthly_data: Array<{
+      month: string;
+      revenue: number;
+      order_count: number;
+    }>;
+    period_type?: string;
+    selected_period?: string;
+  }> => {
+    const response = await api.get('/sales/stats/', { params })
+    return response.data
+  },
+
+  // 일별 매출 조회
+  getDailyRevenue: async (date: string): Promise<{
+    date: string;
+    total_revenue: number;
+    order_count: number;
+    orders: Array<{
+      id: number;
+      business_name: string;
+      total_price: number;
+      order_datetime: string;
+    }>;
+    hourly_data: Array<{
+      hour: number;
+      revenue: number;
+      order_count: number;
+    }>;
+    top_fish_types: Array<{
+      fish_name: string;
+      quantity: number;
+      revenue: number;
+      percentage: number;
+    }>;
+  }> => {
+    const response = await api.get(`/sales/daily/?date=${date}`)
     return response.data
   },
 }
@@ -558,6 +636,27 @@ export const paymentApi = {
   },
 }
 
+// 주문 취소
+export const cancelOrder = async (data: CancelOrderRequest): Promise<CancelOrderResponse> => {
+  const response = await api.post(`/orders/cancel/`, data)
+  return response.data
+}
+
+// 문서 발급 요청
+export const requestDocument = async (orderId: number, data: DocumentRequest): Promise<DocumentRequestResponse> => {
+  const response = await api.post(`/orders/${orderId}/document-request/`, data)
+  return response.data
+}
+
+// 문서 발급 요청 목록 조회
+export const getDocumentRequests = async (orderId: number): Promise<{
+  tax_invoice?: { id: number; status: string; created_at: string; completed_at?: string }
+  cash_receipt?: { id: number; status: string; created_at: string; completed_at?: string }
+}> => {
+  const response = await api.get(`/orders/${orderId}/document-requests/`)
+  return response.data
+}
+
 // ==================== 미수금(AR) 조회 API ====================
 
 export const arApi = {
@@ -582,3 +681,24 @@ export const arApi = {
 export const customerApi = businessApi
 
 export { api }
+
+// JWT 토큰에서 사용자 정보 추출
+export const getUserInfoFromToken = (): { user_id?: number; business_name?: string } | null => {
+  try {
+    const token = localStorage.getItem('accessToken')
+    if (!token) return null
+    
+    // JWT 토큰의 payload 부분 디코딩 (base64)
+    const payload = token.split('.')[1]
+    if (!payload) return null
+    
+    const decodedPayload = JSON.parse(atob(payload))
+    return {
+      user_id: decodedPayload.user_id,
+      business_name: decodedPayload.business_name
+    }
+  } catch (error) {
+    console.error('JWT 토큰 디코딩 실패:', error)
+    return null
+  }
+}
