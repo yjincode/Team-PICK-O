@@ -204,12 +204,14 @@ export interface ARSummary {
 export interface RefundRequest {
   orderId: number;
   refundReason: string;
+  refundReasonDetail?: string;
 }
 
 // 주문 취소 요청
 export interface CancelOrderRequest {
   orderId: number;
   cancelReason: string;
+  cancelReasonDetail?: string;
 }
 
 // 환불 응답
@@ -219,6 +221,7 @@ export interface RefundResponse {
   status: 'refunded';
   refundAmount: number;
   refundReason: string;
+  refundReasonDetail?: string;
 }
 
 // 주문 취소 응답
@@ -226,6 +229,25 @@ export interface CancelOrderResponse {
   orderId: number;
   status: 'cancelled';
   cancelReason: string;
+  cancelReasonDetail?: string;
+}
+
+// ==================== 문서 발급 요청 관련 타입 ====================
+
+// 문서 발급 요청
+export interface DocumentRequest {
+  orderId: number;
+  documentType: 'tax_invoice' | 'cash_receipt';
+  receiptType?: 'individual' | 'business';  // 현금영수증용
+  identifier: string;  // 사업자등록번호 또는 휴대폰번호
+  specialRequest?: string;
+}
+
+// 문서 발급 응답
+export interface DocumentRequestResponse {
+  message: string;
+  document_request_id: number;
+  status: string;
 }
 
 // ==================== 폼 데이터 관련 타입 ====================

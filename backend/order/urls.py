@@ -3,7 +3,8 @@ from .views import (
     OrderUploadView, OrderListView, OrderDetailView, 
     OrderStatusUpdateView, OrderCancelView,
     TranscriptionStatusView, TranscriptionToOrderView,
-    CancelOrderView, UpdateOrderView, ShipOutOrderView
+    CancelOrderView, UpdateOrderView, ShipOutOrderView,
+    DocumentRequestView, DocumentRequestListView
 )   
 
 urlpatterns = [
@@ -22,6 +23,12 @@ urlpatterns = [
     
     # 주문 출고 API
     path('<int:order_id>/ship-out/', ShipOutOrderView.as_view(), name='order-ship-out'),
+    
+    # 문서 발급 요청 API
+    path('<int:order_id>/document-request/', DocumentRequestView.as_view(), name='document-request'),
+    
+    # 문서 발급 요청 목록 조회 API
+    path('<int:order_id>/document-requests/', DocumentRequestListView.as_view(), name='document-request-list'),
     
     # STT 관련 API
     path('transcription/<uuid:transcription_id>/status/', TranscriptionStatusView.as_view(), name='transcription-status'),
