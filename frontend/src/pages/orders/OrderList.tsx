@@ -34,6 +34,7 @@ import OrderForm from "./OrderForm"
 import { OrderStatusBadge, PaymentStatusBadge } from "../../components/common/StatusBadges"
 import { getLabel } from "../../lib/labels"
 import RefundCancelModal from "../../components/modals/RefundCancelModal"
+import StockShortageModal from "../../components/modals/StockShortageModal"
 
 // 금액 포맷팅 (한국 통화 형식, 소수점 없이)
 const formatPrice = (price: number) => {

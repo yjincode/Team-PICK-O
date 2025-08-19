@@ -13,6 +13,7 @@ import { format } from "date-fns"
 import { formatPhoneNumber } from "../../utils/phoneFormatter"
 import { orderApi } from "../../lib/api"
 import { getBadgeClass, getLabel } from "../../lib/labels"
+import StockShortageModal from "../../components/modals/StockShortageModal"
 import toast from 'react-hot-toast'
 
 const OrderDetail: React.FC = () => {
@@ -49,6 +50,11 @@ const OrderDetail: React.FC = () => {
   // 주문 항목 수정 모달 상태
   const [showItemEditModal, setShowItemEditModal] = useState(false)
   const [editingItems, setEditingItems] = useState<any[]>([])
+  
+  // 재고 부족 모달 상태
+  const [showStockShortageModal, setShowStockShortageModal] = useState(false)
+  const [insufficientItems, setInsufficientItems] = useState<any[]>([])
+  const [shortageActionType, setShortageActionType] = useState<'ready' | 'delivered'>('ready')
 
   useEffect(() => {
     const fetchOrder = async () => {
@@ -89,7 +95,15 @@ const OrderDetail: React.FC = () => {
       
     } catch (error: any) {
       console.error('출고 처리 오류:', error)
-      toast.error(error.response?.data?.error || '출고 처리 중 오류가 발생했습니다.')
+      
+      // 재고 부족 에러인 경우 모달 표시
+      if (error.response?.data?.error_type === 'insufficient_stock') {
+        setInsufficientItems(error.response.data.insufficient_items || [])
+        setShortageActionType('delivered')
+        setShowStockShortageModal(true)
+      } else {
+        toast.error(error.response?.data?.error || '출고 처리 중 오류가 발생했습니다.')
+      }
     } finally {
       setLoading(false)
     }
@@ -112,7 +126,15 @@ const OrderDetail: React.FC = () => {
       
     } catch (error: any) {
       console.error('준비 완료 상태 변경 오류:', error)
-      toast.error(error.response?.data?.error || '상태 변경 중 오류가 발생했습니다.')
+      
+      // 재고 부족 에러인 경우 모달 표시
+      if (error.response?.data?.error_type === 'insufficient_stock') {
+        setInsufficientItems(error.response.data.insufficient_items || [])
+        setShortageActionType('ready')
+        setShowStockShortageModal(true)
+      } else {
+        toast.error(error.response?.data?.error || '상태 변경 중 오류가 발생했습니다.')
+      }
     } finally {
       setLoading(false)
     }
@@ -1195,6 +1217,13 @@ const OrderDetail: React.FC = () => {
         </div>
       )}
 
+      {/* 재고 부족 경고 모달 */}
+      <StockShortageModal
+        open={showStockShortageModal}
+        onOpenChange={setShowStockShortageModal}
+        insufficientItems={insufficientItems}
+        actionType={shortageActionType}
+      />
 
     </div>
   )

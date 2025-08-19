@@ -65,7 +65,11 @@ export default function SalesChart() {
   const [dailyRevenue, setDailyRevenue] = useState<DailyRevenue | null>(null)
   const [periodType, setPeriodType] = useState<PeriodType>('month')
   const [selectedDate, setSelectedDate] = useState<string>('')
-  const [selectedPeriod, setSelectedPeriod] = useState<string>('')
+  const [selectedPeriod, setSelectedPeriod] = useState<string>(() => {
+    // 디폴트값: 현재 달
+    const now = new Date()
+    return `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}`
+  })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -100,6 +104,87 @@ export default function SalesChart() {
       }
       
       const data = await salesApi.getStats(params)
+      
+      // 특정 월 선택 시 해당 월의 총 매출 및 성장률 계산
+      if (periodType === 'month' && selectedPeriod && data.monthly_data) {
+        const monthlyTotal = data.monthly_data.reduce((sum, item) => sum + item.revenue, 0)
+        data.total_revenue = monthlyTotal
+        
+        // 일평균 매출 계산 (매출이 있는 날짜만 고려, 1000원 단위)
+        const daysWithRevenue = data.monthly_data.filter(item => item.revenue > 0)
+        if (daysWithRevenue.length > 0) {
+          const dailyAvg = monthlyTotal / daysWithRevenue.length
+          data.daily_average = Math.round(dailyAvg / 1000) * 1000
+        } else {
+          data.daily_average = 0
+        }
+        
+        // 전월 대비 성장률 계산
+        try {
+          const [year, month] = selectedPeriod.split('-')
+          const prevMonth = parseInt(month) - 1
+          const prevYear = prevMonth === 0 ? parseInt(year) - 1 : parseInt(year)
+          const prevMonthStr = prevMonth === 0 ? '12' : prevMonth.toString().padStart(2, '0')
+          const prevPeriod = `${prevYear}-${prevMonthStr}`
+          
+          // 전월 데이터 요청
+          const prevParams = {
+            period_type: periodType,
+            selected_period: prevPeriod
+          }
+          const prevData = await salesApi.getStats(prevParams)
+          const prevMonthTotal = prevData.monthly_data?.reduce((sum, item) => sum + item.revenue, 0) || 0
+          
+          if (prevMonthTotal > 0) {
+            data.growth_rate = ((monthlyTotal - prevMonthTotal) / prevMonthTotal) * 100
+          } else {
+            data.growth_rate = monthlyTotal > 0 ? 100 : 0
+          }
+        } catch (error) {
+          console.error('전월 데이터 로드 실패:', error)
+          data.growth_rate = 0
+        }
+      }
+      
+      // 년도별 보기에서 성장률 및 월평균 계산
+      if (periodType === 'year') {
+        // 월평균 매출 계산 (매출이 있는 월만 고려, 1000원 단위)
+        if (data.monthly_data) {
+          const monthsWithRevenue = data.monthly_data.filter(item => item.revenue > 0)
+          if (monthsWithRevenue.length > 0) {
+            const monthlyAvg = data.total_revenue / monthsWithRevenue.length
+            data.monthly_average = Math.round(monthlyAvg / 1000) * 1000
+          } else {
+            data.monthly_average = 0
+          }
+        }
+        
+        // 특정 년도 선택 시 전년 대비 성장률 계산
+        if (selectedPeriod) {
+          try {
+            const currentYear = parseInt(selectedPeriod)
+            const prevYear = currentYear - 1
+            
+            // 전년 데이터 요청
+            const prevParams = {
+              period_type: periodType,
+              selected_period: prevYear.toString()
+            }
+            const prevData = await salesApi.getStats(prevParams)
+            const prevYearTotal = prevData.total_revenue || 0
+            
+            if (prevYearTotal > 0) {
+              data.growth_rate = ((data.total_revenue - prevYearTotal) / prevYearTotal) * 100
+            } else {
+              data.growth_rate = data.total_revenue > 0 ? 100 : 0
+            }
+          } catch (error) {
+            console.error('전년 데이터 로드 실패:', error)
+            data.growth_rate = 0
+          }
+        }
+      }
+      
       setSalesStats(data)
     } catch (err) {
       console.error('매출 데이터 로드 실패:', err)
@@ -120,10 +205,10 @@ export default function SalesChart() {
     }
   }
 
-  // 컴포넌트 마운트 시 데이터 로드
+  // 컴포넌트 마운트 시 데이터 로드 (selectedPeriod 의존성 추가)
   useEffect(() => {
     loadSalesStats()
-  }, [periodType])
+  }, [periodType, selectedPeriod])
 
   // 날짜 선택 시 일별 매출 조회
   useEffect(() => {
@@ -156,18 +241,36 @@ export default function SalesChart() {
   
   // 평균 매출 가져오기 (일평균 또는 월평균)
   const getAverageRevenue = () => {
-    if (salesStats?.daily_average !== undefined) {
-      return salesStats.daily_average
+    if (periodType === 'month' && selectedPeriod && salesStats?.monthly_data) {
+      // 특정 월 선택 시: 해당 월의 일평균 매출 계산
+      const totalRevenue = salesStats.monthly_data.reduce((sum, item) => sum + item.revenue, 0)
+      const daysWithData = salesStats.monthly_data.filter(item => item.revenue > 0).length
+      const dailyAverage = daysWithData > 0 ? totalRevenue / daysWithData : 0
+      return Math.round(dailyAverage / 1000) * 1000 // 1000원 단위로 반올림
     }
-    return salesStats?.monthly_average || 0
+    
+    if (periodType === 'year' && salesStats?.monthly_data) {
+      // 연도별 보기 시: 월평균 매출 계산
+      const totalRevenue = salesStats.monthly_data.reduce((sum, item) => sum + item.revenue, 0)
+      const monthsWithData = salesStats.monthly_data.filter(item => item.revenue > 0).length
+      const monthlyAverage = monthsWithData > 0 ? totalRevenue / monthsWithData : 0
+      return Math.round(monthlyAverage / 1000) * 1000 // 1000원 단위로 반올림
+    }
+    
+    // 기본값 (백엔드에서 계산된 값이 있다면)
+    const average = salesStats?.daily_average || salesStats?.monthly_average || 0
+    return Math.round(average / 1000) * 1000 // 1000원 단위로 반올림
   }
   
   // 평균 매출 라벨 가져오기
   const getAverageLabel = () => {
-    if (selectedPeriod && periodType === 'month') {
+    if (periodType === 'month' && selectedPeriod) {
       return '일평균 매출'
     }
-    return '월평균 매출'
+    if (periodType === 'year') {
+      return '월평균 매출'
+    }
+    return '평균 매출'
   }
 
   // 현재 보여지는 기간 텍스트 생성
@@ -381,7 +484,21 @@ export default function SalesChart() {
                       tickFormatter={(hour) => `${hour}시`}
                     />
                     <YAxis 
-                      tickFormatter={(value) => `₩${(value / 1000).toFixed(0)}K`}
+                      tickFormatter={(value) => {
+                        if (value >= 100000000) {
+                          return `${(value / 100000000).toFixed(0)}억원`
+                        } else if (value >= 10000000) {
+                          return `${(value / 10000000).toFixed(0)}천만원`
+                        } else if (value >= 1000000) {
+                          return `${(value / 1000000).toFixed(0)}백만원`
+                        } else if (value >= 10000) {
+                          return `${(value / 10000).toFixed(0)}만원`
+                        } else if (value >= 1000) {
+                          return `${(value / 1000).toFixed(0)}천원`
+                        } else {
+                          return `${value.toLocaleString()}원`
+                        }
+                      }}
                     />
                     <Tooltip 
                       formatter={(value: number) => [formatCurrency(value), '매출']}
@@ -601,7 +718,9 @@ export default function SalesChart() {
                   <TrendingDown className="h-6 w-6 text-red-600" />
                 )}
                 <div>
-                  <p className="text-sm text-gray-600">성장률</p>
+                  <p className="text-sm text-gray-600">
+                    {periodType === 'month' && selectedPeriod ? '전월 대비' : '전년 대비'} 성장률
+                  </p>
                   <p className={`text-xl font-bold ${
                     salesStats.growth_rate >= 0 ? 'text-green-600' : 'text-red-600'
                   }`}>
@@ -626,13 +745,73 @@ export default function SalesChart() {
             <ResponsiveContainer width="100%" height={300}>
               <LineChart data={salesStats.monthly_data}>
                 <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="month" />
+                <XAxis 
+                  dataKey="month"
+                  interval={0}
+                  tick={{ fontSize: 12 }}
+                  tickFormatter={(value) => {
+                    if (periodType === 'month' && selectedPeriod) {
+                      // 일별 데이터에서 날짜 추출
+                      if (typeof value === 'string' && value.includes('-')) {
+                        const day = parseInt(value.split('-')[2] || '1')
+                        // 1, 5, 10, 15, 20, 25, 30일만 표시
+                        if ([1, 5, 10, 15, 20, 25, 30].includes(day)) {
+                          return `${day}일`
+                        }
+                      }
+                      return ''
+                    }
+                    
+                    // 년도별 보기
+                    if (periodType === 'year') {
+                      if (typeof value === 'string' && value.includes('-')) {
+                        const month = parseInt(value.split('-')[1] || '1')
+                        return `${month}월`
+                      }
+                    }
+                    
+                    return value
+                  }}
+                />
                 <YAxis 
-                  tickFormatter={(value) => `₩${(value / 1000000).toFixed(0)}M`}
+                  tickFormatter={(value) => {
+                    if (value >= 100000000) {
+                      return `${(value / 100000000).toFixed(0)}억원`
+                    } else if (value >= 10000000) {
+                      return `${(value / 10000000).toFixed(0)}천만원`
+                    } else if (value >= 1000000) {
+                      return `${(value / 1000000).toFixed(0)}백만원`
+                    } else if (value >= 10000) {
+                      return `${(value / 10000).toFixed(0)}만원`
+                    } else if (value >= 1000) {
+                      return `${(value / 1000).toFixed(0)}천원`
+                    } else {
+                      return `${value.toLocaleString()}원`
+                    }
+                  }}
                 />
                 <Tooltip 
                   formatter={(value: number) => [formatCurrency(value), '매출']}
-                  labelFormatter={(label) => `${label}`}
+                  labelFormatter={(label) => {
+                    if (typeof label === 'string') {
+                      // 일별 데이터 (2024-12-01)
+                      if (label.includes('-') && label.split('-').length === 3) {
+                        const parts = label.split('-')
+                        const year = parts[0]
+                        const month = parseInt(parts[1])
+                        const day = parseInt(parts[2])
+                        return `${year}년 ${month}월 ${day}일`
+                      }
+                      // 월별 데이터 (2024-12)
+                      if (label.includes('-') && label.split('-').length === 2) {
+                        const parts = label.split('-')
+                        const year = parts[0]
+                        const month = parseInt(parts[1])
+                        return `${year}년 ${month}월`
+                      }
+                    }
+                    return label
+                  }}
                 />
                 <Line 
                   type="monotone" 
@@ -654,7 +833,23 @@ export default function SalesChart() {
                 
                 return (
                   <div key={monthData.month} className="text-center p-3 bg-gray-50 rounded-lg">
-                    <p className="text-sm font-medium text-gray-700">{monthData.month}</p>
+                    <p className="text-sm font-medium text-gray-700">
+                      {(() => {
+                        if (typeof monthData.month === 'string') {
+                          // 일별 데이터 (2024-12-01)
+                          if (monthData.month.includes('-') && monthData.month.split('-').length === 3) {
+                            const day = parseInt(monthData.month.split('-')[2])
+                            return `${day}일`
+                          }
+                          // 월별 데이터 (2024-12)
+                          if (monthData.month.includes('-') && monthData.month.split('-').length === 2) {
+                            const month = parseInt(monthData.month.split('-')[1])
+                            return `${month}월`
+                          }
+                        }
+                        return monthData.month
+                      })()
+                    }</p>
                     <p className="text-lg font-bold text-gray-900">{formatCurrency(monthData.revenue)}</p>
                     <p className="text-xs text-gray-500">{monthData.order_count}건</p>
                     {index > 0 && (

@@ -19,21 +19,27 @@ interface FishStock {
   id: number;
   fish_type_id: number;
   fish_type_name: string;
-  stock_quantity: number;
-  ordered_quantity: number; // 주문된 수량 (백엔드에서 계산)
-  available_stock: number;  // 가용 재고 (백엔드에서 계산)
-  needed_quantity: number;  // 필요 수량 (백엔드에서 계산)
+  stock_quantity: number;   // 재고 수량
+  ordered_quantity?: number; // 주문 수량 (기본값 0)
   unit: string;
   status: string;
   updated_at: string;       
 }
 
-// 상태 계산 함수 (단순화)
+// 상태 계산 함수 (재고수량과 주문수량 비교)
 const calculateStockStatus = (stock: FishStock) => {
-  const availableStock = stock.available_stock
+  const stockQuantity = stock.stock_quantity
+  const orderedQuantity = stock.ordered_quantity || 0
   
-  if (availableStock <= 0) return 'insufficient' // 부족
-  if (availableStock <= 10) return 'low' // 주문필요
+  // 주문수량이 재고수량보다 많으면 부족
+  if (orderedQuantity > stockQuantity) return 'insufficient'
+  
+  // 재고가 아예 없으면 부족
+  if (stockQuantity <= 0) return 'insufficient'
+  
+  // 재고가 적으면 주문필요
+  if (stockQuantity <= 10) return 'low'
+  
   return 'normal' // 정상
 }
 
@@ -274,29 +280,20 @@ const FishStockList: React.FC = () => {
             </CardHeader>
             <CardContent className="space-y-4">
               {/* 재고 수량 정보 */}
-              <div className="grid grid-cols-3 gap-3 text-center">
-                <div className="bg-blue-50 p-3 rounded-lg">
-                  <div className="text-blue-600 font-semibold text-lg">{stock.stock_quantity}</div>
-                  <div className="text-xs text-blue-600">등록 수량</div>
+              <div className="grid grid-cols-2 gap-4 text-center">
+                <div className="bg-blue-50 p-4 rounded-lg">
+                  <div className="text-blue-600 font-semibold text-xl">{stock.stock_quantity}</div>
+                  <div className="text-sm text-blue-600">재고 수량</div>
                 </div>
-                <div className="bg-orange-50 p-3 rounded-lg">
-                  <div className="text-orange-600 font-semibold text-lg">{stock.ordered_quantity}</div>
-                  <div className="text-xs text-orange-600">주문 수량</div>
-                </div>
-                <div className="bg-green-50 p-3 rounded-lg">
-                  <div className="text-green-600 font-semibold text-lg">{stock.available_stock}</div>
-                  <div className="text-xs text-green-600">가용 재고</div>
+                <div className="bg-orange-50 p-4 rounded-lg">
+                  <div className="text-orange-600 font-semibold text-xl">{stock.ordered_quantity || 0}</div>
+                  <div className="text-sm text-orange-600">주문 수량</div>
                 </div>
               </div>
               
-              {/* 단위 및 필요 수량 */}
-              <div className="flex justify-between items-center text-sm text-gray-600">
+              {/* 단위 정보 */}
+              <div className="text-sm text-gray-600">
                 <span>단위: {stock.unit}</span>
-                {stock.needed_quantity > 0 && (
-                  <span className="text-red-600 font-medium">
-                    필요: +{stock.needed_quantity} {stock.unit}
-                  </span>
-                )}
               </div>
               
               {/* 상태 정보 */}
@@ -309,13 +306,18 @@ const FishStockList: React.FC = () => {
               {currentStatus === 'insufficient' && (
                 <div className="flex items-center space-x-2 text-red-600 text-sm bg-red-50 p-2 rounded">
                   <AlertTriangle className="h-4 w-4" />
-                  <span>재고 부족 - 즉시 발주 필요</span>
+                  <span>
+                    {(stock.ordered_quantity || 0) > stock.stock_quantity 
+                      ? `주문량 초과 - ${(stock.ordered_quantity || 0) - stock.stock_quantity}${stock.unit} 부족`
+                      : '재고 없음 - 즉시 발주 필요'
+                    }
+                  </span>
                 </div>
               )}
               {currentStatus === 'low' && (
                 <div className="flex items-center space-x-2 text-orange-600 text-sm bg-orange-50 p-2 rounded">
                   <AlertTriangle className="h-4 w-4" />
-                  <span>재고 부족 예상 - 발주 권장</span>
+                  <span>재고 부족 - 발주 권장</span>
                 </div>
               )}
               <div className="flex space-x-2 pt-2">
