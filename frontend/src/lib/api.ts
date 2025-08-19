@@ -131,10 +131,14 @@ api.interceptors.request.use(
       console.log('🔄 액세스 토큰 갱신 필요')
       accessToken = await refreshAccessToken()
 
-      // 갱신에 실패한 경우 로그인 페이지로 리다이렉트
+      // 갱신에 실패한 경우 토큰 제거만 하고 조용히 처리
       if (!accessToken) {
-        window.location.href = '/login'
-        return Promise.reject(new Error('토큰 갱신 실패'))
+        console.log('🚫 토큰 갱신 실패 - 인증되지 않은 요청')
+        return Promise.reject({ 
+          name: 'AuthenticationError',
+          message: '인증이 필요합니다',
+          config: config
+        })
       }
     }
 
@@ -193,10 +197,9 @@ api.interceptors.response.use(
         error.config.headers.Authorization = `Bearer ${newAccessToken}`;
         return api(error.config);
       } else {
-        // 토큰 갱신 실패 시 로그인 페이지로 리다이렉트
-        console.log('🚫 토큰 갱신 실패 - 로그인 페이지로 이동');
+        // 토큰 갱신 실패 시 토큰 제거만 하고 리다이렉트는 AuthContext에 맡김
+        console.log('🚫 토큰 갱신 실패 - AuthContext에서 처리');
         TokenManager.removeTokens();
-        window.location.href = '/login';
       }
     }
 

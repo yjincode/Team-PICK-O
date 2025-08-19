@@ -1189,3 +1189,4 @@ class UpdateOrderView(View):
                 'error': '주문 수정 처리 중 오류 발생',
                 'details': str(e)
             }, status=500)
+
