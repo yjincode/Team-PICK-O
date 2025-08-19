@@ -26,6 +26,7 @@ from fish_registry.models import FishType
 from fish_registry.serializers import FishTypeSerializer
 from business.models import Business
 from business.serializers import BusinessSerializer
+from .models import DocumentRequest
 
 @method_decorator(csrf_exempt, name='dispatch')
 class OrderUploadView(View):
@@ -913,6 +914,7 @@ class CancelOrderView(View):
         
         order_id = data.get('order_id')
         cancel_reason = data.get('cancel_reason', '')
+        cancel_reason_detail = data.get('cancel_reason_detail', '')
         
         if not order_id:
             return JsonResponse({'error': 'order_id는 필수입니다.'}, status=400)
@@ -935,6 +937,7 @@ class CancelOrderView(View):
                 # 1. 주문 상태 변경
                 order.order_status = 'cancelled'
                 order.cancel_reason = cancel_reason
+                order.cancel_reason_detail = cancel_reason_detail
                 order.save()
                 
                 # 2. 실제 재고 복원 (새로운 방식)
@@ -992,6 +995,158 @@ class CancelOrderView(View):
             import traceback
             traceback.print_exc()
             return JsonResponse({'error': f'주문 취소 처리 중 오류 발생: {str(e)}'}, status=500)
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class DocumentRequestView(View):
+    """문서 발급 요청 처리 뷰"""
+    
+    def post(self, request, *args, **kwargs):
+        """문서 발급 요청 생성"""
+        print(f"📄 문서 발급 요청 처리 시작")
+        
+        # 사용자 인증 확인
+        if not hasattr(request, 'user_id'):
+            print(f"❌ 사용자 인증 정보 없음")
+            return JsonResponse({'error': '사용자 인증이 필요합니다.'}, status=401)
+        
+        print(f"✅ 사용자 인증 확인: user_id={request.user_id}")
+        
+        # Django View에서 JSON 데이터 파싱
+        try:
+            if request.content_type and 'application/json' in request.content_type:
+                data = json.loads(request.body)
+            else:
+                data = request.POST.dict()
+            print(f"📝 파싱된 데이터: {data}")
+        except json.JSONDecodeError as e:
+            print(f"❌ JSON 파싱 오류: {e}")
+            return JsonResponse({'error': '잘못된 JSON 형식입니다.'}, status=400)
+        
+        # 필수 필드 검증
+        required_fields = ['orderId', 'documentType', 'identifier']
+        for field in required_fields:
+            if field not in data or not data[field]:
+                print(f"❌ 필수 필드 누락: {field}")
+                return JsonResponse({'error': f'{field}는 필수입니다.'}, status=400)
+        
+        print(f"✅ 필수 필드 검증 완료")
+        
+        # 데이터 추출
+        order_id = data.get('orderId')
+        document_type = data.get('documentType')
+        receipt_type = data.get('receiptType')
+        identifier = data.get('identifier')
+        special_request = data.get('specialRequest', '')
+        
+        print(f"🔍 추출된 데이터:")
+        print(f"  - order_id: {order_id} (타입: {type(order_id)})")
+        print(f"  - document_type: {document_type}")
+        print(f"  - receipt_type: {receipt_type}")
+        print(f"  - identifier: {identifier}")
+        print(f"  - special_request: {special_request}")
+        
+        # 주문 존재 여부 확인
+        try:
+            order = Order.objects.get(id=order_id)
+            print(f"✅ 주문 확인: order_id={order_id}")
+        except Order.DoesNotExist:
+            print(f"❌ 주문을 찾을 수 없음: order_id={order_id}")
+            return JsonResponse({'error': '주문을 찾을 수 없습니다.'}, status=404)
+        
+        # DocumentRequest 모델 생성 시도
+        try:
+            print(f"🗄️ DocumentRequest 모델 생성 시도...")
+            
+            document_request = DocumentRequest.objects.create(
+                order_id=order_id,
+                user_id=request.user_id,
+                document_type=document_type,
+                receipt_type=receipt_type,
+                identifier=identifier,
+                special_request=special_request,
+                status='pending'
+            )
+            
+            print(f"✅ DocumentRequest 생성 성공: id={document_request.id}")
+            
+            # 응답 데이터 구성
+            response_data = {
+                'message': '문서 발급 요청이 성공적으로 처리되었습니다.',
+                'document_request_id': document_request.id,
+                'status': document_request.status
+            }
+            
+            print(f"📤 응답 데이터: {response_data}")
+            return JsonResponse(response_data, status=201)
+            
+        except Exception as e:
+            print(f"❌ DocumentRequest 생성 실패: {e}")
+            print(f"❌ 오류 타입: {type(e)}")
+            print(f"❌ 오류 상세: {str(e)}")
+            
+            # 데이터베이스 제약 조건 오류인지 확인
+            if 'constraint' in str(e).lower():
+                return JsonResponse({'error': '데이터베이스 제약 조건 위반입니다.'}, status=400)
+            elif 'field' in str(e).lower():
+                return JsonResponse({'error': '필드 유효성 검증 실패입니다.'}, status=400)
+            else:
+                return JsonResponse({'error': f'문서 발급 요청 처리 중 오류 발생: {str(e)}'}, status=500)
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class DocumentRequestListView(View):
+    """문서 발급 요청 목록 조회 뷰"""
+
+    def get(self, request, *args, **kwargs):
+        """주문별 문서 발급 요청 목록 조회"""
+        print(f"📋 문서 발급 요청 목록 조회 시작")
+
+        # 사용자 인증 확인
+        if not hasattr(request, 'user_id'):
+            print(f"❌ 사용자 인증 정보 없음")
+            return JsonResponse({'error': '사용자 인증이 필요합니다.'}, status=401)
+
+        print(f"✅ 사용자 인증 확인: user_id={request.user_id}")
+
+        # URL에서 order_id 추출
+        order_id = kwargs.get('order_id')
+        if not order_id:
+            print(f"❌ 주문 ID 누락")
+            return JsonResponse({'error': '주문 ID가 필요합니다.'}, status=400)
+
+        try:
+            # 주문 존재 여부 확인
+            order = Order.objects.get(id=order_id)
+            print(f"✅ 주문 확인: order_id={order_id}")
+
+            # 해당 주문의 문서 발급 요청 조회
+            document_requests = DocumentRequest.objects.filter(order_id=order_id)
+            print(f"📋 문서 요청 조회 결과: {document_requests.count()}건")
+
+            # 응답 데이터 구성
+            response_data = {}
+            for doc_request in document_requests:
+                response_data[doc_request.document_type] = {
+                    'id': doc_request.id,
+                    'status': doc_request.status,
+                    'created_at': doc_request.created_at.isoformat(),
+                    'completed_at': doc_request.completed_at.isoformat() if doc_request.completed_at else None,
+                    'document_type': doc_request.document_type,
+                    'receipt_type': doc_request.receipt_type,
+                    'identifier': doc_request.identifier,
+                    'special_request': doc_request.special_request
+                }
+
+            print(f"📤 응답 데이터: {response_data}")
+            return JsonResponse(response_data, status=200)
+
+        except Order.DoesNotExist:
+            print(f"❌ 주문을 찾을 수 없음: order_id={order_id}")
+            return JsonResponse({'error': '주문을 찾을 수 없습니다.'}, status=404)
+        except Exception as e:
+            print(f"❌ 문서 요청 조회 오류: {e}")
+            return JsonResponse({'error': f'문서 요청 조회 중 오류 발생: {str(e)}'}, status=500)
 
 
 @method_decorator(csrf_exempt, name='dispatch')

@@ -250,14 +250,15 @@ const OrderList: React.FC = () => {
   }
 
   // 환불 처리 실행
-  const executeRefund = async (reason: string) => {
+  const executeRefund = async (reason: string, detail: string) => {
     if (!selectedOrderId) return
 
     try {
       setProcessingRefund(true)
       await paymentApi.refund({
         orderId: selectedOrderId,
-        refundReason: reason
+        refundReason: reason,
+        refundReasonDetail: detail
       })
       
       toast.success('환불이 성공적으로 처리되었습니다!')
@@ -305,14 +306,15 @@ const OrderList: React.FC = () => {
   }
 
   // 주문 취소 실행
-  const executeCancel = async (reason: string) => {
+  const executeCancel = async (reason: string, detail: string) => {
     if (!selectedOrderId) return
 
     try {
       setProcessingCancel(true)
       await paymentApi.cancelOrder({
         orderId: selectedOrderId,
-        cancelReason: reason
+        cancelReason: reason,
+        cancelReasonDetail: detail
       })
       
       toast.success('주문이 성공적으로 취소되었습니다!')
@@ -580,8 +582,9 @@ const OrderList: React.FC = () => {
                         </TableCell>
                         <TableCell className="text-center">
                           <div className="flex items-center justify-center gap-2">
-                            {/* 결제 버튼 - 미결제 상태일 때만 표시 */}
-                            {(!order.payment || order.payment.payment_status !== 'paid') && (
+                            {/* 결제 버튼 - 미결제 상태이고 취소되지 않은 주문일 때만 표시 */}
+                            {(!order.payment || order.payment.payment_status !== 'paid') && 
+                             order.order_status !== 'cancelled' && (
                               <Button
                                 variant="outline"
                                 size="sm"
@@ -628,7 +631,6 @@ const OrderList: React.FC = () => {
                                 취소
                               </Button>
                             )}
-
                           </div>
                         </TableCell>
                       </TableRow>
@@ -715,6 +717,8 @@ const OrderList: React.FC = () => {
         onSubmit={executeRefund}
         type="refund"
         orderId={selectedOrderId || 0}
+        businessName={orders.find(o => o.id === selectedOrderId)?.business?.business_name || ''}
+        itemsSummary={orders.find(o => o.id === selectedOrderId)?.items_summary || ''}
         isLoading={processingRefund}
       />
 
@@ -724,6 +728,8 @@ const OrderList: React.FC = () => {
         onSubmit={executeCancel}
         type="cancel"
         orderId={selectedOrderId || 0}
+        businessName={orders.find(o => o.id === selectedOrderId)?.business?.business_name || ''}
+        itemsSummary={orders.find(o => o.id === selectedOrderId)?.items_summary || ''}
         isLoading={processingCancel}
       />
     </div>

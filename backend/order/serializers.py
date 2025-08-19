@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Order, OrderItem
+from .models import Order, OrderItem, DocumentRequest
 
 
 class OrderItemSerializer(serializers.ModelSerializer):
@@ -39,6 +39,9 @@ class OrderSerializer(serializers.ModelSerializer):
             'memo',
             'order_status',
             'cancel_reason',
+            'cancel_reason_detail',
+            'refund_reason',
+            'refund_reason_detail',
             'is_urgent',
             'last_updated_at',
             'order_items'
@@ -51,6 +54,9 @@ class OrderSerializer(serializers.ModelSerializer):
             'transcribed_text': {'required': False},
             'memo': {'required': False},
             'cancel_reason': {'required': False},
+            'cancel_reason_detail': {'required': False},
+            'refund_reason': {'required': False},
+            'refund_reason_detail': {'required': False},
             'is_urgent': {'required': False},
             'last_updated_at': {'required': False}
         }
@@ -452,3 +458,31 @@ class OrderUpdateSerializer(serializers.ModelSerializer):
         instance.save()
         
         return instance
+
+
+class DocumentRequestSerializer(serializers.ModelSerializer):
+    """문서 발급 요청 시리얼라이저"""
+    
+    class Meta:
+        model = DocumentRequest
+        fields = [
+            'id',
+            'order',
+            'user',
+            'document_type',
+            'receipt_type',
+            'identifier',
+            'special_request',
+            'status',
+            'created_at',
+            'completed_at'
+        ]
+        read_only_fields = ['id', 'user', 'status', 'created_at', 'completed_at']
+    
+    def create(self, validated_data):
+        # 현재 로그인한 사용자 정보 추가
+        request = self.context.get('request')
+        if request and hasattr(request, 'user_id'):
+            validated_data['user_id'] = request.user_id
+        
+        return super().create(validated_data)

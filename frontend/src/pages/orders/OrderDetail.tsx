@@ -11,9 +11,10 @@ import { Badge } from "../../components/ui/badge"
 import { ArrowLeft } from "lucide-react"
 import { format } from "date-fns"
 import { formatPhoneNumber } from "../../utils/phoneFormatter"
-import { orderApi } from "../../lib/api"
+import { orderApi, requestDocument, getDocumentRequests } from "../../lib/api"
 import { getBadgeClass, getLabel } from "../../lib/labels"
 import toast from 'react-hot-toast'
+import DocumentRequestModal from "../../components/modals/DocumentRequestModal"
 
 const OrderDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>()
@@ -50,6 +51,15 @@ const OrderDetail: React.FC = () => {
   const [showItemEditModal, setShowItemEditModal] = useState(false)
   const [editingItems, setEditingItems] = useState<any[]>([])
 
+  // 문서 발급 요청 관련 상태
+  const [showDocumentModal, setShowDocumentModal] = useState(false)
+  const [documentModalType, setDocumentModalType] = useState<'tax_invoice' | 'cash_receipt'>('tax_invoice')
+  const [processingDocument, setProcessingDocument] = useState(false)
+  const [documentRequests, setDocumentRequests] = useState<{
+    tax_invoice?: { id: number; status: string }
+    cash_receipt?: { id: number; status: string }
+  }>({})
+
   useEffect(() => {
     const fetchOrder = async () => {
       if (!id) return
@@ -60,6 +70,9 @@ const OrderDetail: React.FC = () => {
         const response = await orderApi.getById(parseInt(id))
         console.log('주문 상세 응답:', response)
         setOrder(response)
+        
+        // 기존 문서 요청 정보 조회
+        await fetchDocumentRequests(parseInt(id))
       } catch (error) {
         console.error('주문 정보 조회 실패:', error)
         toast.error('주문 정보를 불러올 수 없습니다.')
@@ -71,6 +84,19 @@ const OrderDetail: React.FC = () => {
 
     fetchOrder()
   }, [id, navigate])
+
+  // 문서 요청 정보 조회 함수
+  const fetchDocumentRequests = async (orderId: number) => {
+    try {
+      const response = await getDocumentRequests(orderId)
+      console.log('📋 문서 요청 정보 조회 완료:', response)
+      setDocumentRequests(response)
+    } catch (error) {
+      console.error('문서 요청 정보 조회 실패:', error)
+      // 오류 발생 시 빈 객체로 설정
+      setDocumentRequests({})
+    }
+  }
 
   const handleShipOut = async () => {
     if (!order) return
@@ -125,7 +151,7 @@ const OrderDetail: React.FC = () => {
       setLoading(true)
       console.log('등록 상태로 되돌리기 시작:', order.id)
       
-      await orderApi.updateStatus(order.id, 'placed')
+      await orderApi.updateStatus(order.id, 'ready')
       toast.success('주문이 등록 상태로 되돌아갔습니다.')
       
       // 주문 정보 다시 조회하여 업데이트
@@ -139,6 +165,65 @@ const OrderDetail: React.FC = () => {
     } finally {
       setLoading(false)
     }
+  }
+
+  // 문서 발급 요청 처리
+  const handleDocumentRequest = async (data: {
+    documentType: 'tax_invoice' | 'cash_receipt'
+    receiptType?: 'individual' | 'business'
+    identifier: string
+    specialRequest: string
+  }) => {
+    if (!order) return
+
+    setProcessingDocument(true)
+    try {
+      console.log('📄 문서 발급 요청 시작:', data)
+      
+      const response = await requestDocument(order.id, {
+        orderId: order.id,
+        documentType: data.documentType,
+        receiptType: data.receiptType,
+        identifier: data.identifier,
+        specialRequest: data.specialRequest
+      })
+
+      console.log('✅ 문서 발급 요청 성공:', response)
+      toast.success('문서 발급 요청이 성공적으로 처리되었습니다!')
+      setShowDocumentModal(false)
+
+      // 문서 발급 요청 정보 저장
+      console.log('📝 문서 요청 상태 업데이트 전:', documentRequests)
+      setDocumentRequests(prev => {
+        const newState = {
+          ...prev,
+          [data.documentType]: {
+            id: response.document_request_id,
+            status: response.status
+          }
+        }
+        console.log('📝 문서 요청 상태 업데이트 후:', newState)
+        return newState
+      })
+      
+    } catch (error: any) {
+      console.error('❌ 문서 발급 요청 오류:', error)
+      toast.error(error.response?.data?.error || '문서 발급 요청 중 오류가 발생했습니다.')
+    } finally {
+      setProcessingDocument(false)
+    }
+  }
+
+  // 세금계산서 요청 모달 열기
+  const openTaxInvoiceModal = () => {
+    setDocumentModalType('tax_invoice')
+    setShowDocumentModal(true)
+  }
+
+  // 현금영수증 요청 모달 열기
+  const openCashReceiptModal = () => {
+    setDocumentModalType('cash_receipt')
+    setShowDocumentModal(true)
   }
 
   const handleCancel = async () => {
@@ -892,33 +977,74 @@ const OrderDetail: React.FC = () => {
           {/* 액션 */}
           <div className="flex flex-wrap gap-3 justify-end">
                         {/* 문서 관련 버튼들 */}
-            <div className="flex flex-wrap gap-3 mb-4">
-              {/* 주문 확인서 - 수정 모드가 아닐 때만 표시 */}
-              {!isEditing && (
-                <Button variant="outline" size="sm" className="border-blue-600 text-blue-600 hover:bg-blue-50">
-                  주문 확인서 (PDF)
-                </Button>
-              )}
+                         <div className="flex flex-wrap gap-3 mb-4">
+               {/* 결제 수단별 문서 버튼 */}
+               {order.payment_method === 'card' && order.receipt_url && (
+                 <Button variant="outline" size="sm" className="border-green-600 text-green-600 hover:bg-green-50">
+                   카드 매출전표 보기
+                 </Button>
+               )}
+               
+               {/* 주문확인서 - 항상 표시 */}
+               <Button
+                 variant="outline"
+                 size="sm"
+                 className="border-indigo-600 text-indigo-600 hover:bg-indigo-50"
+                 onClick={() => navigate(`/order-confirmation/${order.id}`)}
+               >
+                 주문확인서
+               </Button>
               
-              {/* 결제 수단별 문서 버튼 */}
-              {order.payment_method === 'card' && order.receipt_url && (
-                <Button variant="outline" size="sm" className="border-green-600 text-green-600 hover:bg-green-50">
-                  카드 매출전표 보기
-                </Button>
-              )}
-              
-              {/* 현금영수증 요청 - 결제 완료 후에만 */}
+              {/* 현금영수증 요청/확인 - 결제 완료 후에만 */}
               {order.payment_method === 'cash' && order.payment_status === 'paid' && (
-                <Button variant="outline" size="sm" className="border-orange-600 text-orange-600 hover:bg-orange-50">
+                   documentRequests.cash_receipt ? (
+                     <Button
+                       variant="outline"
+                       size="sm"
+                       className="border-orange-600 text-orange-600 hover:bg-orange-50"
+                       onClick={() => navigate(`/cash-receipt/${order.id}`)}
+                     >
+                       현금영수증
+                     </Button>
+                   ) : (
+                     <Button
+                       variant="outline"
+                       size="sm"
+                       className="border-orange-600 text-orange-600 hover:bg-orange-50"
+                       onClick={openCashReceiptModal}
+                     >
                   현금영수증 요청
                 </Button>
+                   )
               )}
               
-              {/* 세금계산서 요청 - 결제 완료 후에만 */}
+                 {/* 세금계산서 요청/확인 - 결제 완료 후에만 */}
               {order.payment_method === 'bank_transfer' && order.payment_status === 'paid' && (
-                <Button variant="outline" size="sm" className="border-purple-600 text-purple-600 hover:bg-purple-50">
+                   console.log('🔍 세금계산서 버튼 조건 확인:', {
+                     payment_method: order.payment_method,
+                     payment_status: order.payment_status,
+                     has_tax_invoice: !!documentRequests.tax_invoice,
+                     tax_invoice_data: documentRequests.tax_invoice
+                   }),
+                   documentRequests.tax_invoice ? (
+                     <Button
+                       variant="outline"
+                       size="sm"
+                       className="border-purple-600 text-purple-600 hover:bg-purple-50"
+                       onClick={() => navigate(`/tax-invoice/${order.id}`)}
+                     >
+                       세금계산서
+                     </Button>
+                   ) : (
+                     <Button
+                       variant="outline"
+                       size="sm"
+                       className="border-purple-600 text-purple-600 hover:bg-purple-50"
+                       onClick={openTaxInvoiceModal}
+                     >
                   세금계산서 요청
                 </Button>
+                   )
               )}
             </div>
             
@@ -1194,6 +1320,21 @@ const OrderDetail: React.FC = () => {
           </div>
         </div>
       )}
+
+
+      {/* 문서 발급 요청 모달 */}
+      <DocumentRequestModal
+        isOpen={showDocumentModal}
+        onClose={() => setShowDocumentModal(false)}
+        onSubmit={handleDocumentRequest}
+        type={documentModalType}
+        orderId={order?.id || 0}
+        businessName={order?.business_name || ''}
+        itemsSummary={order?.items?.map((item: any) => 
+          `${item.fish_type_name || item.item_name_snapshot || '어종명 없음'} ${item.quantity}${item.unit}`
+        ).join(', ') || ''}
+        isLoading={processingDocument}
+      />
 
 
     </div>

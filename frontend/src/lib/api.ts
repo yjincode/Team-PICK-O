@@ -21,7 +21,9 @@ import {
   RefundResponse,
   CancelOrderRequest,
   CancelOrderResponse,
-  OrderListItem
+  OrderListItem,
+  DocumentRequest,
+  DocumentRequestResponse
 } from '../types'
 
 
@@ -443,8 +445,18 @@ export const authApi = {
 
   // 현재 사용자 정보 조회
   getCurrentUser: async (): Promise<ApiResponse<any>> => {
-    const response = await api.get('/auth/me')
-    return response.data
+    const userInfo = getUserInfoFromToken()
+    if (userInfo) {
+      return {
+        success: true,
+        data: userInfo
+      }
+    } else {
+      return {
+        success: false,
+        data: null
+      }
+    }
   },
 }
 
@@ -624,6 +636,27 @@ export const paymentApi = {
   },
 }
 
+// 주문 취소
+export const cancelOrder = async (data: CancelOrderRequest): Promise<CancelOrderResponse> => {
+  const response = await api.post(`/orders/cancel/`, data)
+  return response.data
+}
+
+// 문서 발급 요청
+export const requestDocument = async (orderId: number, data: DocumentRequest): Promise<DocumentRequestResponse> => {
+  const response = await api.post(`/orders/${orderId}/document-request/`, data)
+  return response.data
+}
+
+// 문서 발급 요청 목록 조회
+export const getDocumentRequests = async (orderId: number): Promise<{
+  tax_invoice?: { id: number; status: string; created_at: string; completed_at?: string }
+  cash_receipt?: { id: number; status: string; created_at: string; completed_at?: string }
+}> => {
+  const response = await api.get(`/orders/${orderId}/document-requests/`)
+  return response.data
+}
+
 // ==================== 미수금(AR) 조회 API ====================
 
 export const arApi = {
@@ -648,3 +681,24 @@ export const arApi = {
 export const customerApi = businessApi
 
 export { api }
+
+// JWT 토큰에서 사용자 정보 추출
+export const getUserInfoFromToken = (): { user_id?: number; business_name?: string } | null => {
+  try {
+    const token = localStorage.getItem('accessToken')
+    if (!token) return null
+    
+    // JWT 토큰의 payload 부분 디코딩 (base64)
+    const payload = token.split('.')[1]
+    if (!payload) return null
+    
+    const decodedPayload = JSON.parse(atob(payload))
+    return {
+      user_id: decodedPayload.user_id,
+      business_name: decodedPayload.business_name
+    }
+  } catch (error) {
+    console.error('JWT 토큰 디코딩 실패:', error)
+    return null
+  }
+}
