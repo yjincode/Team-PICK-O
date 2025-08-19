@@ -13,6 +13,7 @@ export interface Business {
   address?: string;
   memo?: string;
   outstanding_balance?: number; // 미수금 필드는 동적으로 계산되므로 optional
+  last_order_date?: string; // 마지막 주문 날짜
 }
 
 // 2. 어종 테이블
