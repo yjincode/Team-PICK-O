@@ -243,7 +243,7 @@ const OrderConfirmationPage: React.FC = () => {
                                          {order.items?.map((item, index) => (
                        <tr key={index} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                          <td className="px-4 py-3 text-sm text-gray-900 border-b border-gray-200">
-                           {item.fish_type?.name || item.fish_type_name || item.item_name_snapshot || '품목명'}
+                           {item.fish_type_name || item.item_name_snapshot || '품목명'}
                          </td>
                         <td className="px-4 py-3 text-center text-sm text-gray-900 border-b border-gray-200">
                           {item.quantity} {item.unit}

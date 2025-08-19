@@ -29,14 +29,8 @@ const UnpaidList: React.FC = () => {
 				setIsLoadingBusinesses(true)
 				const response = await businessApi.getAll()
 				let businessData: Business[] = []
-				if (response && Array.isArray((response as any).results)) {
-					businessData = (response as any).results
-				} else if (response?.data && Array.isArray(response.data.results)) {
-					businessData = response.data.results
-				} else if (response?.data && Array.isArray(response.data)) {
-					businessData = response.data
-				} else if (Array.isArray(response)) {
-					businessData = response as unknown as Business[]
+				if (response && Array.isArray(response.results)) {
+					businessData = response.results
 				} else {
 					console.warn('알 수 없는 거래처 응답 형태:', response)
 				}
