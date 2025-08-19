@@ -36,10 +36,7 @@ interface Order {
   order_datetime: string;
 }
 
-const ordersRes = await orderApi.getAll();
-const ordersData: OrderListItem[] = Array.isArray(ordersRes)
-  ? ordersRes
-  : ordersRes.data || [];
+// 이 코드는 컴포넌트 내부에서 useEffect로 처리해야 합니다
 
 
 const BusinessList: React.FC = () => {

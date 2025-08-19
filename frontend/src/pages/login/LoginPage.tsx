@@ -25,8 +25,11 @@ interface StepInfo {
 }
 
 export default function LoginPage(): JSX.Element {
+  console.log('🟢 LoginPage 렌더링 시작')
   const navigate = useNavigate()
   const { user, loading: authLoading, sendSMSCode, verifySMSCode, registerUser } = useAuth()
+  
+  console.log('🔍 LoginPage 상태:', { user, authLoading })
   
   // 상태 관리 (sessionStorage에서 복원)
   const [currentStep, setCurrentStep] = useState<LoginStep>(() => {
