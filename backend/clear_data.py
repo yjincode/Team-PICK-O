@@ -1,7 +1,9 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
 """
 데이터베이스 초기화 스크립트 (User 테이블 제외)
 실행: python manage.py shell -c "exec(open('clear_data.py').read())"
+윈도우: python manage.py shell -c "exec(open('clear_data.py', encoding='utf-8').read())"
 """
 
 import os
