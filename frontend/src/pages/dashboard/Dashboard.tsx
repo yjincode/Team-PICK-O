@@ -86,6 +86,7 @@ const Dashboard: React.FC = () => {
 
     loadDashboardData()
   }, [])
+  
   return (
     <div className="space-y-4 sm:space-y-6">
       {/* 헤더: 검색 및 날씨 위젯 */}
@@ -100,7 +101,8 @@ const Dashboard: React.FC = () => {
           </div>
           <Button className="bg-accent-blue hover:bg-accent-blue/90 h-12 px-6 touch-target flex-shrink-0">검색</Button>
         </div>
-        <div className="w-full sm:w-auto">
+        {/* 날씨 위젯 */}
+        <div className="w-full sm:w-52">
           <WeatherWidget />
         </div>
       </div>
@@ -285,4 +287,4 @@ const Dashboard: React.FC = () => {
   )
 }
 
-export default Dashboard; 
+export default Dashboard 
