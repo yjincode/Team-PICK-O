@@ -44,6 +44,7 @@ const Dashboard: React.FC = () => {
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [recentOrders, setRecentOrders] = useState<RecentOrder[]>([])
   const [lowStockItems, setLowStockItems] = useState<LowStockItem[]>([])
+  // const [weatherData, setWeatherData] = useState<WeatherData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -58,6 +59,16 @@ const Dashboard: React.FC = () => {
     }
   }
 
+  // 날씨 데이터 새로고침
+  // const refreshWeather = async () => {
+  //   try {
+  //     const data = await weatherApi.getCurrentWeather()
+  //     setWeatherData(data)
+  //   } catch (err) {
+  //     console.error('날씨 데이터 새로고침 실패:', err)
+  //   }
+  // }
+
   // 데이터 로딩
   useEffect(() => {
     const loadDashboardData = async () => {
@@ -65,16 +76,18 @@ const Dashboard: React.FC = () => {
         setLoading(true)
         setError(null)
 
-        // 병렬로 모든 데이터 로딩
+        // 병렬로 모든 데이터 로딩 (날씨 제외)
         const [statsData, ordersData, stockData] = await Promise.all([
           dashboardApi.getStats(),
           dashboardApi.getRecentOrders(5),
           dashboardApi.getLowStockItems()
+          // weatherApi.getCurrentWeather()
         ])
 
         setStats(statsData)
         setRecentOrders(ordersData as any) // 타입 캐스팅으로 order_status 타입 불일치 해결
         setLowStockItems(stockData)
+        // setWeatherData(weatherData)
 
       } catch (err) {
         console.error('대시보드 데이터 로딩 실패:', err)
@@ -86,6 +99,7 @@ const Dashboard: React.FC = () => {
 
     loadDashboardData()
   }, [])
+  
   return (
     <div className="space-y-4 sm:space-y-6">
       {/* 헤더: 검색 및 날씨 위젯 */}
@@ -100,7 +114,8 @@ const Dashboard: React.FC = () => {
           </div>
           <Button className="bg-accent-blue hover:bg-accent-blue/90 h-12 px-6 touch-target flex-shrink-0">검색</Button>
         </div>
-        <div className="w-full sm:w-auto">
+        {/* 날씨 위젯 */}
+        <div className="w-full sm:w-52">
           <WeatherWidget />
         </div>
       </div>
@@ -285,4 +300,4 @@ const Dashboard: React.FC = () => {
   )
 }
 
-export default Dashboard; 
+export default Dashboard 
