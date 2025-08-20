@@ -724,6 +724,7 @@ class OrderListView(View):
                 from payment.models import Payment
                 refunded_order_ids = Payment.objects.filter(payment_status='refunded').values_list('order_id', flat=True)
                 orders_queryset = orders_queryset.filter(id__in=refunded_order_ids)
+        # payment_status='all' 또는 지정되지 않은 경우: 모든 주문 (필터링 안함)
         
         # 날짜별 필터링
         date_filter = request.GET.get('date')

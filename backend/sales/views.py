@@ -4,10 +4,12 @@ from django.views import View
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
-from django.db.models import Sum, Count, Q
-from django.db.models.functions import TruncMonth, TruncYear, TruncDate
+from django.db.models import Sum, Count, Q, F
+from django.db.models.functions import TruncMonth, TruncYear, TruncDate, Extract
+from django.db import models
 from core.middleware import get_user_queryset_filter
-from order.models import Order
+from order.models import Order, OrderItem
+from business.models import Business
 from decimal import Decimal
 
 
@@ -321,15 +323,13 @@ class DailySalesView(View):
                 })
             
             # 어종별 매출 및 수량 통계
-            from django.db.models import F, Extract
-            from order.models import OrderItem
             fish_stats = OrderItem.objects.filter(
                 order__in=daily_orders
             ).select_related('fish_type').values(
                 'fish_type__name'
             ).annotate(
                 total_quantity=Sum('quantity'),
-                total_revenue=Sum(F('quantity') * F('unit_price'))
+                total_revenue=Sum(F('quantity') * F('unit_price'), output_field=models.DecimalField())
             ).order_by('-total_revenue')
             
             total_fish_revenue = sum(item['total_revenue'] for item in fish_stats if item['total_revenue'])
@@ -373,3 +373,207 @@ class DailySalesView(View):
             import traceback
             traceback.print_exc()
             return JsonResponse({'error': f'일별 매출 조회 중 오류가 발생했습니다: {str(e)}'}, status=500)
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class BusinessRankingView(View):
+    """거래처별 구매 순위 API - JWT 미들웨어 인증"""
+    
+    def get(self, request):
+        """거래처별 구매 순위 조회"""
+        print(f"🏆 거래처 구매 순위 조회 요청")
+        print(f"🆔 request.user_id: {getattr(request, 'user_id', 'NOT SET')}")
+        
+        # 미들웨어에서 설정된 사용자 정보 확인
+        if not hasattr(request, 'user_id') or not request.user_id:
+            print(f"❌ 사용자 인증 정보 없음")
+            return JsonResponse({'error': '사용자 인증이 필요합니다.'}, status=401)
+        
+        print(f"✅ 사용자 인증 확인: user_id={request.user_id}")
+        
+        try:
+            # 쿼리 파라미터 가져오기
+            period_type = request.GET.get('period_type', 'month')
+            selected_period = request.GET.get('selected_period')
+            limit = int(request.GET.get('limit', 10))
+            
+            print(f"📝 매개변수: period_type={period_type}, selected_period={selected_period}, limit={limit}")
+            
+            # 날짜 범위 설정
+            end_date = datetime.now().date()
+            
+            if selected_period:
+                if period_type == 'month':
+                    # 특정 월 선택
+                    year, month = selected_period.split('-')
+                    start_date = datetime(int(year), int(month), 1).date()
+                    if int(month) == 12:
+                        end_date = datetime(int(year) + 1, 1, 1).date() - timedelta(days=1)
+                    else:
+                        end_date = datetime(int(year), int(month) + 1, 1).date() - timedelta(days=1)
+                else:
+                    # 특정 년도 선택
+                    year = int(selected_period)
+                    start_date = datetime(year, 1, 1).date()
+                    end_date = datetime(year, 12, 31).date()
+            else:
+                # 기본 범위
+                if period_type == 'month':
+                    start_date = (end_date.replace(day=1) - timedelta(days=365)).replace(day=1)
+                else:
+                    start_date = end_date.replace(year=end_date.year - 5, month=1, day=1)
+            
+            print(f"📅 날짜 범위: {start_date} ~ {end_date}")
+            
+            # 거래처별 구매 통계
+            business_stats = Order.objects.filter(
+                **get_user_queryset_filter(request),
+                order_status__in=['delivered', 'completed'],
+                order_datetime__date__gte=start_date,
+                order_datetime__date__lte=end_date
+            ).values('business_id').annotate(
+                total_purchase=Sum('total_price'),
+                order_count=Count('id')
+            ).order_by('-total_purchase')[:limit]
+            
+            # 전체 매출 계산 (비율 계산용)
+            total_revenue = Order.objects.filter(
+                **get_user_queryset_filter(request),
+                order_status__in=['delivered', 'completed'],
+                order_datetime__date__gte=start_date,
+                order_datetime__date__lte=end_date
+            ).aggregate(total=Sum('total_price'))['total'] or Decimal('0')
+            
+            # 거래처 이름들을 한번에 조회
+            business_ids = [item['business_id'] for item in business_stats]
+            businesses = Business.objects.filter(id__in=business_ids).values('id', 'business_name')
+            business_names = {b['id']: b['business_name'] for b in businesses}
+            
+            rankings = []
+            for item in business_stats:
+                purchase_amount = float(item['total_purchase'] or 0)
+                percentage = (purchase_amount / float(total_revenue) * 100) if total_revenue > 0 else 0
+                
+                business_name = business_names.get(item['business_id'], f"거래처 #{item['business_id']}")
+                
+                rankings.append({
+                    'business_id': item['business_id'],
+                    'business_name': business_name,
+                    'total_purchase': purchase_amount,
+                    'order_count': item['order_count'],
+                    'percentage': round(percentage, 1)
+                })
+            
+            print(f"✅ 거래처 순위 조회 완료: {len(rankings)}개 거래처")
+            
+            return JsonResponse({
+                'rankings': rankings,
+                'period_type': period_type,
+                'selected_period': selected_period,
+                'total_revenue': float(total_revenue)
+            })
+            
+        except Exception as e:
+            print(f"❌ 거래처 순위 조회 오류: {e}")
+            import traceback
+            traceback.print_exc()
+            return JsonResponse({'error': f'거래처 순위 조회 중 오류가 발생했습니다: {str(e)}'}, status=500)
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class FishTypeSalesView(View):
+    """어종별 판매량 API - JWT 미들웨어 인증"""
+    
+    def get(self, request):
+        """어종별 판매량 조회"""
+        print(f"🐟 어종별 판매량 조회 요청")
+        print(f"🆔 request.user_id: {getattr(request, 'user_id', 'NOT SET')}")
+        
+        # 미들웨어에서 설정된 사용자 정보 확인
+        if not hasattr(request, 'user_id') or not request.user_id:
+            print(f"❌ 사용자 인증 정보 없음")
+            return JsonResponse({'error': '사용자 인증이 필요합니다.'}, status=401)
+        
+        print(f"✅ 사용자 인증 확인: user_id={request.user_id}")
+        
+        try:
+            # 쿼리 파라미터 가져오기
+            period_type = request.GET.get('period_type', 'month')
+            selected_period = request.GET.get('selected_period')
+            
+            print(f"📝 매개변수: period_type={period_type}, selected_period={selected_period}")
+            
+            # 날짜 범위 설정
+            end_date = datetime.now().date()
+            
+            if selected_period:
+                if period_type == 'month':
+                    # 특정 월 선택
+                    year, month = selected_period.split('-')
+                    start_date = datetime(int(year), int(month), 1).date()
+                    if int(month) == 12:
+                        end_date = datetime(int(year) + 1, 1, 1).date() - timedelta(days=1)
+                    else:
+                        end_date = datetime(int(year), int(month) + 1, 1).date() - timedelta(days=1)
+                else:
+                    # 특정 년도 선택
+                    year = int(selected_period)
+                    start_date = datetime(year, 1, 1).date()
+                    end_date = datetime(year, 12, 31).date()
+            else:
+                # 기본 범위
+                if period_type == 'month':
+                    start_date = (end_date.replace(day=1) - timedelta(days=365)).replace(day=1)
+                else:
+                    start_date = end_date.replace(year=end_date.year - 5, month=1, day=1)
+            
+            print(f"📅 날짜 범위: {start_date} ~ {end_date}")
+            
+            # 어종별 판매 통계
+            fish_stats = OrderItem.objects.filter(
+                order__in=Order.objects.filter(
+                    **get_user_queryset_filter(request),
+                    order_status__in=['delivered', 'completed'],
+                    order_datetime__date__gte=start_date,
+                    order_datetime__date__lte=end_date
+                )
+            ).select_related('fish_type').values(
+                'fish_type_id',
+                'fish_type__name',
+                'unit'
+            ).annotate(
+                total_quantity=Sum('quantity'),
+                total_revenue=Sum(F('quantity') * F('unit_price'), output_field=models.DecimalField())
+            ).order_by('-total_revenue')
+            
+            # 전체 어종 매출 계산 (비율 계산용)
+            total_fish_revenue = sum(float(item['total_revenue'] or 0) for item in fish_stats)
+            
+            sales_data = []
+            for item in fish_stats:
+                revenue = float(item['total_revenue'] or 0)
+                percentage = (revenue / total_fish_revenue * 100) if total_fish_revenue > 0 else 0
+                
+                sales_data.append({
+                    'fish_type_id': item['fish_type_id'],
+                    'fish_name': item['fish_type__name'],
+                    'total_quantity': item['total_quantity'],
+                    'unit': item['unit'] or 'kg',  # 기본값으로 kg 사용
+                    'total_revenue': revenue,
+                    'percentage': round(percentage, 1)
+                })
+            
+            print(f"✅ 어종별 판매량 조회 완료: {len(sales_data)}개 어종")
+            
+            return JsonResponse({
+                'fish_sales': sales_data,
+                'period_type': period_type,
+                'selected_period': selected_period,
+                'total_revenue': total_fish_revenue
+            })
+            
+        except Exception as e:
+            print(f"❌ 어종별 판매량 조회 오류: {e}")
+            import traceback
+            traceback.print_exc()
+            return JsonResponse({'error': f'어종별 판매량 조회 중 오류가 발생했습니다: {str(e)}'}, status=500)
