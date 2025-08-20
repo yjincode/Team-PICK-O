@@ -349,4 +349,7 @@ export interface SalesSummary {
     quantity: number;
     revenue: number;
   }>;
-} 
+}
+
+// ==================== 날씨 관련 타입 ====================
+export * from './weather';
