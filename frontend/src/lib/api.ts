@@ -502,30 +502,46 @@ export const salesApi = {
     return response.data
   },
 
-  // 일별 매출 조회
-  getDailyRevenue: async (date: string): Promise<{
-    date: string;
-    total_revenue: number;
-    order_count: number;
-    orders: Array<{
-      id: number;
+
+  // 거래처별 구매 순위 조회
+  getBusinessRanking: async (params?: {
+    period_type?: 'month' | 'year';
+    selected_period?: string;
+    limit?: number;
+  }): Promise<{
+    rankings: Array<{
+      business_id: number;
       business_name: string;
-      total_price: number;
-      order_datetime: string;
-    }>;
-    hourly_data: Array<{
-      hour: number;
-      revenue: number;
+      total_purchase: number;
       order_count: number;
-    }>;
-    top_fish_types: Array<{
-      fish_name: string;
-      quantity: number;
-      revenue: number;
       percentage: number;
     }>;
+    period_type: string;
+    selected_period?: string;
+    total_revenue: number;
   }> => {
-    const response = await api.get(`/sales/daily/?date=${date}`)
+    const response = await api.get('/sales/business-ranking/', { params })
+    return response.data
+  },
+
+  // 어종별 판매량 조회
+  getFishTypeSales: async (params?: {
+    period_type?: 'month' | 'year';
+    selected_period?: string;
+  }): Promise<{
+    fish_sales: Array<{
+      fish_type_id: number;
+      fish_name: string;
+      total_quantity: number;
+      unit: string;
+      total_revenue: number;
+      percentage: number;
+    }>;
+    period_type: string;
+    selected_period?: string;
+    total_revenue: number;
+  }> => {
+    const response = await api.get('/sales/fish-sales/', { params })
     return response.data
   },
 }
