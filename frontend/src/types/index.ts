@@ -183,8 +183,8 @@ export interface MarkPaidRequest {
 
 // 미결제 주문 정보
 export interface UnpaidOrder {
-  id: Key;
-  amount: ReactNode;
+  id: number;
+  amount: number;
   orderId: number;
   businessId: number;
   businessName?: string;
