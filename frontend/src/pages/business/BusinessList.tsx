@@ -16,6 +16,8 @@ import { useKakaoPostcode } from "../../hooks/useKakaoPostcode";
 import { KakaoAddress } from "../../types/kakao";
 import { formatPhoneNumber } from "../../utils/phoneFormatter";
 import { formatCurrency } from "@/lib/utils";    
+import { useNavigate } from "react-router-dom"; // 추가
+
 
 import {
   Pagination,
@@ -40,6 +42,7 @@ interface Order {
 
 
 const BusinessList: React.FC = () => {
+  const navigate = useNavigate(); // 추가
   const [businesses, setBusinesses] = useState<Business[]>([]);
   const [isLoadingBusinesses, setIsLoadingBusinesses] = useState<boolean>(false);
   const [hasInitialized, setHasInitialized] = useState<boolean>(false);
@@ -616,8 +619,7 @@ const BusinessList: React.FC = () => {
                         </div>
                         <div className="flex space-x-2">
                           <Button variant="outline" size="sm" onClick={() => {
-                              setSelectedBusiness(business);
-                              setShowUnpaid(true);
+                              navigate(`/business/${business.id}`); 
                           }}>
                             <Eye className="h-4 w-4 mr-2" />상세
                           </Button>

@@ -691,6 +691,14 @@ export const arApi = {
     const response = await api.get('/payments/ar/summary/')
     return response.data
   },
+
+  // 거래처별 미수금 주문 조회
+  getUnpaidOrdersByBusiness: async (businessId: string): Promise<UnpaidOrder[]> => {
+    const response = await api.get('/business/${businessId}', {
+      params: { business_id: businessId }
+    });
+    return response.data;
+  },
 }
 
 // 기존 호환성을 위한 별칭 (점진적 마이그레이션)

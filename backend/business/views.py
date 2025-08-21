@@ -30,6 +30,8 @@ from django.db.models import Sum, Count
 from order.models import Order
 from inventory.models import Inventory
 from datetime import datetime, date
+from rest_framework import generics
+
 
 @api_view(['POST'])
 @authentication_classes([])  # 인증 완전 비활성화
@@ -537,3 +539,7 @@ class BusinessListAPIView(ListAPIView):
         if not hasattr(self.request, 'user_id') or not self.request.user_id:
             raise PermissionDenied('사용자 인증이 필요합니다.')
         return Business.objects.filter(user_id=self.request.user_id).order_by('-id')
+
+class BusinessDetailAPIView(generics.RetrieveAPIView):
+    queryset = Business.objects.all()
+    serializer_class = BusinessSerializer

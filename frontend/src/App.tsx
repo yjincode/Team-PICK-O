@@ -64,7 +64,7 @@ const App: React.FC = () => {
           } 
         />
         <Route 
-          path="/business/unpaid" 
+          path="/business/:businessId" 
           element={
             <PrivateRoute>
               <MainLayout>
