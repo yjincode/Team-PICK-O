@@ -10,6 +10,7 @@ import { Search, ShoppingCart, AlertTriangle, DollarSign } from "lucide-react"
 import { WeatherWidget } from "../../components/common/WeatherWidget"
 import { StatsCard } from "../../components/common/StatsCard"
 import { OrderStatusBadge } from "../../components/common/OrderStatusBadge"
+import Header from "../../components/layout/Header"
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts"
 import { dashboardApi, salesApi, orderApi } from "../../lib/api"
 
@@ -171,7 +172,7 @@ const Dashboard: React.FC = () => {
   
   return (
     <div className="space-y-4 sm:space-y-6">
-      {/* 헤더: 검색 및 날씨 위젯 */}
+      {/* 헤더: 검색, 날씨 위젯, 프로필/알림 */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div className="flex items-center space-x-3 flex-1 max-w-md">
           <div className="relative flex-1">
@@ -183,9 +184,16 @@ const Dashboard: React.FC = () => {
           </div>
           <Button className="bg-accent-blue hover:bg-accent-blue/90 h-12 px-6 touch-target flex-shrink-0">검색</Button>
         </div>
-        {/* 날씨 위젯 */}
-        <div className="w-full sm:w-52">
-          <WeatherWidget />
+        
+        {/* 우측 영역: 날씨 위젯 + 프로필/알림 */}
+        <div className="flex items-center space-x-4">
+          {/* 날씨 위젯 */}
+          <div className="w-full sm:w-52">
+            <WeatherWidget />
+          </div>
+          
+          {/* 프로필 및 알림 위젯 */}
+          <Header />
         </div>
       </div>
 
