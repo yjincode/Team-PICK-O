@@ -8,7 +8,7 @@ import { createContext, useContext, useState, useEffect, ReactNode } from 'react
 import { ConfirmationResult } from 'firebase/auth'
 import { TokenManager } from '../lib/tokenManager'
 import { sendPhoneVerification, verifyPhoneCode } from '../lib/firebase'
-import { api } from '../lib/api'
+import { api, authApi } from '../lib/api'
 import { UserData } from '../types/auth'
 
 interface AuthContextType {
@@ -23,6 +23,10 @@ interface AuthContextType {
   
   // 회원가입
   registerUser: (userData: any, firebaseToken: string) => Promise<void>
+  
+  // 슈퍼계정 직접 인증 (Firebase 완전 우회)
+  superAccountDirectLogin: (phoneNumber: string) => Promise<{ isNewUser: boolean }>
+  superAccountDirectRegister: (userData: any) => Promise<void>
   
   // 인증 관리
   logout: () => void
@@ -197,6 +201,77 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
     }
   }
 
+  // 슈퍼계정 직접 로그인 (Firebase 완전 우회)
+  const superAccountDirectLogin = async (phoneNumber: string): Promise<{ isNewUser: boolean }> => {
+    try {
+      setLoading(true)
+      
+      console.log('🚀 슈퍼계정 직접 로그인 시작 (Firebase 완전 우회)')
+      
+      const response = await authApi.superAccountLogin(phoneNumber)
+      
+      if (response.is_new_user) {
+        // 신규 슈퍼계정 - 회원가입 필요
+        console.log('🆕 신규 슈퍼계정 - 회원가입 필요')
+        return { isNewUser: true }
+      } else {
+        // 기존 슈퍼계정 - JWT 토큰 저장 및 로그인 처리
+        const { access_token, refresh_token, user_id, business_name, status } = response
+        
+        TokenManager.setTokens(access_token, refresh_token)
+        
+        if (status === 'approved' && business_name) {
+          const userData: UserData = { user_id, business_name }
+          setUser(userData)
+        }
+        
+        console.log('✅ 슈퍼계정 직접 로그인 성공')
+        return { isNewUser: false }
+      }
+      
+    } catch (error: any) {
+      console.error('❌ 슈퍼계정 직접 로그인 실패:', error)
+      throw error
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // 슈퍼계정 직접 회원가입 (Firebase 완전 우회)
+  const superAccountDirectRegister = async (userData: any): Promise<void> => {
+    try {
+      setLoading(true)
+      
+      console.log('🚀 슈퍼계정 직접 회원가입 시작 (Firebase 완전 우회)')
+      
+      const response = await authApi.superAccountRegister({
+        business_name: userData.business_name,
+        owner_name: userData.owner_name,
+        address: userData.address
+      })
+      
+      // 회원가입 완료 후 JWT 토큰 저장
+      if (response.access_token && response.refresh_token) {
+        TokenManager.setTokens(response.access_token, response.refresh_token)
+      }
+      
+      // 사용자 상태 업데이트
+      const newUserData: UserData = {
+        user_id: response.user.id,
+        business_name: response.user.business_name
+      }
+      setUser(newUserData)
+      
+      console.log('✅ 슈퍼계정 직접 회원가입 성공')
+      
+    } catch (error: any) {
+      console.error('❌ 슈퍼계정 직접 회원가입 실패:', error)
+      throw error
+    } finally {
+      setLoading(false)
+    }
+  }
+
   // 사용자 데이터 갱신 (토큰 페이로드에서 재추출)
   const refreshUserData = (): void => {
     if (TokenManager.isAuthenticated()) {
@@ -223,6 +298,8 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
     sendSMSCode,
     verifySMSCode,
     registerUser,
+    superAccountDirectLogin,
+    superAccountDirectRegister,
     logout,
     refreshUserData
   }

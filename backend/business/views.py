@@ -301,6 +301,189 @@ def get_user_id_from_token(request):
 @api_view(['POST'])
 @authentication_classes([])
 @permission_classes([AllowAny])
+def super_account_login(request):
+    """
+    슈퍼계정 직접 로그인 API - Firebase 로직 완전 우회
+    전화번호만으로 직접 인증하여 JWT 토큰 발급
+    """
+    print(f"🚀 슈퍼계정 직접 로그인 요청")
+    print(f"📱 요청 데이터: {request.data}")
+    
+    try:
+        phone_number = request.data.get('phone_number')
+        
+        if not phone_number:
+            return Response({
+                'error': 'phone_number가 필요합니다.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # 슈퍼계정 전화번호 체크 (여러 형식 지원)
+        SUPER_ACCOUNT_PHONES = [
+            "+821077777777",
+            "01077777777", 
+            "010-7777-7777"
+        ]
+        
+        # 입력된 전화번호 정규화
+        normalized_phone = phone_number.replace("-", "").replace(" ", "")
+        
+        if normalized_phone in ["01077777777"] or phone_number in SUPER_ACCOUNT_PHONES:
+            print(f"🔑 슈퍼계정 직접 로그인 감지: {phone_number}")
+            
+            # 슈퍼계정용 고정 Firebase UID
+            super_firebase_uid = "super_account_0107777_7777"
+            
+            try:
+                # 기존 슈퍼계정 사용자 확인
+                user = User.objects.get(firebase_uid=super_firebase_uid)
+                print(f"✅ 슈퍼계정 사용자 발견: {user.business_name} (ID: {user.id})")
+                
+                # 사용자 상태 확인
+                if user.status != 'approved':
+                    print(f"⚠️ 슈퍼계정 상태: {user.status}")
+                    return Response({
+                        'error': f'슈퍼계정이 승인되지 않았습니다: {user.status}'
+                    }, status=status.HTTP_403_FORBIDDEN)
+                
+                # JWT 토큰 발급
+                token_pair = generate_token_pair(user)
+                
+                if not token_pair:
+                    print("❌ 슈퍼계정 JWT 토큰 생성 실패")
+                    return Response({
+                        'error': '토큰 생성에 실패했습니다.'
+                    }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                
+                print(f"✅ 슈퍼계정 직접 로그인 성공 - JWT 발급 완료")
+                
+                return Response({
+                    'access_token': token_pair['access_token'],
+                    'refresh_token': token_pair['refresh_token'],
+                    'user_id': user.id,
+                    'business_name': user.business_name,
+                    'status': user.status,
+                    'is_new_user': False,
+                    'is_super_account': True,
+                    'token_type': 'Bearer',
+                    'access_expires_in': token_pair['access_expires_in'],
+                    'refresh_expires_in': token_pair['refresh_expires_in'],
+                    'message': '🔑 슈퍼계정 직접 로그인 성공! (Firebase 완전 우회)'
+                }, status=status.HTTP_200_OK)
+                
+            except User.DoesNotExist:
+                # 신규 슈퍼계정 - 회원가입 필요
+                print(f"🆕 신규 슈퍼계정 - 회원가입 필요")
+                return Response({
+                    'is_new_user': True,
+                    'is_super_account': True,
+                    'message': '🔑 슈퍼계정 신규 사용자입니다. 회원가입을 진행해주세요.',
+                    'redirect_to_register': True
+                }, status=status.HTTP_200_OK)
+                
+        else:
+            return Response({
+                'error': '슈퍼계정이 아닙니다. Firebase 인증을 사용해주세요.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+    except Exception as e:
+        print(f"❌ 슈퍼계정 직접 로그인 오류: {e}")
+        return Response({
+            'error': '슈퍼계정 로그인 중 오류가 발생했습니다.'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@authentication_classes([])
+@permission_classes([AllowAny])
+def super_account_register(request):
+    """
+    슈퍼계정 직접 회원가입 API - Firebase 로직 완전 우회
+    """
+    print(f"🚀 슈퍼계정 직접 회원가입 요청")
+    print(f"📱 요청 데이터: {request.data}")
+    
+    try:
+        data = request.data
+        
+        # 필수 필드 검증 (firebase_token 제외)
+        required_fields = ['business_name', 'owner_name', 'address']
+        for field in required_fields:
+            if not data.get(field):
+                return Response({
+                    'error': f'{field} 필드가 필요합니다.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # 슈퍼계정용 고정 값들
+        super_firebase_uid = "super_account_0107777_7777"
+        SUPER_ACCOUNT_PHONE = "+821077777777"
+        
+        # 이미 존재하는 슈퍼계정인지 확인
+        if User.objects.filter(firebase_uid=super_firebase_uid).exists():
+            print(f"❌ 슈퍼계정 중복 가입 시도")
+            return Response({
+                'error': '이미 등록된 슈퍼계정입니다.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # 신규 슈퍼계정 생성 (Firebase 완전 우회)
+        user = User.objects.create(
+            username=super_firebase_uid,
+            firebase_uid=super_firebase_uid,
+            business_name=data['business_name'],
+            owner_name=data['owner_name'],
+            phone_number=SUPER_ACCOUNT_PHONE,
+            address=data['address'],
+            status='approved'  # 슈퍼계정은 즉시 승인
+        )
+        
+        print(f"✅ 슈퍼계정 직접 회원가입 완료 - ID: {user.id}, 사업장: {user.business_name}")
+        
+        # Discord 웹훅 전송
+        try:
+            send_discord_notification(user)
+        except Exception as discord_error:
+            print(f"⚠️ Discord 알림 전송 실패: {discord_error}")
+        
+        # 회원가입 완료 후 즉시 JWT 토큰 발급
+        token_pair = generate_token_pair(user)
+        
+        if not token_pair:
+            return Response({
+                'error': 'JWT 토큰 생성에 실패했습니다.'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        return Response({
+            'message': '슈퍼계정 회원가입이 완료되었습니다.',
+            'user': {
+                'id': user.id,
+                'firebase_uid': user.firebase_uid,
+                'business_name': user.business_name,
+                'owner_name': user.owner_name,
+                'phone_number': user.phone_number,
+                'address': user.address,
+                'status': user.status,
+                'created_at': user.created_at
+            },
+            'access_token': token_pair['access_token'],
+            'refresh_token': token_pair['refresh_token'],
+            'token_type': 'Bearer',
+            'access_expires_in': token_pair['access_expires_in'],
+            'refresh_expires_in': token_pair['refresh_expires_in'],
+            'is_super_account': True,
+            'message_detail': '🔑 슈퍼계정 회원가입 및 로그인 완료! (Firebase 완전 우회)'
+        }, status=status.HTTP_201_CREATED)
+        
+    except Exception as e:
+        print(f"❌ 슈퍼계정 직접 회원가입 오류: {e}")
+        import traceback
+        traceback.print_exc()
+        return Response({
+            'error': f'슈퍼계정 회원가입 중 오류가 발생했습니다: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@authentication_classes([])
+@permission_classes([AllowAny])
 def firebase_to_jwt_exchange(request):
     """
     Firebase 토큰을 자체 JWT 토큰으로 교환하는 API

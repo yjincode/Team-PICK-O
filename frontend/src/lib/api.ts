@@ -115,7 +115,9 @@ api.interceptors.request.use(
     const publicEndpoints = [
       '/business/auth/firebase-to-jwt/',
       '/business/auth/register/',
-      '/business/auth/refresh/'
+      '/business/auth/refresh/',
+      '/business/auth/super-login/',
+      '/business/auth/super-register/'
     ]
 
     const isPublicEndpoint = publicEndpoints.some(endpoint => config.url?.includes(endpoint))
@@ -457,6 +459,24 @@ export const authApi = {
         data: null
       }
     }
+  },
+
+  // 슈퍼계정 직접 로그인 (Firebase 완전 우회)
+  superAccountLogin: async (phoneNumber: string): Promise<any> => {
+    const response = await api.post('/business/auth/super-login/', {
+      phone_number: phoneNumber
+    })
+    return response.data
+  },
+
+  // 슈퍼계정 직접 회원가입 (Firebase 완전 우회)
+  superAccountRegister: async (userData: {
+    business_name: string;
+    owner_name: string;
+    address: string;
+  }): Promise<any> => {
+    const response = await api.post('/business/auth/super-register/', userData)
+    return response.data
   },
 }
 
