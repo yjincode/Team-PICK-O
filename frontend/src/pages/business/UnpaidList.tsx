@@ -6,7 +6,7 @@ import React, { useState, useEffect } from "react"
 import { useNavigate, useParams } from 'react-router-dom'
 import { format } from "date-fns"
 import { ko } from "date-fns/locale"
-import { AlertTriangle, CreditCard, ChevronLeft, ChevronRight } from "lucide-react"
+import { AlertTriangle, CreditCard, ChevronLeft, ChevronRight, Phone, MapPin, Building2 } from "lucide-react"
 
 import { Badge } from "../../components/ui/badge"
 import { Button } from "../../components/ui/button"
@@ -27,14 +27,13 @@ const UnpaidList: React.FC = () => {
 	const [totalCount, setTotalCount] = useState(0)
 	const [totalPages, setTotalPages] = useState(0)
 	const [business, setBusiness] = useState<any>(null)
-	
 
 	useEffect(() => {
 		const fetchOrders = async () => {
 			if (!businessId) {
 				setOrders([])
 				setLoading(false)
-				setBusinessName('')
+				setBusiness(null)
 				return
 			}
 			try {
@@ -56,14 +55,13 @@ const UnpaidList: React.FC = () => {
 				}
 			
 				try {
-				 setLoading(true);
-					  const response = await businessApi.getById(businessId);
-				  console.log('businessResponse', response);
-				  setBusinessName(response.data.business_name);
-					} catch (error) {
-					  console.error('거래처 정보 가져오기 실패:', error);
-					  setBusinessName('알수 없음');
-							}
+					const businessRes = await businessApi.getById(businessId)
+					console.log("API Response:", businessRes)
+					setBusiness(businessRes)
+				  } catch (err) {
+					console.error("거래처 정보 가져오기 실패:", err)
+					setBusiness(null)
+				  }
 			} catch (error) {
 				console.error('미수금 주문 목록 가져오기 실패:', error)
 				setOrders([])
@@ -73,6 +71,70 @@ const UnpaidList: React.FC = () => {
 		}
 		fetchOrders()
 	}, [businessId, currentPage, itemsPerPage])
+
+	// 카카오맵 초기화
+	useEffect(() => {
+		if (!business?.address) return;
+		if (typeof window === 'undefined') return;
+	  
+		const loadKakaoMap = () => {
+		  if (!(window as any).kakao) {
+			const script = document.createElement('script');
+			script.src = `//dapi.kakao.com/v2/maps/sdk.js?appkey=345d37cd125a6cd69d4a819d26ed9dc0&libraries=services&autoload=false`;
+			script.async = true;
+			script.onload = () => {
+				(window as any).kakao.maps.load(() => {
+					initMap();
+				  });
+			};
+			document.head.appendChild(script);
+		  } else if ((window as any).kakao.maps) {
+			initMap();
+		  }
+		};
+	  
+		loadKakaoMap();
+	  }, [business]);
+
+	const initMap = () => {
+		const { kakao } = window as any;	
+		if (!business?.address || !(window as any).kakao) return
+
+		const mapContainer = document.getElementById('map')
+		if (!mapContainer) return
+
+		const mapOption = {
+			center: new (window as any).kakao.maps.LatLng(37.5665, 126.9780), // 서울 시청 좌표 (기본값)
+			level: 3
+		}
+
+		const map = new (window as any).kakao.maps.Map(mapContainer, mapOption)
+
+		// 주소-좌표 변환 객체 생성
+		const geocoder = new (window as any).kakao.maps.services.Geocoder()
+
+		// 주소로 좌표 검색
+		geocoder.addressSearch(business.address, function(result: any, status: any) {
+			if (status === (window as any).kakao.maps.services.Status.OK) {
+				const coords = new (window as any).kakao.maps.LatLng(result[0].y, result[0].x)
+
+				// 결과값으로 받은 위치를 마커로 표시
+				const marker = new kakao.maps.Marker({
+					map: map,
+					position: coords,
+				  });
+				  
+				// 지도의 중심을 결과값으로 받은 위치로 이동
+				map.setCenter(coords)
+
+				// 인포윈도우로 장소에 대한 설명 표시
+				const infowindow = new (window as any).kakao.maps.InfoWindow({
+					content: `<div style="padding:5px;font-size:12px;">${business.business_name}</div>`
+				})
+				infowindow.open(map, marker)
+			}
+		})
+	}
 
 	const handleViewDetail = (orderId: number) => {
 		navigate(`/orders/${orderId}`)
@@ -88,16 +150,65 @@ const UnpaidList: React.FC = () => {
 	return (
 		<div className="min-h-screen bg-gray-50">
 			<header className="px-6 py-4 bg-white border-b border-gray-200">
-				<div className="flex items-center justify-between">
-					<div>
-						<h1 className="text-2xl sm:text-3xl font-bold text-gray-900">미수금 주문 목록</h1>
+				<div className="flex flex-col gap-2">
+					<h1 className="text-2xl sm:text-3xl font-bold text-gray-900">미수금 주문 목록</h1>
+					{business ? (
+						<div className="mt-2 p-4 rounded-xl bg-gray-50 border border-gray-200">
+							<p className="text-lg font-semibold text-gray-900">{business.business_name}</p>
+							<p className="text-sm text-gray-600">📞 {business.phone_number || "전화번호 없음"}</p>
+							<p className="text-sm text-gray-600">📍 {business.address || "주소 없음"}</p>
+						</div>
+					) : (
 						<p className="text-sm sm:text-base text-gray-600 mt-1">
-							거래처 {businessName}의 미결제 주문</p>
-					</div>
+							거래처 정보를 불러올 수 없습니다.
+						</p>
+					)}
 				</div>
 			</header>
 
 			<div className="p-6">
+				{/* 거래처 프로필 카드 */}
+				{business && (
+					<Card className="mb-6 shadow-lg">
+						<CardContent className="p-6">
+							<div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+								{/* 거래처 정보 */}
+								<div className="lg:col-span-2 space-y-4">
+									<div className="flex items-center gap-3">
+										<div className="p-3 bg-blue-100 rounded-full">
+											<Building2 className="h-6 w-6 text-blue-600" />
+										</div>
+										<div>
+											<h2 className="text-2xl font-bold text-gray-900">{business.business_name}</h2>
+											<p className="text-sm text-gray-500">거래처 정보</p>
+										</div>
+									</div>
+									
+									<div className="space-y-3">
+										<div className="flex items-center gap-3">
+											<Phone className="h-5 w-5 text-gray-400" />
+											<span className="text-gray-700">{business.phone_number || "전화번호 없음"}</span>
+										</div>
+										<div className="flex items-start gap-3">
+											<MapPin className="h-5 w-5 text-gray-400 mt-0.5" />
+											<span className="text-gray-700">{business.address || "주소 없음"}</span>
+										</div>
+									</div>
+								</div>
+
+								{/* 지도 */}
+								<div className="lg:col-span-1">
+									<div className="bg-gray-100 rounded-lg overflow-hidden">
+										<div id="map" className="w-full h-48"></div>
+									</div>
+									<p className="text-xs text-gray-500 mt-2 text-center">위치 정보</p>
+								</div>
+							</div>
+						</CardContent>
+					</Card>
+				)}
+
+				{/* 주문 목록 */}
 				<Card>
 					<CardHeader>
 						<CardTitle className="flex items-center justify-between">
@@ -265,7 +376,7 @@ const UnpaidList: React.FC = () => {
 										disabled={currentPage === totalPages}
 									>
 										다음
-										<ChevronRight className="h-4 w-4" />
+										<ChevronLeft className="h-4 w-4" />
 									</Button>
 								</div>
 							</div>
