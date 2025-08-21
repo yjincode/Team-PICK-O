@@ -218,7 +218,7 @@ export const businessApi = {
   },
 
   // ID로 거래처 조회
-  getById: async (id: number): Promise<ApiResponse<Business>> => {
+  getById: async (id: string): Promise<ApiResponse<Business>> => {
     const response = await api.get(`/business/customers/${id}`)
     return response.data
   },
@@ -413,6 +413,12 @@ export const orderApi = {
   }>> => {
     const response = await api.post(`/orders/${id}/ship-out/`)
     return response.data
+  },
+  
+  // 거래처별 미수금 주문 조회
+  getUnpaidOrdersByBusiness: async (businessId: string): Promise<UnpaidOrder[]> => {
+    const response = await api.get(`/business/${businessId}/unpaid-orders`);
+    return response.data;
   },
 }
 
@@ -676,13 +682,6 @@ export const arApi = {
     return response.data
   },
 
-  // 거래처별 미수금 주문 조회
-  getUnpaidOrdersByBusiness: async (businessId: string): Promise<UnpaidOrder[]> => {
-    const response = await api.get('/business/${businessId}', {
-      params: { business_id: businessId }
-    });
-    return response.data;
-  },
 }
 
 // 기존 호환성을 위한 별칭 (점진적 마이그레이션)
