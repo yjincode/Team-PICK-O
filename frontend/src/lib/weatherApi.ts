@@ -1,4 +1,4 @@
-import { WeatherData, WeatherWarning, UserLocation, OpenMeteoResponse, WarningLevel } from '../types/weather';
+import { WeatherData, WeatherWarning, UserLocation, OpenMeteoResponse, WarningLevel, WarningType } from '../types/weather';
 
 // 주소를 좌표로 변환하는 함수
 export const getCoordinatesFromAddress = async (address: string): Promise<{ lat: number; lon: number; name: string } | null> => {
@@ -136,17 +136,47 @@ const transformWeatherData = (apiData: OpenMeteoResponse, lat: number, lon: numb
   };
 };
 
-// 특보 정보 (임시 더미 데이터, 나중에 기상청 API로 교체)
-export const fetchWeatherWarning = async (): Promise<WeatherWarning | null> => {
-  // 실제 구현 시에는 기상청 API 호출
-  // 현재는 더미 데이터 반환
+// 특보 정보 (백엔드 기상청 API 호출)
+export const fetchWeatherWarning = async (area?: string): Promise<WeatherWarning | null> => {
+  try {
+    const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
+    const url = area 
+      ? `${apiBaseUrl}/dashboard/weather/warnings/?area=${encodeURIComponent(area)}`
+      : `${apiBaseUrl}/dashboard/weather/warnings/`;
+    
+    console.log('기상청 경보 API 호출:', url);
+    
+    const response = await fetch(url);
+    
+    if (!response.ok) {
+      throw new Error(`경보 API 호출 실패: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    console.log('📋 경보 API 응답:', data);
+    
+    if (data.success && data.data && data.data.length > 0) {
+      // 첫 번째 경보 정보 반환
+      const warning = data.data[0];
+      console.log('⚠️ 경보 정보 발견:', warning);
   return {
-    level: '경보' as WarningLevel,
-    type: '폭염',
-    message: '폭염 경보',
-    area: '서울',
-    validTime: new Date().toLocaleString('ko-KR')
-  };
+        level: warning.level as WarningLevel,
+        type: warning.type as WarningType,
+        message: warning.message,
+        area: warning.area,
+        validTime: warning.validTime
+      };
+    }
+    
+    // 경보가 없으면 null 반환
+    console.log('ℹ️ 발효 중인 경보가 없습니다.');
+    return null;
+    
+  } catch (error) {
+    console.error('경보 정보 가져오기 실패:', error);
+    // 에러 시 null 반환 (경보배너 숨김)
+    return null;
+  }
 };
 
 // 캐싱 관련 유틸리티

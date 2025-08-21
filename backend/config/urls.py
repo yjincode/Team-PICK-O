@@ -6,6 +6,7 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 from django.http import JsonResponse
+
 from drf_spectacular.views import (
     SpectacularAPIView,
     SpectacularSwaggerView,
@@ -79,6 +80,8 @@ urlpatterns = [
     path('api/v1/fish-registry/', include('fish_registry.urls')),
     path('api/v1/transcription/', include('transcription.urls')),
     path('api/v1/sales/', include('sales.urls')),
+    
+
     
     # API Documentation
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),

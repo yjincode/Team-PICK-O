@@ -66,8 +66,12 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({ className = '', us
       // 날씨 데이터와 특보 정보를 동시에 가져오기
       const [data, warning] = await Promise.all([
         fetchWeatherData(targetLocation.lat, targetLocation.lon),
-        fetchWeatherWarning()
+        fetchWeatherWarning(targetLocation.name)  // 현재 지역의 경보 정보 가져오기
       ]);
+      
+      console.log('🌤️ 날씨 데이터:', data);
+      console.log('⚠️ 경보 정보:', warning);
+      console.log('📍 현재 지역:', targetLocation.name);
       
       // 위치 정보 업데이트
       data.location.name = targetLocation.name;
@@ -126,6 +130,17 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({ className = '', us
       loadWeatherData();
     }
   }, [lastUpdated]);
+
+  // 경보 정보 주기적 업데이트 (5분마다)
+  useEffect(() => {
+    const warningInterval = setInterval(() => {
+      if (currentLocation.name) {
+        fetchWeatherWarning(currentLocation.name).then(setWeatherWarning);
+      }
+    }, 5 * 60 * 1000); // 5분
+
+    return () => clearInterval(warningInterval);
+  }, [currentLocation.name]);
 
   if (loading) {
     return (
