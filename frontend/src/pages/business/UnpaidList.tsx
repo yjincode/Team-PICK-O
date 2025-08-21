@@ -150,19 +150,15 @@ const UnpaidList: React.FC = () => {
 	return (
 		<div className="min-h-screen bg-gray-50">
 			<header className="px-6 py-4 bg-white border-b border-gray-200">
-				<div className="flex flex-col gap-2">
-					<h1 className="text-2xl sm:text-3xl font-bold text-gray-900">미수금 주문 목록</h1>
-					{business ? (
-						<div className="mt-2 p-4 rounded-xl bg-gray-50 border border-gray-200">
-							<p className="text-lg font-semibold text-gray-900">{business.business_name}</p>
-							<p className="text-sm text-gray-600">📞 {business.phone_number || "전화번호 없음"}</p>
-							<p className="text-sm text-gray-600">📍 {business.address || "주소 없음"}</p>
-						</div>
-					) : (
-						<p className="text-sm sm:text-base text-gray-600 mt-1">
-							거래처 정보를 불러올 수 없습니다.
-						</p>
-					)}
+				<div className="flex flex-row gap-2">
+					<h1 className="text-2xl sm:text-3xl font-bold text-gray-900">고객 상세 페이지</h1>
+					<Button 
+    				variant="outline" 
+    				size="sm" 
+					className="w-10 h-10 p-0  ml-auto "
+   					 onClick={() => navigate(-1)} // 한 단계 뒤로 이동
+  				>
+    			<ChevronLeft className="h-4 w-4 mr-1" /></Button>
 				</div>
 			</header>
 
