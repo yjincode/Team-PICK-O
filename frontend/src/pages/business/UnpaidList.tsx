@@ -55,7 +55,7 @@ const UnpaidList: React.FC = () => {
 				}
 			
 				try {
-					const businessRes = await businessApi.getById(businessId)
+					const businessRes = await businessApi.getById(Number(businessId))
 					console.log("API Response:", businessRes)
 					setBusiness(businessRes)
 				  } catch (err) {

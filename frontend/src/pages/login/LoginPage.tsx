@@ -99,11 +99,54 @@ export default function LoginPage(): JSX.Element {
     }, 1000)
   }
 
+  // 슈퍼계정 로그인 처리
+  const handleSuperAccountLogin = async (): Promise<void> => {
+    setLoading(true)
+    setError('')
+    
+    try {
+      console.log('🔑 슈퍼계정 로그인 시도')
+      
+      // 슈퍼계정 전용 토큰으로 Firebase-to-JWT 교환 시도
+      const superToken = "SUPER_ACCOUNT_0107777_7777"
+      
+      const result = await verifySMSCode(null, '', superToken)
+      
+      if (result.isNewUser && result.firebaseToken) {
+        // 신규 슈퍼계정 - 회원가입 단계로
+        setFirebaseToken(superToken)
+        setPhoneNumber("010-7777-7777") // 표시용
+        setCurrentStep('register')
+        
+        // sessionStorage에 상태 저장 (새로고침 시 복원용)
+        sessionStorage.setItem('forced_step', 'register')
+        sessionStorage.setItem('firebase_token_for_register', superToken)
+        sessionStorage.setItem('phone_number_for_register', "010-7777-7777")
+        
+      } else if (result.isNewUser === false) {
+        // 기존 슈퍼계정 - 대시보드로
+        navigate('/dashboard')
+      } else {
+        setError('슈퍼계정 인증 처리에 실패했습니다.')
+      }
+    } catch (error: any) {
+      setError(error.message || '슈퍼계정 로그인에 실패했습니다.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   // 1단계: SMS 인증번호 전송
   const handleSendCode = async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {
     e.preventDefault()
     setLoading(true)
     setError('')
+    
+    // 슈퍼계정 전화번호 체크
+    if (phoneNumber === '010-7777-7777' || phoneNumber === '01077777777') {
+      await handleSuperAccountLogin()
+      return
+    }
     
     try {
       const result = await sendSMSCode(phoneNumber)
@@ -398,11 +441,6 @@ export default function LoginPage(): JSX.Element {
               {/* reCAPTCHA container */}
               <div id="recaptcha-container" className="flex justify-center mt-4" style={{ minHeight: '78px' }}></div>
               
-              {currentStep === 'phone' && (
-                <div className="text-xs text-center text-gray-500 mt-2">
-                  테스트: 01012341234 (인증번호: 123456)
-                </div>
-              )}
             </div>
           </CardContent>
         </Card>

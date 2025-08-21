@@ -19,7 +19,7 @@ interface AuthContextType {
   
   // SMS 인증 관련
   sendSMSCode: (phoneNumber: string) => Promise<ConfirmationResult>
-  verifySMSCode: (confirmationResult: ConfirmationResult, code: string) => Promise<{ isNewUser: boolean; firebaseToken?: string }>
+  verifySMSCode: (confirmationResult: ConfirmationResult | null, code: string, superToken?: string) => Promise<{ isNewUser: boolean; firebaseToken?: string }>
   
   // 회원가입
   registerUser: (userData: any, firebaseToken: string) => Promise<void>
@@ -101,39 +101,52 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
     }
   }
 
-  // Firebase 인증번호 확인 및 JWT 교환
-  const verifySMSCode = async (confirmationResult: ConfirmationResult, code: string): Promise<{ isNewUser: boolean; firebaseToken?: string }> => {
+  // Firebase 인증번호 확인 및 JWT 교환 (슈퍼계정 지원)
+  const verifySMSCode = async (confirmationResult: ConfirmationResult | null, code: string, superToken?: string): Promise<{ isNewUser: boolean; firebaseToken?: string }> => {
     try {
       setLoading(true)
       
-      // 1. Firebase 인증번호 확인
-      const authResult = await verifyPhoneCode(confirmationResult, code)
+      let firebaseToken: string
       
-      if (authResult.success && authResult.user && authResult.idToken) {
-        // 2. Firebase ID 토큰을 JWT로 교환
-        const response = await api.post('/business/auth/firebase-to-jwt/', {
-          firebase_token: authResult.idToken
-        })
-        
-        if (response.data.is_new_user) {
-          // 신규 사용자 - Firebase ID 토큰 반환하고 회원가입 단계로
-          return { isNewUser: true, firebaseToken: authResult.idToken }
-        } else {
-          // 기존 사용자 - JWT 토큰 저장 및 로그인 처리
-          const { access_token, refresh_token, user_id, business_name, status } = response.data
-          
-          TokenManager.setTokens(access_token, refresh_token)
-          
-          if (status === 'approved' && business_name) {
-            const userData: UserData = { user_id, business_name }
-            setUser(userData)
-          }
-          
-          return { isNewUser: false }
+      if (superToken) {
+        // 슈퍼계정 처리 - Firebase 인증 건너뛰기
+        console.log('🔑 슈퍼계정 처리 시작')
+        firebaseToken = superToken
+      } else {
+        // 일반 Firebase 인증번호 확인
+        if (!confirmationResult) {
+          throw new Error('인증 세션이 만료되었습니다.')
         }
         
+        const authResult = await verifyPhoneCode(confirmationResult, code)
+        
+        if (authResult.success && authResult.user && authResult.idToken) {
+          firebaseToken = authResult.idToken
+        } else {
+          throw new Error(authResult.error || '인증 실패')
+        }
+      }
+      
+      // Firebase ID 토큰(또는 슈퍼계정 토큰)을 JWT로 교환
+      const response = await api.post('/business/auth/firebase-to-jwt/', {
+        firebase_token: firebaseToken
+      })
+      
+      if (response.data.is_new_user) {
+        // 신규 사용자 - Firebase ID 토큰 반환하고 회원가입 단계로
+        return { isNewUser: true, firebaseToken: firebaseToken }
       } else {
-        throw new Error(authResult.error || '인증 실패')
+        // 기존 사용자 - JWT 토큰 저장 및 로그인 처리
+        const { access_token, refresh_token, user_id, business_name, status } = response.data
+        
+        TokenManager.setTokens(access_token, refresh_token)
+        
+        if (status === 'approved' && business_name) {
+          const userData: UserData = { user_id, business_name }
+          setUser(userData)
+        }
+        
+        return { isNewUser: false }
       }
       
     } catch (error: any) {
