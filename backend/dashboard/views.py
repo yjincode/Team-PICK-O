@@ -8,6 +8,7 @@ from datetime import datetime, date
 from order.models import Order
 from inventory.models import Inventory
 from business.models import Business
+from .weather_service import WeatherService
 
 
 @api_view(['GET'])
@@ -154,3 +155,132 @@ class DashboardLowStockView(APIView):
             return Response({
                 'error': f'재고 부족 조회 중 오류가 발생했습니다: {str(e)}'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# 기상청 날씨 및 경보 API 뷰들
+@api_view(['GET'])
+@permission_classes([])  # 인증 불필요
+def weather_warnings(request):
+    """
+    현재 발효 중인 기상청 특보 정보를 반환합니다.
+    
+    Query Parameters:
+        area: 지역명 (선택사항, 기본값: 전체)
+    
+    Returns:
+        JSON 형태의 특보 정보 리스트
+    """
+    try:
+        area = request.GET.get('area', None)
+        
+        weather_service = WeatherService()
+        warnings = weather_service.get_current_warnings(area)
+        
+        # 프론트엔드 타입에 맞게 데이터 변환
+        formatted_warnings = []
+        for warning in warnings:
+            formatted_warning = {
+                'level': warning['level'],
+                'type': warning['type'],
+                'message': warning['message'],
+                'area': warning['area'],
+                'validTime': warning['validTime']
+            }
+            formatted_warnings.append(formatted_warning)
+        
+        return Response({
+            'success': True,
+            'data': formatted_warnings,
+            'count': len(formatted_warnings)
+        })
+        
+    except Exception as e:
+        return Response({
+            'success': False,
+            'error': str(e),
+            'data': []
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([])  # 인증 불필요
+def weather_forecast(request):
+    """
+    특정 지역의 기상청 단기 예보 정보를 반환합니다.
+    
+    Query Parameters:
+        area: 지역명 (필수)
+    
+    Returns:
+        JSON 형태의 예보 정보
+    """
+    try:
+        area = request.GET.get('area', '서울')
+        
+        if not area:
+            return Response({
+                'success': False,
+                'error': '지역명이 필요합니다.',
+                'data': {}
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        weather_service = WeatherService()
+        forecast = weather_service.get_weather_forecast(area)
+        
+        if not forecast:
+            return Response({
+                'success': False,
+                'error': '예보 정보를 가져올 수 없습니다.',
+                'data': {}
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        return Response({
+            'success': True,
+            'data': forecast
+        })
+        
+    except Exception as e:
+        return Response({
+            'success': False,
+            'error': str(e),
+            'data': {}
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([])  # 인증 불필요
+def weather_status(request):
+    """
+    날씨 서비스 상태를 확인합니다.
+    
+    Returns:
+        JSON 형태의 서비스 상태 정보
+    """
+    try:
+        weather_service = WeatherService()
+        has_api_key = bool(weather_service.api_key)
+        
+        # 간단한 API 키 유효성 테스트
+        test_warnings = []
+        if has_api_key:
+            try:
+                test_warnings = weather_service.get_current_warnings('서울')
+            except:
+                pass
+        
+        return Response({
+            'success': True,
+            'data': {
+                'api_key_configured': has_api_key,
+                'service_status': 'active' if has_api_key else 'inactive',
+                'test_warnings_count': len(test_warnings),
+                'supported_areas': list(weather_service.city_coordinates.keys())
+            }
+        })
+        
+    except Exception as e:
+        return Response({
+            'success': False,
+            'error': str(e),
+            'data': {}
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
