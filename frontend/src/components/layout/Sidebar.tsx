@@ -8,6 +8,8 @@ import { useState, useRef, useEffect } from "react"
 import { Link, useLocation } from "react-router-dom"
 import { Home, Users, ShoppingCart, Package, TrendingUp, ChevronDown, ChevronRight, ChevronLeft } from "lucide-react"
 import { SharkMascot } from "../common/SharkMascot"
+import { useNavigate } from "react-router-dom";
+import { sub } from "date-fns"
 
 // 메뉴 아이템 타입 정의
 interface MenuItem {
@@ -89,11 +91,13 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed = false, onToggle }) => {
   }>({ isOpen: false })
   const dropdownRef = useRef<HTMLDivElement>(null)
 
-  // 메뉴 토글 함수
+  // // 메뉴 토글 함수
   const toggleItem = (title: string) => {
-    setOpenItems((prev) => (prev.includes(title) ? prev.filter((item) => item !== title) : [...prev, title]))
+    // 하나만 열리도록 토글 (클릭 시 다른 메뉴는 닫힘)
+    setOpenItems(prev => (prev.includes(title) ? [] : [title]))
   }
 
+  
   // 사이드 드롭다운 열기
   const openSideDropdown = (menu: MenuItem, buttonElement: HTMLElement) => {
     const rect = buttonElement.getBoundingClientRect()
@@ -108,6 +112,14 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed = false, onToggle }) => {
   const closeSideDropdown = () => {
     setSideDropdown({ isOpen: false })
   }
+
+  // 대시보드로 이동 시 모든 메뉴 닫기
+  useEffect(() => {
+    if (location.pathname === '/dashboard') {
+      setOpenItems([])
+      setSideDropdown({ isOpen: false })
+    }
+  }, [location.pathname])
 
   // 클릭 외부 영역 감지
   useEffect(() => {
@@ -178,10 +190,11 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed = false, onToggle }) => {
                 </span>
               </button>
             )}
-            <div className="w-16 h-16 sm:w-20 sm:h-20">
+            <Link to="/dashboard" className="flex flex-col items-center">
+            <div className="w-30 h-30 sm:w-32 sm:h-32">
               <SharkMascot />
             </div>
-            <h1 className="text-lg sm:text-xl font-bold text-white text-center">바다 대장부</h1>
+          </Link>
           </div>
         )}
       </div>
@@ -250,7 +263,10 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed = false, onToggle }) => {
             ) : (
               <Link
                 to={item.url!}
-                onClick={closeMobileSidebar}
+                onClick={() => {
+                  setOpenItems([]);  // 다른 메뉴 다 닫기
+                  closeMobileSidebar(); // 모바일 사이드바 닫기
+                }}
                 className={`flex items-center rounded-lg transition-colors touch-target ${
                   collapsed ? 'p-2 justify-center' : 'space-x-3 p-3'
                 } ${
