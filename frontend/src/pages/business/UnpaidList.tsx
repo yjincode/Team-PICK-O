@@ -45,17 +45,24 @@ const UnpaidList: React.FC = () => {
 					payment_status: 'pending'
 				}
 				const response = await orderApi.getAll(params)
+				// 서버 응답 후 프론트에서 취소/환불 건 제거
+				const filterOutCancelledAndRefunded = (list: OrderListItem[]) =>
+					(list || []).filter((o) => o.order_status !== 'cancelled' && (o.payment ? o.payment.payment_status !== 'refunded' : true))
+
 				if ((response as any).pagination) {
-					setOrders((response as any).data || [])
+					const rawList: OrderListItem[] = (response as any).data || []
+					const filtered = filterOutCancelledAndRefunded(rawList)
+					setOrders(filtered)
 					setTotalCount((response as any).pagination.total_count)
 					setTotalPages((response as any).pagination.total_pages)
 				} else {
-					const ordersData = (response as any).data || []
-					setOrders(Array.isArray(ordersData) ? ordersData : [])
+					const ordersData: OrderListItem[] = (response as any).data || []
+					const filtered = filterOutCancelledAndRefunded(Array.isArray(ordersData) ? ordersData : [])
+					setOrders(filtered)
 				}
 			
 				try {
-					const businessRes = await businessApi.getById(Number(businessId))
+					const businessRes = await businessApi.getById(businessId)
 					console.log("API Response:", businessRes)
 					setBusiness(businessRes)
 				  } catch (err) {
@@ -147,6 +154,9 @@ const UnpaidList: React.FC = () => {
 	const startIndex = (currentPage - 1) * itemsPerPage
 	const endIndex = Math.min(startIndex + itemsPerPage, totalCount)
 
+// 필터링된 목록 기준으로 표기 (환불/취소 제외)
+	const formatCurrency = (amount: number): string => `₩${amount.toLocaleString()}`
+
 	return (
 		<div className="min-h-screen bg-gray-50">
 			<header className="px-6 py-4 bg-white border-b border-gray-200">
@@ -169,7 +179,7 @@ const UnpaidList: React.FC = () => {
 						<CardContent className="p-6">
 							<div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 								{/* 거래처 정보 */}
-								<div className="lg:col-span-2 space-y-4">
+								<div className="lg:col-span-2 flex flex-col h-full space-y-4">
 									<div className="flex items-center gap-3">
 										<div className="p-3 bg-blue-100 rounded-full">
 											<Building2 className="h-6 w-6 text-blue-600" />
@@ -189,7 +199,15 @@ const UnpaidList: React.FC = () => {
 											<MapPin className="h-5 w-5 text-gray-400 mt-0.5" />
 											<span className="text-gray-700">{business.address || "주소 없음"}</span>
 										</div>
+										</div>
+
+										<div className="flex items-baseline space-x-2 mt-8">
+										 <p className="text-sm text-gray-500">미수금</p>
+                       				 	 <p className="text-lg font-bold text-red-600">
+                        					    {formatCurrency(business.outstanding_balance ?? 0)}
+                         				 </p>
 									</div>
+									
 								</div>
 
 								{/* 지도 */}
@@ -208,7 +226,7 @@ const UnpaidList: React.FC = () => {
 				<Card>
 					<CardHeader>
 						<CardTitle className="flex items-center justify-between">
-							<span>주문 목록 ({totalCount}건)</span>
+							<span>미수금 목록 ({totalCount}건)</span>
 						</CardTitle>
 					</CardHeader>
 					<CardContent>
@@ -217,12 +235,12 @@ const UnpaidList: React.FC = () => {
 								<TableHeader>
 									<TableRow className="bg-gray-50">
 										<TableHead className="font-semibold text-gray-900">번호</TableHead>
-										<TableHead className="font-semibold text-gray-900">거래처명</TableHead>
+										{/* <TableHead className="font-semibold text-gray-900">거래처명</TableHead> */}
 										<TableHead className="font-semibold text-gray-900">주문일자</TableHead>
 										<TableHead className="font-semibold text-gray-900">납기일</TableHead>
 										<TableHead className="font-semibold text-gray-900">품목 요약</TableHead>
 										<TableHead className="font-semibold text-gray-900">총금액</TableHead>
-										<TableHead className="font-semibold text-gray-900">결제 상태</TableHead>
+										{/* <TableHead className="font-semibold text-gray-900">결제 상태</TableHead> */}
 										<TableHead className="font-semibold text-gray-900 text-center"></TableHead>
 									</TableRow>
 								</TableHeader>
@@ -255,11 +273,11 @@ const UnpaidList: React.FC = () => {
 												<TableCell className="font-medium text-gray-900">
 													{totalCount ? (totalCount - startIndex - index) : (index + 1)}
 												</TableCell>
-												<TableCell className="font-medium">
+												{/* <TableCell className="font-medium">
 													<div className="font-semibold text-gray-900">
 														{order.business?.business_name || '거래처명 없음'}
 													</div>
-												</TableCell>
+												</TableCell> */}
 												<TableCell className="text-gray-600">
 													{format(new Date(order.order_datetime), "yyyy-MM-dd", { locale: ko })}
 												</TableCell>
@@ -287,36 +305,8 @@ const UnpaidList: React.FC = () => {
 												<TableCell className="font-semibold text-gray-900">
 													{new Intl.NumberFormat('ko-KR', { style: 'decimal', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(Math.round(order.total_price))}원
 												</TableCell>
-												<TableCell>
-													{/* 결제 상태 표시 (미결제로 필터링되어 있지만 안전하게 표시) */}
-													{order.payment ? (
-														<PaymentStatusBadge status={order.payment.payment_status} />
-													) : (
-														<Badge variant="outline" className="text-gray-500 border-gray-300">
-															미결제
-														</Badge>
-													)}
-												</TableCell>
-												<TableCell className="text-center">
-													<div className="flex items-center justify-center gap-2">
-														{/* 결제 버튼 - 미결제 상태이고 취소되지 않은 주문일 때만 표시 */}
-														{(!order.payment || order.payment.payment_status !== 'paid') && 
-														 order.order_status !== 'cancelled' && (
-															<Button
-																variant="outline"
-																size="sm"
-																onClick={(e) => {
-																	e.stopPropagation()
-																	handlePayment(order.id)
-																}}
-																className="border-green-600 text-green-600 hover:bg-green-50"
-															>
-																<CreditCard className="h-4 w-4 mr-1" />
-																	결제
-																</Button>
-														)}
-													</div>
-												</TableCell>
+												
+												
 											</TableRow>
 										))
 									)}

@@ -1,7 +1,7 @@
 from django.urls import path
 from . import views
 from .views import (
-    BusinessCreateView, BusinessListAPIView, BusinessDetailAPIView
+    BusinessCreateView, BusinessListAPIView, BusinessDetailAPIView, unpaid_orders_view
 )
 
 urlpatterns = [
@@ -20,5 +20,6 @@ urlpatterns = [
     path('customers/', BusinessListAPIView.as_view()),  # GET: 목록 조회 (인증 필요)
     path('customers/create/', BusinessCreateView.as_view()),  # POST: 생성 (인증 필요)
     path('customers/<int:pk>/', BusinessDetailAPIView.as_view()), 
+    path('<int:business_id>/unpaid-orders/', unpaid_orders_view, name='unpaid-orders'),
 
 ] 

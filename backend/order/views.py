@@ -710,18 +710,17 @@ class OrderListView(View):
         # 결제 상태별 필터링 (Payment 모델의 역방향 관계 사용)
         payment_status_filter = request.GET.get('payment_status')
         if payment_status_filter and payment_status_filter != 'all':
+            from payment.models import Payment
             if payment_status_filter == 'paid':
-                # Payment 모델에서 order를 통해 역방향 조회
-                from payment.models import Payment
                 paid_order_ids = Payment.objects.filter(payment_status='paid').values_list('order_id', flat=True)
                 orders_queryset = orders_queryset.filter(id__in=paid_order_ids)
             elif payment_status_filter == 'pending':
-                # 결제 정보가 없거나 pending 상태
-                from payment.models import Payment
-                pending_order_ids = Payment.objects.filter(payment_status='pending').values_list('order_id', flat=True)
-                orders_queryset = orders_queryset.exclude(id__in=Payment.objects.filter(payment_status='paid').values_list('order_id', flat=True))
+                # 미수금: 결제되지 않았고(refunded 포함하지 않음), 주문이 취소되지 않은 건만
+                excluded_statuses = ['paid', 'refunded']
+                excluded_ids = Payment.objects.filter(payment_status__in=excluded_statuses).values_list('order_id', flat=True)
+                orders_queryset = orders_queryset.exclude(id__in=excluded_ids)
+                orders_queryset = orders_queryset.exclude(order_status='cancelled')
             elif payment_status_filter == 'refunded':
-                from payment.models import Payment
                 refunded_order_ids = Payment.objects.filter(payment_status='refunded').values_list('order_id', flat=True)
                 orders_queryset = orders_queryset.filter(id__in=refunded_order_ids)
         # payment_status='all' 또는 지정되지 않은 경우: 모든 주문 (필터링 안함)
