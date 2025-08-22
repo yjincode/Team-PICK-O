@@ -25,11 +25,8 @@ interface StepInfo {
 }
 
 export default function LoginPage(): JSX.Element {
-  console.log('🟢 LoginPage 렌더링 시작')
   const navigate = useNavigate()
   const { user, loading: authLoading, sendSMSCode, verifySMSCode, registerUser, superAccountDirectLogin, superAccountDirectRegister } = useAuth()
-  
-  console.log('🔍 LoginPage 상태:', { user, authLoading })
   
   // 상태 관리 (sessionStorage에서 복원)
   const [currentStep, setCurrentStep] = useState<LoginStep>(() => {
@@ -109,9 +106,7 @@ export default function LoginPage(): JSX.Element {
     setLoading(true)
     setError('')
     
-    try {
-      console.log('🚀 슈퍼계정 직접 로그인 시도 (Firebase 완전 우회)')
-      
+    try {      
       const result = await superAccountDirectLogin(phoneNumber)
       
       if (result.isNewUser) {
@@ -125,7 +120,6 @@ export default function LoginPage(): JSX.Element {
         
       } else {
         // 기존 슈퍼계정 - 대시보드로
-        console.log('✅ 슈퍼계정 직접 로그인 성공 - 대시보드로 이동')
         navigate('/dashboard')
       }
     } catch (error: any) {
@@ -210,7 +204,6 @@ export default function LoginPage(): JSX.Element {
       
       if (isSuperAccount) {
         // 슈퍼계정 직접 회원가입 (Firebase 완전 우회)
-        console.log('🚀 슈퍼계정 직접 회원가입 처리')
         await superAccountDirectRegister(userInfo)
       } else {
         // 일반 Firebase 회원가입

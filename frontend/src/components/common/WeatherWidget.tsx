@@ -68,11 +68,7 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({ className = '', us
         fetchWeatherData(targetLocation.lat, targetLocation.lon),
         fetchWeatherWarning(targetLocation.name)  // 현재 지역의 경보 정보 가져오기
       ]);
-      
-      console.log('🌤️ 날씨 데이터:', data);
-      console.log('⚠️ 경보 정보:', warning);
-      console.log('📍 현재 지역:', targetLocation.name);
-      
+            
       // 위치 정보 업데이트
       data.location.name = targetLocation.name;
       data.location.lat = targetLocation.lat;
@@ -101,9 +97,7 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({ className = '', us
       const location = await getCurrentLocation();
       
       // GPS 좌표를 실제 지역명으로 변환
-      const locationName = await getLocationNameFromCoords(location.lat, location.lon);
-      console.log('GPS 지역명 변환 결과:', locationName);
-      
+      const locationName = await getLocationNameFromCoords(location.lat, location.lon);      
       const newLocation: UserLocation = {
         name: locationName,
         lat: location.lat,

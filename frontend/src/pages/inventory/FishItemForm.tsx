@@ -60,9 +60,7 @@ const FishItemForm: React.FC = () => {
   const fetchFishTypes = async () => {
     try {
       setLoading(true)
-      console.log('🔄 어종 목록 로딩 시작...')
       const response = await fishTypeApi.getAll()
-      console.log('✅ 어종 목록 로딩 성공:', response)
       // DRF ViewSet은 배열을 직접 반환하므로 response.data를 직접 사용
       setFishTypes(response.data || [])
     } catch (error) {
@@ -79,18 +77,12 @@ const FishItemForm: React.FC = () => {
 
   // 필터링 처리 (페이지는 제외)
   useEffect(() => {
-    console.log('🔍 필터링 시작:', { 
-      totalFishTypes: fishTypes.length, 
-      searchTerm, 
-      unitFilter
-    })
     
     let filtered = [...fishTypes]
     
     // 검색 필터링
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase()
-      console.log('🔎 검색어 필터링:', term)
       filtered = filtered.filter(fishType => 
         fishType.name.toLowerCase().includes(term) ||
         (fishType.aliases && fishType.aliases.toLowerCase().includes(term))
@@ -100,7 +92,6 @@ const FishItemForm: React.FC = () => {
     
     // 단위 필터링
     if (unitFilter !== 'all') {
-      console.log('📏 단위 필터링:', unitFilter)
       const beforeFilter = filtered.length
       filtered = filtered.filter(fishType => fishType.unit === unitFilter)
       console.log('📏 단위 필터 결과:', filtered.length, '(이전:', beforeFilter, ')')
@@ -130,7 +121,6 @@ const FishItemForm: React.FC = () => {
   
   // 디버깅: 사용 가능한 단위 목록 로그
   useEffect(() => {
-    console.log('📏 사용 가능한 단위 목록:', availableUnits)
     console.log('📊 어종별 단위:', fishTypes.map(fish => ({ name: fish.name, unit: fish.unit })))
   }, [fishTypes, availableUnits])
 
@@ -407,7 +397,6 @@ const FishItemForm: React.FC = () => {
                 <Button
                   variant="outline"
                   onClick={() => {
-                    console.log('🔄 필터 리셋')
                     setSearchTerm('')
                     setUnitFilter('all')
                     setCurrentPage(1)
