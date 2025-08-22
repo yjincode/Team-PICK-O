@@ -31,6 +31,7 @@ from order.models import Order
 from inventory.models import Inventory
 from datetime import datetime, date
 from rest_framework import generics
+from order.models import Order
 
 
 @api_view(['POST'])
@@ -826,3 +827,9 @@ class BusinessListAPIView(ListAPIView):
 class BusinessDetailAPIView(generics.RetrieveAPIView):
     queryset = Business.objects.all()
     serializer_class = BusinessSerializer
+
+
+def unpaid_orders_view(request, business_id):
+    orders = get_unpaid_orders(business_id)  # DB 조회
+    data = list(orders.values())
+    return JsonResponse({"orders": data})
