@@ -2,9 +2,7 @@ import { WeatherData, WeatherWarning, UserLocation, OpenMeteoResponse, WarningLe
 
 // 주소를 좌표로 변환하는 함수
 export const getCoordinatesFromAddress = async (address: string): Promise<{ lat: number; lon: number; name: string } | null> => {
-  try {
-    console.log('주소 검색 시작:', address);
-    
+  try {    
     // Open-Meteo Geocoding API로 주소 검색
     const response = await fetch(
       `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(address)}&count=1&language=ko&format=json&country_code=KR`
@@ -142,10 +140,7 @@ export const fetchWeatherWarning = async (area?: string): Promise<WeatherWarning
     const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
     const url = area 
       ? `${apiBaseUrl}/dashboard/weather/warnings/?area=${encodeURIComponent(area)}`
-      : `${apiBaseUrl}/dashboard/weather/warnings/`;
-    
-    console.log('기상청 경보 API 호출:', url);
-    
+      : `${apiBaseUrl}/dashboard/weather/warnings/`;    
     const response = await fetch(url);
     
     if (!response.ok) {
