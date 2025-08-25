@@ -59,14 +59,11 @@ const BusinessList: React.FC = () => {
   // 거래처 목록을 가져오는 함수 (재사용 가능)
   const fetchBusinesses = async (pageNum = page) => {
     if (isLoadingBusinesses) {
-      console.log('⏸️ 이미 로딩 중이므로 API 호출 생략');
       return;
     }
     try {
-      console.log('🔄 거래처 목록 API 호출 시작 - 페이지:', pageNum);
       setIsLoadingBusinesses(true);
       const res = await businessApi.getAll({ page: pageNum, page_size: pageSize });
-      console.log("✅ API 응답:", res);
       console.log("📊 응답 데이터 - count:", res.count, "results 개수:", res.results?.length);
       // 다양한 응답 구조에 대응
       let data: any = null;
@@ -161,26 +158,15 @@ const BusinessList: React.FC = () => {
 
   // AuthContext 로딩이 완료되면 API 호출 (인증 여부와 관계없이)
   useEffect(() => {
-    console.log('🔍 useEffect 실행됨:', {
-      loading,
-      isAuthenticated,
-      user: !!user,
-      hasInitialized
-    });
-
     // AuthContext 로딩 중이면 대기
     if (loading) {
-      console.log('⏳ AuthContext 로딩 중, API 호출 대기...');
       return;
     }
 
     // 이미 초기화했으면 더 이상 호출하지 않음
     if (hasInitialized) {
-      console.log('✅ 이미 초기화 완료됨');
       return;
     }
-
-    console.log('🚀 거래처 목록 로드 (인증 상태와 관계없이)');
     setHasInitialized(true);
     fetchBusinesses(1); // 첫 페이지 로드
     fetchUnpaidStats();

@@ -30,7 +30,6 @@ const OrderConfirmationPage: React.FC = () => {
       try {
         // 1. 주문 정보 조회
         const orderResponse = await orderApi.getById(parseInt(id!))
-        console.log('📦 주문 정보 조회 결과:', orderResponse)
         setOrder(orderResponse)
 
         // 2. 공급자 정보 조회 (로그인한 사용자)

@@ -72,9 +72,7 @@ const OrderDetail: React.FC = () => {
       
       try {
         setLoading(true)
-        console.log('주문 상세 조회 시작:', id)
         const response = await orderApi.getById(parseInt(id))
-        console.log('주문 상세 응답:', response)
         setOrder(response)
         
         // 기존 문서 요청 정보 조회
@@ -95,7 +93,6 @@ const OrderDetail: React.FC = () => {
   const fetchDocumentRequests = async (orderId: number) => {
     try {
       const response = await getDocumentRequests(orderId)
-      console.log('📋 문서 요청 정보 조회 완료:', response)
       setDocumentRequests(response)
     } catch (error) {
       console.error('문서 요청 정보 조회 실패:', error)
@@ -109,7 +106,6 @@ const OrderDetail: React.FC = () => {
     
     try {
       setLoading(true)
-      console.log('출고 처리 시작:', order.id)
       
       await orderApi.shipOut(order.id)
       toast.success('출고가 처리되었습니다.')
@@ -117,7 +113,6 @@ const OrderDetail: React.FC = () => {
       // 주문 정보 다시 조회하여 업데이트
       const updatedOrder = await orderApi.getById(parseInt(id!))
       setOrder(updatedOrder)
-      console.log('출고 처리 완료, 주문 상태 업데이트됨')
       
     } catch (error: any) {
       console.error('출고 처리 오류:', error)
@@ -171,7 +166,6 @@ const OrderDetail: React.FC = () => {
     
     try {
       setLoading(true)
-      console.log('등록 상태로 되돌리기 시작:', order.id)
       
       await orderApi.updateStatus(order.id, 'ready')
       toast.success('주문이 등록 상태로 되돌아갔습니다.')
@@ -179,7 +173,6 @@ const OrderDetail: React.FC = () => {
       // 주문 정보 다시 조회하여 업데이트
       const updatedOrder = await orderApi.getById(parseInt(id!))
       setOrder(updatedOrder)
-      console.log('등록 상태로 되돌리기 완료')
       
     } catch (error: any) {
       console.error('등록 상태로 되돌리기 오류:', error)
@@ -200,7 +193,6 @@ const OrderDetail: React.FC = () => {
 
     setProcessingDocument(true)
     try {
-      console.log('📄 문서 발급 요청 시작:', data)
       
       const response = await requestDocument(order.id, {
         orderId: order.id,
@@ -210,7 +202,6 @@ const OrderDetail: React.FC = () => {
         specialRequest: data.specialRequest
       })
 
-      console.log('✅ 문서 발급 요청 성공:', response)
       toast.success('문서 발급 요청이 성공적으로 처리되었습니다!')
       setShowDocumentModal(false)
 
