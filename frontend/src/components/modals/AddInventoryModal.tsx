@@ -56,11 +56,9 @@ const AddInventoryModal: React.FC<AddInventoryModalProps> = ({
   }, [open])
 
   const loadFishTypes = async () => {
-    console.log('🔄 어종 목록 로딩 시작...')
     setLoadingFishTypes(true)
     try {
       const response = await inventoryApi.getFishTypes()
-      console.log('✅ 어종 데이터 수신:', response)
       
       // inventoryApi.getFishTypes()는 { data: FishType[] } 형태로 반환
       let fishTypeData: FishType[] = []
@@ -74,7 +72,6 @@ const AddInventoryModal: React.FC<AddInventoryModalProps> = ({
         console.warn('예상치 못한 응답 형태:', response)
       }
       
-      console.log('📊 로드된 어종 개수:', fishTypeData.length)
       setFishTypes(fishTypeData)
     } catch (error: any) {
       console.error('❌ 어종 목록 로딩 에러:', error)
@@ -82,7 +79,6 @@ const AddInventoryModal: React.FC<AddInventoryModalProps> = ({
       setFishTypes([])
     } finally {
       setLoadingFishTypes(false)
-      console.log('🔄 어종 목록 로딩 완료')
     }
   }
 
@@ -147,9 +143,7 @@ const AddInventoryModal: React.FC<AddInventoryModalProps> = ({
         status: "registered"  // 기본 상태를 "등록됨"으로 설정
       }
       
-      console.log('📤 재고 추가 요청:', submitData)
       const response = await inventoryApi.create(submitData)
-      console.log('✅ 재고 추가 성공:', response)
       
       toast.success(`재고가 성공적으로 추가되었습니다: ${formData.stock_quantity}${formData.unit}`)
       
@@ -229,7 +223,6 @@ const AddInventoryModal: React.FC<AddInventoryModalProps> = ({
                 </SelectTrigger>
                 <SelectContent>
                   {fishTypes.map((fishType) => {
-                    console.log('🐟 렌더링 어종:', fishType)
                     return (
                       <SelectItem key={fishType.id} value={fishType.id.toString()}>
                         {fishType.name} ({fishType.unit})

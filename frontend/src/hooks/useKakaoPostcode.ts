@@ -78,16 +78,8 @@ export const useKakaoPostcode = ({
         if (onComplete) {
           onComplete(data);
         }
-        
-        console.log('선택된 주소:', {
-          zonecode: data.zonecode,
-          address: fullAddress,
-          roadAddress: data.roadAddress,
-          jibunAddress: data.jibunAddress,
-        });
       },
       onclose: (state: string) => {
-        console.log('주소검색 창 닫힘:', state);
         if (onClose) {
           onClose();
         }

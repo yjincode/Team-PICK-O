@@ -30,6 +30,10 @@ import {
 } from "../../components/ui/pagination";
 import { Business } from "../../types";
 
+interface BusinessSearchProps {
+  onSelect: (business: Business) => void;
+  onClose: () => void;
+}
 
 interface Order {
   id: number;
@@ -50,7 +54,8 @@ const BusinessList: React.FC = () => {
   const [pageSize] = useState(10); // 고정값, 필요시 변경 가능
   const [count, setCount] = useState(0); // 전체 개수
   const [orders, setOrders] = useState<Order[]>([]);
-
+  const [filteredBusinesses, setFilteredBusinesses] = useState<Business[]>([]);
+  const [searchTerm, setSearchTerm] = useState<string>("")
   const { user, isAuthenticated, loading } = useAuth();
 
   const [showUnpaid, setShowUnpaid] = useState(false);
@@ -172,6 +177,23 @@ const BusinessList: React.FC = () => {
     fetchUnpaidStats();
   }, [loading, hasInitialized]);
 
+
+  // 검색어에 따라 거래처 필터링
+  useEffect(() => {
+    if (!searchTerm.trim()) {
+      setFilteredBusinesses(businesses);
+    } else {
+      const term = searchTerm.toLowerCase();
+      setFilteredBusinesses(
+        businesses.filter(
+          (b) =>
+            b.business_name.toLowerCase().includes(term) ||
+            (b.phone_number && b.phone_number.replace(/-/g, "").includes(term.replace(/-/g, "")))
+        )
+      );
+    }
+  }, [businesses, searchTerm]);
+
   // 페이지 변경 시 목록 새로고침
   useEffect(() => {
     if (hasInitialized) {
@@ -180,7 +202,6 @@ const BusinessList: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page]);
 
-  const [searchTerm, setSearchTerm] = useState<string>("")
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false)
   const [isRegistering, setIsRegistering] = useState<boolean>(false)
   const [isEditModalOpen, setIsEditModalOpen] = useState<boolean>(false)
@@ -538,7 +559,7 @@ const BusinessList: React.FC = () => {
                 placeholder="거래처명, 전화번호로 검색..."
                 className="pl-10 bg-white border-gray-200"
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
             <Button variant="outline" className="flex-shrink-0">검색</Button>
@@ -571,8 +592,8 @@ const BusinessList: React.FC = () => {
           </div>
         ) : (
           <>
-            {businesses && businesses.length > 0 ? (
-              businesses.map((business) => {
+            {filteredBusinesses && filteredBusinesses.length > 0 ? (
+              filteredBusinesses.map((business) => {
                 const oldestOrderDate = getOldestOrderDate(business.id, orders);
                 const overdueDays = calculateOverdueDays(oldestOrderDate);
                 

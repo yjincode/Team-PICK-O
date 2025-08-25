@@ -114,7 +114,6 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
       
       if (superToken) {
         // 슈퍼계정 처리 - Firebase 인증 건너뛰기
-        console.log('🔑 슈퍼계정 처리 시작')
         firebaseToken = superToken
       } else {
         // 일반 Firebase 인증번호 확인
@@ -204,10 +203,7 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
   // 슈퍼계정 직접 로그인 (Firebase 완전 우회)
   const superAccountDirectLogin = async (phoneNumber: string): Promise<{ isNewUser: boolean }> => {
     try {
-      setLoading(true)
-      
-      console.log('🚀 슈퍼계정 직접 로그인 시작 (Firebase 완전 우회)')
-      
+      setLoading(true)      
       const response = await authApi.superAccountLogin(phoneNumber)
       
       if (response.is_new_user) {
@@ -224,8 +220,6 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
           const userData: UserData = { user_id, business_name }
           setUser(userData)
         }
-        
-        console.log('✅ 슈퍼계정 직접 로그인 성공')
         return { isNewUser: false }
       }
       
@@ -242,7 +236,6 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
     try {
       setLoading(true)
       
-      console.log('🚀 슈퍼계정 직접 회원가입 시작 (Firebase 완전 우회)')
       
       const response = await authApi.superAccountRegister({
         business_name: userData.business_name,
@@ -261,8 +254,6 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
         business_name: response.user.business_name
       }
       setUser(newUserData)
-      
-      console.log('✅ 슈퍼계정 직접 회원가입 성공')
       
     } catch (error: any) {
       console.error('❌ 슈퍼계정 직접 회원가입 실패:', error)
