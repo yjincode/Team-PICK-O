@@ -25,11 +25,8 @@ interface StepInfo {
 }
 
 export default function LoginPage(): JSX.Element {
-  console.log('🟢 LoginPage 렌더링 시작')
   const navigate = useNavigate()
-  const { user, loading: authLoading, sendSMSCode, verifySMSCode, registerUser } = useAuth()
-  
-  console.log('🔍 LoginPage 상태:', { user, authLoading })
+  const { user, loading: authLoading, sendSMSCode, verifySMSCode, registerUser, superAccountDirectLogin, superAccountDirectRegister } = useAuth()
   
   // 상태 관리 (sessionStorage에서 복원)
   const [currentStep, setCurrentStep] = useState<LoginStep>(() => {
@@ -71,19 +68,24 @@ export default function LoginPage(): JSX.Element {
     }
   }, [user, authLoading, navigate, currentStep])
 
-  // reCAPTCHA 초기화
+  // reCAPTCHA 초기화 (슈퍼계정이 아닐 때만)
   useEffect(() => {
-    const timer = setTimeout(() => {
-      try {
-        setupRecaptcha('recaptcha-container')
-      } catch (error) {
-        console.error('reCAPTCHA 초기화 실패:', error)
-        setError('reCAPTCHA 초기화에 실패했습니다.')
-      }
-    }, 100);
+    // 슈퍼계정인 경우 reCAPTCHA 초기화 건너뛰기
+    const isSuperAccount = phoneNumber === '010-7777-7777' || phoneNumber === '01077777777'
     
-    return () => clearTimeout(timer)
-  }, [])
+    if (!isSuperAccount) {
+      const timer = setTimeout(() => {
+        try {
+          setupRecaptcha('recaptcha-container')
+        } catch (error) {
+          console.error('reCAPTCHA 초기화 실패:', error)
+          setError('reCAPTCHA 초기화에 실패했습니다.')
+        }
+      }, 100);
+      
+      return () => clearTimeout(timer)
+    }
+  }, [phoneNumber])
 
   // 쿨다운 타이머
   const startCooldown = (seconds: number) => {
@@ -99,37 +101,29 @@ export default function LoginPage(): JSX.Element {
     }, 1000)
   }
 
-  // 슈퍼계정 로그인 처리
-  const handleSuperAccountLogin = async (): Promise<void> => {
+  // 슈퍼계정 직접 로그인 처리 (Firebase 완전 우회)
+  const handleSuperAccountDirectLogin = async (): Promise<void> => {
     setLoading(true)
     setError('')
     
-    try {
-      console.log('🔑 슈퍼계정 로그인 시도')
+    try {      
+      const result = await superAccountDirectLogin(phoneNumber)
       
-      // 슈퍼계정 전용 토큰으로 Firebase-to-JWT 교환 시도
-      const superToken = "SUPER_ACCOUNT_0107777_7777"
-      
-      const result = await verifySMSCode(null, '', superToken)
-      
-      if (result.isNewUser && result.firebaseToken) {
+      if (result.isNewUser) {
         // 신규 슈퍼계정 - 회원가입 단계로
-        setFirebaseToken(superToken)
-        setPhoneNumber("010-7777-7777") // 표시용
         setCurrentStep('register')
         
         // sessionStorage에 상태 저장 (새로고침 시 복원용)
         sessionStorage.setItem('forced_step', 'register')
-        sessionStorage.setItem('firebase_token_for_register', superToken)
-        sessionStorage.setItem('phone_number_for_register', "010-7777-7777")
+        sessionStorage.setItem('phone_number_for_register', phoneNumber)
+        sessionStorage.setItem('is_super_account', 'true')
         
-      } else if (result.isNewUser === false) {
+      } else {
         // 기존 슈퍼계정 - 대시보드로
         navigate('/dashboard')
-      } else {
-        setError('슈퍼계정 인증 처리에 실패했습니다.')
       }
     } catch (error: any) {
+      console.error('❌ 슈퍼계정 직접 로그인 실패:', error)
       setError(error.message || '슈퍼계정 로그인에 실패했습니다.')
     } finally {
       setLoading(false)
@@ -142,9 +136,9 @@ export default function LoginPage(): JSX.Element {
     setLoading(true)
     setError('')
     
-    // 슈퍼계정 전화번호 체크
+    // 슈퍼계정 전화번호 체크 (Firebase 완전 우회)
     if (phoneNumber === '010-7777-7777' || phoneNumber === '01077777777') {
-      await handleSuperAccountLogin()
+      await handleSuperAccountDirectLogin()
       return
     }
     
@@ -206,16 +200,24 @@ export default function LoginPage(): JSX.Element {
     setError('')
     
     try {
-      if (!firebaseToken) {
-        throw new Error('인증 정보가 없습니다. 다시 로그인해주세요.')
-      }
+      const isSuperAccount = sessionStorage.getItem('is_super_account') === 'true'
       
-      await registerUser(userInfo, firebaseToken)
+      if (isSuperAccount) {
+        // 슈퍼계정 직접 회원가입 (Firebase 완전 우회)
+        await superAccountDirectRegister(userInfo)
+      } else {
+        // 일반 Firebase 회원가입
+        if (!firebaseToken) {
+          throw new Error('인증 정보가 없습니다. 다시 로그인해주세요.')
+        }
+        await registerUser(userInfo, firebaseToken)
+      }
       
       // 회원가입 완료 후 sessionStorage 정리
       sessionStorage.removeItem('forced_step')
       sessionStorage.removeItem('firebase_token_for_register')
       sessionStorage.removeItem('phone_number_for_register')
+      sessionStorage.removeItem('is_super_account')
       
       // 대시보드로 이동 (AuthContext에서 user 상태가 설정됨)
       navigate('/dashboard')

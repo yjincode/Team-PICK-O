@@ -30,6 +30,10 @@ import {
 } from "../../components/ui/pagination";
 import { Business } from "../../types";
 
+interface BusinessSearchProps {
+  onSelect: (business: Business) => void;
+  onClose: () => void;
+}
 
 interface Order {
   id: number;
@@ -50,7 +54,8 @@ const BusinessList: React.FC = () => {
   const [pageSize] = useState(10); // 고정값, 필요시 변경 가능
   const [count, setCount] = useState(0); // 전체 개수
   const [orders, setOrders] = useState<Order[]>([]);
-
+  const [filteredBusinesses, setFilteredBusinesses] = useState<Business[]>([]);
+  const [searchTerm, setSearchTerm] = useState<string>("")
   const { user, isAuthenticated, loading } = useAuth();
 
   const [showUnpaid, setShowUnpaid] = useState(false);
@@ -59,14 +64,11 @@ const BusinessList: React.FC = () => {
   // 거래처 목록을 가져오는 함수 (재사용 가능)
   const fetchBusinesses = async (pageNum = page) => {
     if (isLoadingBusinesses) {
-      console.log('⏸️ 이미 로딩 중이므로 API 호출 생략');
       return;
     }
     try {
-      console.log('🔄 거래처 목록 API 호출 시작 - 페이지:', pageNum);
       setIsLoadingBusinesses(true);
       const res = await businessApi.getAll({ page: pageNum, page_size: pageSize });
-      console.log("✅ API 응답:", res);
       console.log("📊 응답 데이터 - count:", res.count, "results 개수:", res.results?.length);
       // 다양한 응답 구조에 대응
       let data: any = null;
@@ -161,30 +163,36 @@ const BusinessList: React.FC = () => {
 
   // AuthContext 로딩이 완료되면 API 호출 (인증 여부와 관계없이)
   useEffect(() => {
-    console.log('🔍 useEffect 실행됨:', {
-      loading,
-      isAuthenticated,
-      user: !!user,
-      hasInitialized
-    });
-
     // AuthContext 로딩 중이면 대기
     if (loading) {
-      console.log('⏳ AuthContext 로딩 중, API 호출 대기...');
       return;
     }
 
     // 이미 초기화했으면 더 이상 호출하지 않음
     if (hasInitialized) {
-      console.log('✅ 이미 초기화 완료됨');
       return;
     }
-
-    console.log('🚀 거래처 목록 로드 (인증 상태와 관계없이)');
     setHasInitialized(true);
     fetchBusinesses(1); // 첫 페이지 로드
     fetchUnpaidStats();
   }, [loading, hasInitialized]);
+
+
+  // 검색어에 따라 거래처 필터링
+  useEffect(() => {
+    if (!searchTerm.trim()) {
+      setFilteredBusinesses(businesses);
+    } else {
+      const term = searchTerm.toLowerCase();
+      setFilteredBusinesses(
+        businesses.filter(
+          (b) =>
+            b.business_name.toLowerCase().includes(term) ||
+            (b.phone_number && b.phone_number.replace(/-/g, "").includes(term.replace(/-/g, "")))
+        )
+      );
+    }
+  }, [businesses, searchTerm]);
 
   // 페이지 변경 시 목록 새로고침
   useEffect(() => {
@@ -194,7 +202,6 @@ const BusinessList: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page]);
 
-  const [searchTerm, setSearchTerm] = useState<string>("")
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false)
   const [isRegistering, setIsRegistering] = useState<boolean>(false)
   const [isEditModalOpen, setIsEditModalOpen] = useState<boolean>(false)
@@ -552,7 +559,7 @@ const BusinessList: React.FC = () => {
                 placeholder="거래처명, 전화번호로 검색..."
                 className="pl-10 bg-white border-gray-200"
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
             <Button variant="outline" className="flex-shrink-0">검색</Button>
@@ -585,8 +592,8 @@ const BusinessList: React.FC = () => {
           </div>
         ) : (
           <>
-            {businesses && businesses.length > 0 ? (
-              businesses.map((business) => {
+            {filteredBusinesses && filteredBusinesses.length > 0 ? (
+              filteredBusinesses.map((business) => {
                 const oldestOrderDate = getOldestOrderDate(business.id, orders);
                 const overdueDays = calculateOverdueDays(oldestOrderDate);
                 

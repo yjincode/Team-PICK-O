@@ -61,9 +61,6 @@ const firebaseConfig: FirebaseConfig = {
   measurementId: "G-0MZ40REVBH"
 };
 
-// Firebase 설정 디버깅
-console.log('🔥 Firebase 설정 전체:', firebaseConfig);
-
 // Firebase 초기화
 const app: FirebaseApp = initializeApp(firebaseConfig);
 const auth: Auth = getAuth(app);
@@ -77,13 +74,10 @@ try {
 }
 
 // reCAPTCHA verifier 설정
-export const setupRecaptcha = (containerId: string): RecaptchaVerifier => {
-  console.log('🔧 reCAPTCHA 설정 시작...', { containerId, authDomain: firebaseConfig.authDomain });
-  
+export const setupRecaptcha = (containerId: string): RecaptchaVerifier => {  
   // 기존 verifier가 있다면 정리
   if (window.recaptchaVerifier) {
     try {
-      console.log('🧹 기존 reCAPTCHA verifier 정리 중...');
       window.recaptchaVerifier.clear();
     } catch (error) {
       console.warn('기존 reCAPTCHA verifier 정리 중 오류:', error);
@@ -96,8 +90,6 @@ export const setupRecaptcha = (containerId: string): RecaptchaVerifier => {
   if (!container) {
     throw new Error(`reCAPTCHA 컨테이너를 찾을 수 없습니다: ${containerId}`);
   }
-  
-  console.log('📍 reCAPTCHA 컨테이너 확인됨:', container);
   
   // 새로운 RecaptchaVerifier 생성 (테스트 환경에서 더 관대한 설정)
   const recaptchaVerifier = new RecaptchaVerifier(auth, containerId, {
@@ -124,8 +116,6 @@ export const setupRecaptcha = (containerId: string): RecaptchaVerifier => {
     }
   });
   
-  console.log('🔨 reCAPTCHA verifier 생성됨 (invisible 모드)');
-  
   // window 객체에 저장
   window.recaptchaVerifier = recaptchaVerifier;
   
@@ -146,9 +136,7 @@ const isTestPhoneNumber = (phoneNumber: string): boolean => {
 
 // 전화번호 인증 코드 전송
 export const sendPhoneVerification = async (phoneNumber: string): Promise<AuthResult> => {
-  try {
-    console.log('📱 전화번호 인증 시작:', phoneNumber);
-    
+  try {    
     // 전화번호 정규화
     const normalizedPhone = normalizePhoneNumber(phoneNumber);
     if (!normalizedPhone) {
@@ -157,26 +145,11 @@ export const sendPhoneVerification = async (phoneNumber: string): Promise<AuthRe
         error: '유효하지 않은 전화번호 형식입니다.'
       };
     }
-    
-    console.log('📱 정규화된 전화번호:', normalizedPhone);
-    
+      
     // 테스트 전화번호인지 확인
-    const isTestNumber = isTestPhoneNumber(normalizedPhone);
-    console.log('🧪 테스트 전화번호 여부:', isTestNumber);
-    
+    const isTestNumber = isTestPhoneNumber(normalizedPhone);    
     // reCAPTCHA verifier 설정
     const recaptchaVerifier = setupRecaptcha('recaptcha-container');
-    
-    // Auth 객체 상태 확인
-    console.log('🔐 Auth 객체 상태:', { 
-      currentUser: auth.currentUser,
-      app: auth.app.name,
-      apiKey: firebaseConfig.apiKey.substring(0, 20) + '...',
-      projectId: firebaseConfig.projectId 
-    });
-    
-    // 전화번호 인증 요청
-    console.log('🔐 Firebase Auth 시도:', { phoneNumber: normalizedPhone, projectId: firebaseConfig.projectId });
     
     const confirmationResult = await signInWithPhoneNumber(
       auth,
@@ -186,12 +159,6 @@ export const sendPhoneVerification = async (phoneNumber: string): Promise<AuthRe
     
     // window 객체에 저장
     window.confirmationResult = confirmationResult;
-    
-    console.log('✅ 인증 코드 전송 성공');
-    console.log('💾 confirmationResult 저장 완료:', {
-      hasConfirmationResult: !!window.confirmationResult,
-      confirmationResultType: typeof window.confirmationResult
-    });
     
     return {
       success: true,
@@ -236,21 +203,14 @@ const normalizePhoneNumber = (phoneNumber: string): string | null => {
 
 // 인증 코드 확인
 export const verifyPhoneCode = async (confirmationResult: ConfirmationResult, code: string): Promise<AuthResult> => {
-  try {
-    console.log('🔐 인증 코드 확인 시작');
-    console.log('📱 입력된 코드:', code);
-    console.log('🔍 confirmationResult 상태:', !!confirmationResult);
-    
+  try {    
     if (!confirmationResult) {
       console.error('❌ confirmationResult가 없습니다. 인증 세션이 만료되었습니다.');
       return {
         success: false,
         error: '인증 세션이 만료되었습니다. 다시 시도해주세요.'
       };
-    }
-    
-    console.log('🔄 Firebase 인증 코드 확인 시도...');
-    
+    }    
     // 인증 코드 확인
     const result: UserCredential = await confirmationResult.confirm(code);
     
@@ -260,9 +220,7 @@ export const verifyPhoneCode = async (confirmationResult: ConfirmationResult, co
       phoneNumber: result.user?.phoneNumber
     });
     
-    if (result.user) {
-      console.log('🔄 ID 토큰 가져오는 중...');
-      
+    if (result.user) {      
       // ID 토큰 가져오기
       const idToken = await result.user.getIdToken();
       
@@ -326,10 +284,7 @@ export const signOut = async (): Promise<SignOutResult> => {
       window.recaptchaVerifier = undefined;
     }
     
-    window.confirmationResult = undefined;
-    
-    console.log('✅ 로그아웃 성공');
-    
+    window.confirmationResult = undefined;    
     return {
       success: true
     };

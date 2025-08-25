@@ -69,9 +69,7 @@ const refreshAccessToken = async (): Promise<string | null> => {
         resolve(null)
         return
       }
-      
-      console.log('🔄 액세스 토큰 자동 갱신 시작')
-      
+          
       const response = await fetch(`${API_BASE_URL}/business/auth/refresh/`, {
         method: 'POST',
         headers: {
@@ -87,8 +85,6 @@ const refreshAccessToken = async (): Promise<string | null> => {
         const newAccessToken = data.access_token
 
         TokenManager.setAccessToken(newAccessToken)
-        console.log('✅ 액세스 토큰 자동 갱신 성공')
-
         resolve(newAccessToken)
       } else {
         console.log('❌ 토큰 갱신 실패 - 리로그인 필요')
@@ -115,13 +111,14 @@ api.interceptors.request.use(
     const publicEndpoints = [
       '/business/auth/firebase-to-jwt/',
       '/business/auth/register/',
-      '/business/auth/refresh/'
+      '/business/auth/refresh/',
+      '/business/auth/super-login/',
+      '/business/auth/super-register/'
     ]
 
     const isPublicEndpoint = publicEndpoints.some(endpoint => config.url?.includes(endpoint))
 
     if (isPublicEndpoint) {
-      console.log('🔓 공개 엔드포인트 - 토큰 없이 요청:', config.url)
       return config
     }
 
@@ -171,11 +168,6 @@ api.interceptors.request.use(
 // 응답 인터셉터: 401 오류 시 토큰 갱신 재시도
 api.interceptors.response.use(
   (response) => {
-    console.log('✅ 자동 토큰 갱신 API 성공:', {
-      url: response.config.url,
-      status: response.status,
-      method: response.config.method?.toUpperCase()
-    });
     return response;
   },
   async (error) => {
@@ -486,6 +478,24 @@ export const authApi = {
         data: null
       }
     }
+  },
+
+  // 슈퍼계정 직접 로그인 (Firebase 완전 우회)
+  superAccountLogin: async (phoneNumber: string): Promise<any> => {
+    const response = await api.post('/business/auth/super-login/', {
+      phone_number: phoneNumber
+    })
+    return response.data
+  },
+
+  // 슈퍼계정 직접 회원가입 (Firebase 완전 우회)
+  superAccountRegister: async (userData: {
+    business_name: string;
+    owner_name: string;
+    address: string;
+  }): Promise<any> => {
+    const response = await api.post('/business/auth/super-register/', userData)
+    return response.data
   },
 }
 

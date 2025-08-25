@@ -201,11 +201,9 @@ const AddInventoryModal: React.FC<AddInventoryModalProps> = ({
   }, [selectedFishType, open]) // selectedFishType과 open 모두 의존
 
   const loadFishTypes = async () => {
-    console.log('🔄 어종 목록 로딩 시작...')
     setLoadingFishTypes(true)
     try {
       const response = await inventoryApi.getFishTypes()
-      console.log('✅ 어종 데이터 수신:', response)
       
       // inventoryApi.getFishTypes()는 { data: FishType[] } 형태로 반환
       let fishTypeData: FishType[] = []
@@ -219,7 +217,6 @@ const AddInventoryModal: React.FC<AddInventoryModalProps> = ({
         console.warn('예상치 못한 응답 형태:', response)
       }
       
-      console.log('📊 로드된 어종 개수:', fishTypeData.length)
       setFishTypes(fishTypeData)
     } catch (error: any) {
       console.error('❌ 어종 목록 로딩 에러:', error)
@@ -227,7 +224,6 @@ const AddInventoryModal: React.FC<AddInventoryModalProps> = ({
       setFishTypes([])
     } finally {
       setLoadingFishTypes(false)
-      console.log('🔄 어종 목록 로딩 완료')
     }
   }
 
@@ -309,6 +305,7 @@ const AddInventoryModal: React.FC<AddInventoryModalProps> = ({
         unit_price: parseFloat(formData.unit_price)
       }
       
+
       let response;
       if (mode === 'edit' && inventory) {
         // 수정 모드: 기존 재고에 수량 추가
@@ -327,6 +324,7 @@ const AddInventoryModal: React.FC<AddInventoryModalProps> = ({
         const action = quantity >= 0 ? '추가' : '수정'
         toast.success(`재고가 성공적으로 ${action}되었습니다: ${formData.add_quantity}`)
       }
+
       
       handleClose()
       onSuccess?.()
@@ -399,6 +397,7 @@ const AddInventoryModal: React.FC<AddInventoryModalProps> = ({
                 className="bg-gray-50"
               />
             ) : (
+
               loadingFishTypes ? (
                 <div className="flex items-center justify-center p-8">
                   <Loader2 className="h-4 w-4 animate-spin mr-2" />
@@ -429,6 +428,7 @@ const AddInventoryModal: React.FC<AddInventoryModalProps> = ({
                   </SelectContent>
                 </Select>
               )
+
             )}
           </div>
 

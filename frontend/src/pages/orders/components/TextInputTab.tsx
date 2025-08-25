@@ -112,12 +112,10 @@ const TextInputTab: React.FC<TextInputTabProps> = ({
     setParsedOrder(null)
     
     try {
-      console.log('📝 텍스트 파싱 시작 (API 연동):', textInput)
       const basicOrderData = await parseVoiceOrderWithAPI(textInput) // API 연동 버전 사용
       
       if (basicOrderData.items && basicOrderData.items.length > 0) {
         const validatedOrderData = validateAndCompleteOrder(basicOrderData)
-        console.log('🎯 파싱된 주문 데이터:', validatedOrderData)
         
         setParsedOrder(validatedOrderData)
         onOrderParsed?.(validatedOrderData)

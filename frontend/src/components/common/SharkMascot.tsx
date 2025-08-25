@@ -3,9 +3,11 @@
  * 애플리케이션의 브랜드 로고를 표시합니다
  */
 import React from "react"
+import { Link } from "react-router-dom";
 
 export const SharkMascot: React.FC = () => {
   return (
+    <Link to="/dashboard" className="w-full h-full flex items-cener justify-center">
     <div className="w-full h-full flex items-center justify-center">
       <img 
         src="/logo.png" 
@@ -13,5 +15,6 @@ export const SharkMascot: React.FC = () => {
         className="w-full h-full object-contain"
       />
     </div>
+    </Link>
   )
 } 

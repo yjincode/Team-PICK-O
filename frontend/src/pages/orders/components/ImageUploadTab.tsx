@@ -161,20 +161,16 @@ const ImageUploadTab: React.FC<ImageUploadTabProps> = ({
     setError('')
     
     try {
-      console.log('📷 이미지 OCR 처리 시작:', file.name)
       const extractedText = await extractTextFromImage(file)
       
-      console.log('✅ OCR 처리 완료:', extractedText)
       // setLocalTranscribedText(extractedText)
       
       // 추출된 텍스트를 주문 데이터로 파싱
       try {
-        console.log('📝 주문 데이터 파싱 시작:', extractedText)
         const basicOrderData = parseVoiceOrder(extractedText)
         
         if (basicOrderData.items && basicOrderData.items.length > 0) {
           const validatedOrderData = validateAndCompleteOrder(basicOrderData)
-          console.log('🎯 파싱된 주문 데이터:', validatedOrderData)
           
           setParsedOrder(validatedOrderData)
           onOrderParsed?.(validatedOrderData)
@@ -380,7 +376,6 @@ const ImageUploadTab: React.FC<ImageUploadTabProps> = ({
                             value={item.fish_type_id}
                             onChange={(e) => {
                               // TODO: 어종 변경 핸들러 구현
-                              console.log('어종 변경:', e.target.value)
                             }}
                           >
                             <option value={1}>고등어</option>
@@ -405,7 +400,6 @@ const ImageUploadTab: React.FC<ImageUploadTabProps> = ({
                             min="1"
                             onChange={(e) => {
                               // TODO: 수량 변경 핸들러 구현
-                              console.log('수량 변경:', e.target.value)
                             }}
                           />
                         </div>
@@ -419,7 +413,6 @@ const ImageUploadTab: React.FC<ImageUploadTabProps> = ({
                             min="0"
                             onChange={(e) => {
                               // TODO: 단가 변경 핸들러 구현
-                              console.log('단가 변경:', e.target.value)
                             }}
                           />
                         </div>
