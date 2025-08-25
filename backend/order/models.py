@@ -166,16 +166,12 @@ class OrderItem(models.Model):
         verbose_name="주문 당시 품목명 스냅샷"
     )
     quantity = models.FloatField(verbose_name="주문 수량 (소수 허용)")
-    unit_price = models.DecimalField(
-        max_digits=10, 
-        decimal_places=2, 
+    unit_price = models.IntegerField(
         blank=True, 
         null=True, 
         verbose_name="현재 단가"
     )
-    unit_price_snapshot = models.DecimalField(
-        max_digits=10, 
-        decimal_places=2, 
+    unit_price_snapshot = models.IntegerField(
         blank=True, 
         null=True, 
         verbose_name="주문 당시 단가 스냅샷"

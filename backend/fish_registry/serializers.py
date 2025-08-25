@@ -9,6 +9,7 @@ class FishTypeSerializer(serializers.ModelSerializer):
             'name',
             'aliases',
             'unit',
+            'default_price',
             'notes',
             'created_at'
         ]

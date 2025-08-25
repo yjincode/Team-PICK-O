@@ -546,7 +546,9 @@ class OrderUploadView(View):
                 # 어종명으로 FishType 찾기
                 try:
                     fish_type = FishType.objects.get(name=item['fish_name'])
-                    unit_price = 20000  # 기본 가격 (실제로는 시세 데이터에서 가져와야 함)
+                    
+                    # 어종의 기본 단가 사용 (없으면 기본값)
+                    unit_price = fish_type.default_price if fish_type.default_price else 20000
                     
                     order_items.append({
                         'fish_type_id': fish_type.id,
@@ -1288,6 +1290,21 @@ class ShipOutOrderView(View):
                         inventory.save()
                         inventory.refresh_from_db()  # F 표현식 갱신
                         
+                        # 출고 로그 생성
+                        from inventory.models import InventoryLog
+                        InventoryLog.objects.create(
+                            inventory=inventory,
+                            fish_type=order_item.fish_type,
+                            type='out',
+                            change=-quantity,
+                            before_quantity=old_stock,
+                            after_quantity=inventory.stock_quantity,
+                            unit=order_item.unit,
+                            source_type='order_shipout',
+                            memo=f'주문 #{order.id} 출고 처리',
+                            updated_by_id=request.user_id
+                        )
+                        
                         print(f"✅ 출고 완료 재고차감: {order_item.fish_type.name} - 재고:{old_stock}→{inventory.stock_quantity}, 주문:{old_ordered}→{inventory.ordered_quantity} (-{quantity})")
                     else:
                         print(f"⚠️ 재고차감 실패: {order_item.fish_type.name} - 재고 없음")
@@ -1453,4 +1470,3 @@ class UpdateOrderView(View):
                 'error': '주문 수정 처리 중 오류 발생',
                 'details': str(e)
             }, status=500)
-

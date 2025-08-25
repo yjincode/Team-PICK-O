@@ -6,6 +6,7 @@
 import React, { useState } from 'react';
 import Sidebar from './Sidebar';
 import MobileBottomNav from './MobileBottomNav';
+import { Toaster } from 'react-hot-toast';
 
 interface MainLayoutProps {
   children: React.ReactNode;
@@ -38,6 +39,37 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
           {children}
         </div>
       </main>
+      
+      {/* 토스트 알림 */}
+      <Toaster 
+        position="top-center"
+        toastOptions={{
+          duration: 4000,
+          style: {
+            background: '#363636',
+            color: '#fff',
+            padding: '12px 16px',
+            minHeight: 'auto',
+            lineHeight: '1.4',
+            whiteSpace: 'nowrap',
+            overflow: 'visible',
+          },
+          success: {
+            duration: 3000,
+            iconTheme: {
+              primary: '#10B981',
+              secondary: '#fff',
+            },
+          },
+          error: {
+            duration: 4000,
+            iconTheme: {
+              primary: '#EF4444',
+              secondary: '#fff',
+            },
+          },
+        }}
+      />
     </div>
   );
 };
