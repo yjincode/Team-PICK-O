@@ -49,7 +49,7 @@ const menuItems: MenuItem[] = [
     icon: Package,
     items: [
       { title: "어종 재고", url: "/inventory" },
-      { title: "어종 정보 관리", url: "/inventory/fish-form" },
+      { title: "어종 관리", url: "/inventory/fish-form" },
     ],
   },
   {

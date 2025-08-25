@@ -21,6 +21,8 @@ import OrderConfirmationPage from './pages/orders/OrderConfirmationPage';
 import AiLogList from './pages/orders/AiLogList';
 import FishStockList from './pages/inventory/FishStockList';
 import FishItemForm from './pages/inventory/FishItemForm';
+import InventoryLogsPage from './pages/inventory/InventoryLogsPage';
+import InventoryAnomaliesPage from './pages/inventory/InventoryAnomaliesPage';
 import AuctionPredictionChart from './pages/sales/AuctionPredictionChart';
 import LoginPage from './pages/login/LoginPage';
 import SalesChart from './pages/sales/SalesChart';
@@ -178,6 +180,26 @@ const App: React.FC = () => {
             <PrivateRoute>
               <MainLayout>
                 <FishItemForm />
+              </MainLayout>
+            </PrivateRoute>
+          } 
+        />
+        <Route 
+          path="/inventory/logs" 
+          element={
+            <PrivateRoute>
+              <MainLayout>
+                <InventoryLogsPage />
+              </MainLayout>
+            </PrivateRoute>
+          } 
+        />
+        <Route 
+          path="/inventory/anomalies" 
+          element={
+            <PrivateRoute>
+              <MainLayout>
+                <InventoryAnomaliesPage />
               </MainLayout>
             </PrivateRoute>
           } 

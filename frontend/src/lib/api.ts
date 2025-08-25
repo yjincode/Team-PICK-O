@@ -325,6 +325,29 @@ export const inventoryApi = {
     return response.data
   },
 
+  // 이상 탐지 결과 조회
+  getAnomalies: async (params?: { 
+    page?: number; 
+    page_size?: number;
+    severity?: string;
+    status?: string;
+  }): Promise<ApiResponse<any[]>> => {
+    const response = await api.get('/inventory/anomalies/', { params })
+    return response.data
+  },
+
+  // 이상 탐지 상태 업데이트
+  updateAnomaly: async (anomalyId: number, data: { resolved?: boolean; memo?: string }): Promise<ApiResponse<any>> => {
+    const response = await api.patch(`/inventory/anomalies/${anomalyId}/`, data)
+    return response.data
+  },
+
+  // 재고 요약 정보 조회 (대시보드용)
+  getSummary: async (): Promise<ApiResponse<any>> => {
+    const response = await api.get('/inventory/summary/')
+    return response.data
+  },
+
   // 주문 등록 시 재고 체크
   checkStock: async (data: {
     order_items: Array<{

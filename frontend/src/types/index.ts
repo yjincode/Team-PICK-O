@@ -23,6 +23,7 @@ export interface FishType {
   aliases?: string;  // 배열에서 문자열로 변경 (백엔드 모델과 일치)
   scientific_name?: string;
   unit: string;
+  default_price?: number;  // 기본 단가 필드 추가
   notes?: string;
   created_at?: string;
 }
@@ -30,14 +31,16 @@ export interface FishType {
 // 3. 재고 테이블
 export interface Inventory {
   id: number;
-  fish_type_id: number;
-  stock_quantity: number;   // 재고 수량
-  ordered_quantity?: number; // 주문 수량 (기본값 0)
-  unit?: string;
-  status?: string;
-  aquarium_photo_path?: string;
-  // 조인된 데이터
-  fish_type?: FishType;
+  fish_type_id: number;       // 어종 ID (입력/수정용)
+  stock_quantity: number;
+  ordered_quantity: number;
+  unit: string;
+  status: string;
+  unit_price?: number;  // 소수점 제거
+  total_amount?: number;  // 소수점 제거
+  safety_stock_quantity?: number;
+  reorder_point?: number;
+  updated_at?: string;  // optional로 변경
 }
 
 // ==================== 주문 관련 타입 ====================
@@ -45,13 +48,13 @@ export interface Inventory {
 // 주문 품목
 export interface OrderItem {
   id?: number;
-  fish_type: number;
-  fish_type_name?: string;  // 백엔드 응답에 포함됨
-  item_name_snapshot: string;
+  fish_type_id: number;
+  fish_type?: FishType;
   quantity: number;
-  unit_price: number;
-  unit_price_snapshot?: number;
+  unit_price: number;  // 소수점 제거
+  unit_price_snapshot?: number;  // 소수점 제거
   unit: string;
+  total_amount?: number;  // 총액 필드 추가
   remarks?: string;
 }
 
@@ -272,6 +275,8 @@ export interface InventoryFormData {
   stock_quantity: number;
   unit?: string;
   status?: string;
+  unit_price?: number;  // 단가 필드 추가
+  total_amount?: number;  // 총액 필드 추가
 }
 
 export interface OrderFormData {
@@ -283,7 +288,8 @@ export interface OrderFormData {
   items: Array<{
     fish_type_id: number;
     quantity: number;
-    unit_price?: number;
+    unit_price: number;  // 필수 필드로 변경
+    total_amount?: number;  // 총액 필드 추가
     unit?: string;
   }>;
 }
@@ -328,11 +334,7 @@ export interface Customer extends Business {
 
 // 기존 FishItem 타입을 Inventory로 매핑
 export interface FishItem extends Inventory {
-  name?: string;
-  type?: string;
-  price?: number;
-  created_at?: string;
-  updated_at?: string;
+  updated_at?: string;  // optional로 변경
 }
 
 // 기존 SalesData 타입

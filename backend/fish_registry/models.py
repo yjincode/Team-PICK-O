@@ -9,6 +9,14 @@ class FishType(models.Model):
     aliases = models.TextField(blank=True, null=True, verbose_name="별칭")
     scientific_name = models.TextField(blank=True, null=True, verbose_name="학명")
     unit = models.CharField(max_length=10, verbose_name="단위")
+    
+    # 기본 단가 필드 추가
+    default_price = models.IntegerField(
+        null=True, 
+        blank=True, 
+        verbose_name="기본 단가"
+    )
+    
     notes = models.TextField(blank=True, null=True, verbose_name="설명")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="생성 시각")
 
