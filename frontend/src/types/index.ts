@@ -50,6 +50,8 @@ export interface OrderItem {
   id?: number;
   fish_type_id: number;
   fish_type?: FishType;
+  fish_type_name?: string;  // 어종명 추가
+  item_name_snapshot?: string;  // 품목명 스냅샷 추가
   quantity: number;
   unit_price: number;  // 소수점 제거
   unit_price_snapshot?: number;  // 소수점 제거
