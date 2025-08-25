@@ -309,7 +309,7 @@ const OrderDetail: React.FC = () => {
       is_urgent: order.is_urgent || false,
       order_items: order.items?.map((item: any) => ({
         id: item.id,
-        fish_type_id: item.fish_type?.id || item.fish_type_id || 1, // 기본값 설정
+        fish_type_id: item.fish_type_id || 1, // 기본값 설정
         fish_type_name: item.fish_type_name || item.item_name_snapshot || '',
         quantity: item.quantity,
         unit_price: item.unit_price,
@@ -320,7 +320,7 @@ const OrderDetail: React.FC = () => {
     
     // 주문 항목 수정용 상태도 초기화
     setEditingItems(order.items?.map((item: any) => ({
-      fish_type_id: item.fish_type?.id || item.fish_type_id || 1, // 기본값 설정
+      fish_type_id: item.fish_type_id || 1, // 기본값 설정
       fish_type_name: item.fish_type_name || item.item_name_snapshot || '',
       quantity: item.quantity,
       unit_price: item.unit_price,
