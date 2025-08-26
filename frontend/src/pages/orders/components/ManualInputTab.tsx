@@ -14,7 +14,7 @@ import { OrderItem } from "../../../types"
 
 interface ManualInputTabProps {
   businessId: number | null;
-  fishTypes: Array<{ id: number; name: string; unit: string }>;
+  fishTypes: Array<{ id: number; name: string; unit: string; default_price?: number }>;
   currentItem: Partial<OrderItem>;
   setCurrentItem: (item: Partial<OrderItem>) => void;
   onAddItem: () => void;
@@ -35,10 +35,10 @@ const ManualInputTab: React.FC<ManualInputTabProps> = ({
     if (fishType) {
       const updatedItem = {
         ...currentItem,
-        fish_type: fishType.id,
+        fish_type_id: fishType.id, // fish_type_id로 수정
         item_name_snapshot: fishType.name,
         unit: fishType.unit, // 어종의 단위 추가
-        unit_price: 0 // default_price가 없으므로 0으로 설정
+        unit_price: fishType.default_price || 0 // 기본 단가 자동 입력
       }
       setCurrentItem(updatedItem)
       onItemChange?.(updatedItem) // 아이템 변경 알림
@@ -48,6 +48,12 @@ const ManualInputTab: React.FC<ManualInputTabProps> = ({
   const handleQuantityChange = (value: string) => {
     const quantity = parseInt(value) || 0
     const updatedItem = { ...currentItem, quantity }
+    
+    // 총액 자동 계산
+    if (updatedItem.unit_price) {
+      updatedItem.total_amount = quantity * updatedItem.unit_price
+    }
+    
     setCurrentItem(updatedItem)
     onItemChange?.(updatedItem) // 아이템 변경 알림
   }
@@ -55,6 +61,12 @@ const ManualInputTab: React.FC<ManualInputTabProps> = ({
   const handleUnitPriceChange = (value: string) => {
     const unitPrice = parseFloat(value) || 0
     const updatedItem = { ...currentItem, unit_price: unitPrice }
+    
+    // 총액 자동 계산
+    if (updatedItem.quantity) {
+      updatedItem.total_amount = updatedItem.quantity * unitPrice
+    }
+    
     setCurrentItem(updatedItem)
     onItemChange?.(updatedItem) // 아이템 변경 알림
   }
@@ -136,7 +148,7 @@ const ManualInputTab: React.FC<ManualInputTabProps> = ({
         <Button 
           onClick={onAddItem} 
           className="w-full bg-gray-700 hover:bg-gray-800" 
-          disabled={!currentItem.fish_type || !currentItem.quantity || !currentItem.unit_price}
+          disabled={!currentItem.fish_type_id || !currentItem.quantity || !currentItem.unit_price}
 
         >
           <Plus className="h-4 w-4 mr-2" />

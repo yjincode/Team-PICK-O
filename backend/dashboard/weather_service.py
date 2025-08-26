@@ -18,9 +18,9 @@ class WeatherService:
     """기상청 API 서비스 클래스"""
     
     def __init__(self):
-        self.api_key = getattr(settings, 'DATA_GO_KR_API_KEY', None)
+        self.api_key = getattr(settings, 'WEATHER_API_KEY', None)
         if not self.api_key:
-            logger.warning("DATA_GO_KR_API_KEY가 설정되지 않았습니다.")
+            logger.warning("WEATHER_API_KEY가 설정되지 않았습니다.")
         
         # 기상청 API URL
         self.base_url = "https://apihub.kma.go.kr/api/typ01/url"

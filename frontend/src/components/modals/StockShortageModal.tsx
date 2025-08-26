@@ -5,6 +5,7 @@
 import React from "react"
 import { Button } from "../ui/button"
 import { AlertTriangle, Package, X } from "lucide-react"
+import { useNavigate } from "react-router-dom"
 
 interface InsufficientItem {
   fish_name: string
@@ -27,6 +28,8 @@ const StockShortageModal: React.FC<StockShortageModalProps> = ({
   insufficientItems,
   actionType
 }) => {
+  const navigate = useNavigate()
+  
   if (!open || !insufficientItems?.length) return null
 
   const actionText = actionType === 'ready' ? '출고 준비' : '출고 완료'
@@ -132,8 +135,9 @@ const StockShortageModal: React.FC<StockShortageModalProps> = ({
             className="bg-blue-600 hover:bg-blue-700"
             onClick={() => {
               onOpenChange(false)
-              // 재고 관리 페이지로 이동하는 로직을 여기에 추가할 수 있습니다
-              // window.location.href = '/inventory'
+              // 부족한 어종 정보를 URL 파라미터로 전달
+              const shortageFishTypes = insufficientItems.map(item => item.fish_name).join(',')
+              navigate(`/inventory?shortage=${encodeURIComponent(shortageFishTypes)}`)
             }}
           >
             재고 관리하러 가기

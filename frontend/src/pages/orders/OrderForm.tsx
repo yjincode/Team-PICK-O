@@ -66,7 +66,7 @@ interface OrderFormProps {
       raw_input_path?: string;
     };
     order_items: Array<{
-      fish_type: number;
+      fish_type_id: number;
       quantity: number;
       unit_price: number;
       unit: string;
@@ -243,7 +243,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
     try {
       console.log('🔍 실시간 재고 체크 시작...')
       const stockCheckItems = formData.items.map((item: OrderItem) => ({
-        fish_type_id: item.fish_type,
+        fish_type_id: item.fish_type_id,
         quantity: item.quantity,
         unit: item.unit || '박스'
       }))
@@ -345,7 +345,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
   // }
 
   const [newItem, setNewItem] = useState<Partial<OrderItem>>({
-    fish_type: 1,
+    fish_type_id: 1,
     quantity: 1,
     unit_price: 0,
     unit: "박스",
@@ -489,8 +489,8 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
           memo: validatedData.memo || prev.memo,
           items: validatedData.items.map((item: any) => ({
             id: Date.now(),
-                    fish_type: item.fish_type,
-        item_name_snapshot: fishTypes.find((f) => f.id === item.fish_type)?.name || '',
+            fish_type_id: item.fish_type_id,
+            item_name_snapshot: fishTypes.find((f) => f.id === item.fish_type_id)?.name || '',
             quantity: item.quantity,
             unit_price: item.unit_price || 0,
             unit: item.unit,
@@ -510,10 +510,10 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
   // 주문 항목 추가
   const addItem = () => {
     if (newItem.quantity && newItem.quantity > 0 && newItem.unit_price && newItem.unit_price > 0) {
-      const fishType = fishTypes.find((f: FishType) => f.id === newItem.fish_type)
+      const fishType = fishTypes.find((f: FishType) => f.id === newItem.fish_type_id)
       const item: OrderItem = {
         id: Date.now(),
-        fish_type: newItem.fish_type || 1,
+        fish_type_id: newItem.fish_type_id || 1,
         item_name_snapshot: fishType?.name || '',
         quantity: newItem.quantity || 0,
         unit_price: newItem.unit_price || 0,
@@ -527,7 +527,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
       }))
       
       setNewItem({
-        fish_type: 1,
+        fish_type_id: 1,
         quantity: 1,
         unit_price: 0,
         unit: "박스",
@@ -568,7 +568,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
     setIsCheckingStock(true)
     try {
       const orderItems = formData.items.map(item => ({
-        fish_type: item.fish_type,
+        fish_type_id: item.fish_type_id,
         quantity: item.quantity,
         unit: item.unit
       }))
@@ -597,14 +597,14 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
 
   // 임시 아이템에 대한 재고 체크 (수동 입력 중)
   const checkTempStock = async (tempItem: Partial<OrderItem>) => {
-    if (!tempItem.fish_type || !tempItem.quantity || tempItem.quantity <= 0) {
+    if (!tempItem.fish_type_id || !tempItem.quantity || tempItem.quantity <= 0) {
       setTempStockInfo({warnings: [], errors: []})
       return
     }
 
     try {
       const orderItems = [{
-        fish_type_id: tempItem.fish_type,
+        fish_type_id: tempItem.fish_type_id,
         quantity: tempItem.quantity,
         unit: tempItem.unit || '박스'
       }]
@@ -664,7 +664,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
     try {
       setIsCheckingStock(true)
       const stockCheckItems = formData.items.map((item: OrderItem) => ({
-        fish_type_id: item.fish_type,
+        fish_type_id: item.fish_type_id,
         quantity: item.quantity,
         unit: item.unit || '박스'
       }))
@@ -697,7 +697,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
       delivery_datetime: delivery_datetime,
       order_status: "placed",
       order_items: formData.items.map((item: OrderItem) => ({
-        fish_type_id: item.fish_type,
+        fish_type_id: item.fish_type_id,
         quantity: item.quantity,
         unit_price: parseFloat(item.unit_price.toString()),
         unit: item.unit || '',
@@ -1066,8 +1066,8 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
                         memo: orderData.memo || prev.memo,
                         items: orderData.items?.map((item: any, index: number) => ({
                           id: Date.now() + index,
-                                  fish_type: item.fish_type,
-        item_name_snapshot: fishTypes.find((f) => f.id === item.fish_type)?.name || '',
+                          fish_type_id: item.fish_type_id,
+                          item_name_snapshot: fishTypes.find((f) => f.id === item.fish_type_id)?.name || '',
                           quantity: item.quantity,
                           unit_price: item.unit_price || 0,
                           unit: item.unit,
@@ -1112,8 +1112,8 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
                         memo: orderData.memo || prev.memo,
                         items: orderData.items?.map((item: any, index: number) => ({
                           id: Date.now() + index,
-                                  fish_type: item.fish_type,
-        item_name_snapshot: fishTypes.find((f) => f.id === item.fish_type)?.name || '',
+                          fish_type_id: item.fish_type_id,
+                          item_name_snapshot: fishTypes.find((f) => f.id === item.fish_type_id)?.name || '',
                           quantity: item.quantity,
                           unit_price: item.unit_price || 0,
                           unit: item.unit,
@@ -1160,8 +1160,8 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
                         memo: orderData.memo || prev.memo,
                         items: orderData.items?.map((item: any, index: number) => ({
                           id: Date.now() + index,
-                                  fish_type: item.fish_type,
-        item_name_snapshot: fishTypes.find((f) => f.id === item.fish_type)?.name || '',
+                          fish_type_id: item.fish_type_id,
+                          item_name_snapshot: fishTypes.find((f) => f.id === item.fish_type_id)?.name || '',
                           quantity: item.quantity,
                           unit_price: item.unit_price || 0,
                           unit: item.unit,
