@@ -43,10 +43,8 @@ interface Order {
 }
 
 // 이 코드는 컴포넌트 내부에서 useEffect로 처리해야 합니다
-
-
 const BusinessList: React.FC = () => {
-  const navigate = useNavigate(); // 추가
+  const navigate = useNavigate(); 
   const [businesses, setBusinesses] = useState<Business[]>([]);
   const [isLoadingBusinesses, setIsLoadingBusinesses] = useState<boolean>(false);
   const [hasInitialized, setHasInitialized] = useState<boolean>(false);
@@ -60,7 +58,7 @@ const BusinessList: React.FC = () => {
 
   const [showUnpaid, setShowUnpaid] = useState(false);
   const [selectedBusiness, setSelectedBusiness] = useState<Business | null>(null);
-
+  const [overdueRisks, setOverdueRisks] = useState<Record<number, string>>({});
   // 거래처 목록을 가져오는 함수 (재사용 가능)
   const fetchBusinesses = async (pageNum = page) => {
     if (isLoadingBusinesses) {
@@ -108,8 +106,19 @@ const BusinessList: React.FC = () => {
     try {
       // 주문 목록 (기존 order API 사용)
       const ordersRes = await orderApi.getAll();
-      const ordersData = Array.isArray(ordersRes) ? ordersRes : ordersRes.data || [];
+      console.log("✅ 주문 API 응답:", ordersRes);
+      
+      const ordersData: Order[] = (Array.isArray(ordersRes) ? ordersRes : ordersRes.data || []).map((o: any) => ({
+        id: o.id,
+        business_id: o.business_id ?? 0,
+        total_price: Number(o.total_price || 0),
+        order_datetime: o.order_datetime || '',
+      })); 
+
+      console.log("📝 가공된 ordersData:", ordersData);
       const sumByBusiness: Record<number, { orders: number }> = {};
+
+      setOrders(ordersData);
 
       for (const o of ordersData) {
         const businessId = o.business_id;
@@ -227,7 +236,38 @@ const BusinessList: React.FC = () => {
     return `${onlyNumbers.slice(0, 3)}-${onlyNumbers.slice(3, 7)}-${onlyNumbers.slice(7)}`;
   };
 
-
+  useEffect(() => {
+    const fetchOverdueRisks = async () => {
+      try {
+        const res = await businessApi.getOverdueRisk();
+        // res: [{id: 1, business_name: "...", risk: "높음"}, ...]
+        const riskMap: Record<number, string> = {};
+        
+        // 연체 위험 알림 전송
+        res.forEach((item) => {
+          riskMap[item.id] = item.risk;
+          
+          // 30일 이상 연체된 경우 알림 전송
+          if (item.overdue_days >= 30) {
+            // 커스텀 이벤트로 알림 전송
+            const notificationEvent = new CustomEvent('overdueAlert', {
+              detail: {
+                businessName: item.business_name,
+                overdueDays: item.overdue_days,
+                risk: item.risk
+              }
+            });
+            window.dispatchEvent(notificationEvent);
+          }
+        });
+        
+        setOverdueRisks(riskMap);
+      } catch (e) {
+        console.error("연체 위험 예측 데이터 불러오기 실패:", e);
+      }
+    };
+    fetchOverdueRisks();
+  }, []);
 
   // 수정 모달용 주소검색 훅
   const { openPostcode: openEditPostcode } = useKakaoPostcode({
@@ -596,13 +636,38 @@ const BusinessList: React.FC = () => {
               filteredBusinesses.map((business) => {
                 const oldestOrderDate = getOldestOrderDate(business.id, orders);
                 const overdueDays = calculateOverdueDays(oldestOrderDate);
+                const risk = overdueRisks[business.id] || "없음";
                 
                return (
                 <Card key={business.id} className="shadow-sm hover:shadow-md transition-shadow">
                   <CardContent className="p-4 sm:p-6">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                       <div className="flex-1">
-                        <h3 className="text-lg sm:text-xl font-semibold text-gray-900">{business.business_name}</h3>
+                        <h3 className="text-lg sm:text-xl font-semibold text-gray-900">{business.business_name}
+                        <span
+                            style={{
+                              marginLeft: 8,
+                              padding: "2px 8px",
+                              borderRadius: 8,
+                              background:
+                                risk === "높음"
+                                  ? "#fee2e2"
+                                  : risk === "보통"
+                                  ? "#fef9c3"
+                                  : "#dcfce7",
+                              color:
+                                risk === "높음"
+                                  ? "#dc2626"
+                                  : risk === "보통"
+                                  ? "#b45309"
+                                  : "#15803d",
+                              fontWeight: 600,
+                              fontSize: 12,
+                            }}
+                          >
+                            {risk}
+                          </span>
+                        </h3>
                         <p className="text-sm text-gray-600 mt-1">
                           <Phone className="inline h-3 w-3 mr-1" />
                           {formatPhoneNumber(business.phone_number)}

@@ -232,6 +232,11 @@ export const businessApi = {
     const response = await api.delete(`/business/customers/${id}/`)
     return response.data
   },
+
+  getOverdueRisk: async (): Promise<any[]> => {
+    const response = await api.get('/business/predict_overdue/');
+    return response.data;
+  },
 }
 
 // 어종 관리 API
