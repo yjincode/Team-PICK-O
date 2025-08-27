@@ -29,6 +29,10 @@ accelerate==0.24.1
 # HTTP Client for API calls
 httpx==0.25.2
 
+# Data Processing
+pandas==2.1.4
+requests==2.31.0
+
 # Additional utilities
 scikit-image==0.21.0
 

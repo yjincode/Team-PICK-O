@@ -11,6 +11,11 @@ deployment/
 ├── nginx.conf                  # Nginx 설정
 ├── deploy.sh                   # 배포 스크립트
 ├── .env.example               # 환경변수 예시
+├── daily_data_collection.sh    # 일별 데이터 수집 스크립트
+├── monitor_data_collection.py  # 데이터 수집 모니터링 스크립트
+├── cron_setup.sh              # cron job 설정 스크립트
+├── monitor_setup.sh           # 모니터링 cron job 설정 스크립트
+├── setup_automation.sh        # 자동화 시스템 전체 설정 스크립트
 └── README.md                  # 이 파일
 ```
 
@@ -151,6 +156,70 @@ docker-compose exec database pg_dump -U $POSTGRES_USER $POSTGRES_DB > backup.sql
 docker-compose exec -T database psql -U $POSTGRES_USER -d $POSTGRES_DB < backup.sql
 ```
 
+## 자동화 시스템 설정
+
+### 환경별 설정
+
+#### 🐧 Linux/Unix 환경 (팀 프로덕션)
+
+```bash
+# 자동화 시스템 전체 설정
+./setup_automation.sh
+
+# 또는 개별 설정
+./cron_setup.sh        # 데이터 수집 cron job 설정
+./monitor_setup.sh     # 모니터링 cron job 설정
+```
+
+#### 🪟 Windows 환경 (로컬 개발)
+
+```cmd
+# 관리자 권한으로 실행
+setup_windows_scheduler.bat
+
+# 또는 수동 설정
+# 1. 작업 스케줄러 열기
+# 2. 기본 작업 만들기
+# 3. 트리거: 매일 오전 6시/7시
+# 4. 동작: PowerShell 스크립트 실행
+```
+
+### 설정된 스케줄
+
+- **매일 오전 6시**: 노량진 데이터 수집
+- **매일 오전 7시**: 데이터 수집 모니터링 및 알림
+
+### 로그 확인
+
+#### Linux/Unix
+```bash
+# 실시간 로그 확인
+tail -f /var/log/team-pick-o/daily_collection_$(date +%Y%m%d).log
+tail -f /var/log/team-pick-o/monitor.log
+
+# 에러 로그 확인
+tail -f /var/log/team-pick-o/daily_collection_error_$(date +%Y%m%d).log
+```
+
+#### Windows
+```cmd
+# 로그 확인
+type C:\logs\team-pick-o\daily_collection_YYYYMMDD.log
+type C:\logs\team-pick-o\monitor.log
+```
+
+### 환경 전환 시 주의사항
+
+1. **로컬 → 팀 DB 전환 시**:
+   - `daily_data_collection.sh`의 경로 설정 확인
+   - `monitor_data_collection.py`의 경로 설정 확인
+   - 데이터베이스 연결 설정 변경
+
+2. **Windows → Linux 전환 시**:
+   - cron job으로 변경
+   - 로그 경로 변경 (`/var/log/team-pick-o/`)
+   - 가상환경 활성화 방식 변경
+
 ## 모니터링
 
 프로덕션 환경에서는 다음을 모니터링하세요:
@@ -159,6 +228,7 @@ docker-compose exec -T database psql -U $POSTGRES_USER -d $POSTGRES_DB < backup.
 - 리소스 사용량: `docker stats`
 - 로그: `docker-compose logs`
 - 헬스 체크: `curl http://your-domain/health`
+- 데이터 수집 상태: `python deployment/monitor_data_collection.py`
 
 ## 보안 주의사항
 

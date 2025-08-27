@@ -28,6 +28,7 @@ def api_root(request):
             "accounts": "/api/v1/accounts/",
             "dashboard": "/api/v1/dashboard/",
             "order": "/api/v1/order/",
+            "prediction": "/api/v1/prediction/",
         }
     })
 
@@ -49,6 +50,7 @@ urlpatterns = [
     path('api/v1/dashboard/', include('dashboard.urls')),
     # path('api/v1/fish/', include('fish_analysis.urls')),  # PyTorch 의존성으로 임시 비활성화
     path('api/v1/order/', include('order.urls')),
+    path('api/v1/prediction/', include('prediction.urls')),
     
     # API Documentation
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
