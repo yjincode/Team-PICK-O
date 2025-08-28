@@ -358,12 +358,11 @@ export async function parseVoiceOrderWithBusiness(voiceText: string): Promise<Pa
 
 
 
-
-export async function fetchParsedOrder(textInput: string) {
   //AI API 호출부
-  const res = await fetch("https://40b6f9b84876.ngrok-free.app/order", {
+export async function fetchParsedOrder(textInput: string) {
+  const res = await fetch("/ai/order", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json" ,"ngrok-skip-browser-warning": "true"},
     body: JSON.stringify({ query: textInput }),
   });
 
@@ -372,7 +371,7 @@ export async function fetchParsedOrder(textInput: string) {
   const data = await res.json();
 
   if (!data.success) throw new Error("파싱 실패");
-
+console.log("data", data)
   return data.message;
 }
 
@@ -402,8 +401,9 @@ export async function findOrCreateFishType(name: string | undefined, unit: strin
 export async function findOrCreateBusiness(
   businessName: string,
   phoneNumber: string,
-  businesses: Business[]
-): Promise<number | null> {
+  businesses: Business[],
+  refreshCallback?: () => Promise<Business[]>
+): Promise<Business | null> {
   if (!businessName) return null;
 
   // 1. 기존 거래처 확인
@@ -412,7 +412,7 @@ export async function findOrCreateBusiness(
   );
   if (existingBusiness) {
     console.log(`[기존 거래처 사용] ${businessName} (ID: ${existingBusiness.id})`);
-    return existingBusiness.id;
+    return existingBusiness
   }
 
   // 2. 전화번호 정제
@@ -424,17 +424,18 @@ export async function findOrCreateBusiness(
   // 3. 새 거래처 생성
   try {
     const created = await businessApi.create({
+ 
       business_name: businessName,
       phone_number: cleanPhoneNumber(phoneNumber),
       address: "주소 미입력",
       memo: "(자동 생성)",
     });
 
-    const createdData = created?.data;
-    if (!createdData || typeof createdData.id !== 'number') {
-      console.error("[거래처 생성 응답 이상]", created);
-      throw new Error("응답 구조가 올바르지 않음 (created.data.id 없음)");
-    }
+    const createdData = created.data;
+    // if (!createdData || typeof createdData.id !== 'number') {
+    //   console.error("[거래처 생성 응답 이상]", created);
+    //   throw new Error("응답 구조가 올바르지 않음 (created.data.id 없음)");
+    // }
 
     console.log(`[거래처 등록 완료] ${businessName} (ID: ${createdData.id})`);
 
@@ -446,14 +447,16 @@ export async function findOrCreateBusiness(
 
     if (matched) {
       console.log(`[재조회로 확인된 거래처] ${businessName} (ID: ${matched.id})`);
-      return matched.id;
+      return matched;
     }
 
     // fallback: 생성된 ID라도 반환
     console.warn(`[거래처 확인 실패, 생성된 ID 사용] ${businessName} (ID: ${createdData.id})`);
-    return createdData.id;
+    return createdData
   } catch (error) {
     console.error(`[거래처 등록 실패] ${businessName}`, error);
     return null;
   }
 }
+
+
