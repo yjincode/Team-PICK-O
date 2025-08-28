@@ -44,31 +44,6 @@ const Header: React.FC = () => {
     setNotifications(dummyNotifications);
   }, []);
 
-  // 연체 위험 알림 이벤트 리스너
-  useEffect(() => {
-    const handleOverdueAlert = (event: CustomEvent) => {
-      const { businessName, overdueDays, risk } = event.detail;
-      
-      const newNotification: Notification = {
-        id: `overdue-${Date.now()}`,
-        message: `⚠️ ${businessName} 거래처가 ${overdueDays}일 연체되었습니다. (위험도: ${risk})`,
-        type: 'error',
-        timestamp: new Date(),
-        read: false,
-      };
-      
-      setNotifications(prev => [newNotification, ...prev]);
-    };
-
-    // 이벤트 리스너 등록
-    window.addEventListener('overdueAlert', handleOverdueAlert as EventListener);
-
-    // 컴포넌트 언마운트 시 이벤트 리스너 제거
-    return () => {
-      window.removeEventListener('overdueAlert', handleOverdueAlert as EventListener);
-    };
-  }, []);
-
   const unreadCount = notifications.filter(n => !n.read).length;
 
   const markAsRead = (id: string) => {
