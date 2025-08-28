@@ -63,104 +63,20 @@ class FishSpecies(models.Model):
 
 class FishWeightTier(models.Model):
     """
-    어류 무게 등급 마스터 모델
-    시스템이 사용할 표준 규격 등급을 정의합니다.
-    각 등급은 평균 무게(avg_weight_kg)를 가지며, 이 값이 모델 학습에 사용될 핵심 피처가 됩니다.
+    어종 크기/중량 등급 모델 [cite: 110]
+    API의 크기 코드를 바탕으로 중량 구간을 정의합니다.
     """
-    tier_code = models.CharField(max_length=20, primary_key=True, verbose_name="등급 코드")
-    tier_name = models.CharField(max_length=50, verbose_name="등급명")
-    description = models.TextField(verbose_name="설명")
-    avg_weight_kg = models.FloatField(verbose_name="평균 무게(kg)")
-    
+    size_code = models.CharField(max_length=50, unique=True, verbose_name="크기 코드")
+    size_name_kr = models.CharField(max_length=100, verbose_name="크기명")
+    min_weight_kg = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True, verbose_name="최소 중량(kg)")
+    max_weight_kg = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True, verbose_name="최대 중량(kg)")
+
     class Meta:
-        verbose_name = "어류 무게 등급"
-        verbose_name_plural = "어류 무게 등급 목록"
-        ordering = ['avg_weight_kg']
+        verbose_name = "어종 중량 등급"
+        verbose_name_plural = "어종 중량 등급 목록"
 
     def __str__(self):
-        return f"{self.tier_code} - {self.tier_name} ({self.avg_weight_kg}kg)"
-
-class SizeStandardMapping(models.Model):
-    """
-    규격 매핑 모델
-    원본 규격명을 표준 등급(tier_code)으로 연결하는 매핑 테이블입니다.
-    """
-    raw_label = models.CharField(max_length=100, primary_key=True, verbose_name="원본 규격명")
-    tier_code = models.ForeignKey(FishWeightTier, on_delete=models.CASCADE, verbose_name="표준 등급")
-    processing_logic = models.TextField(verbose_name="처리 로직")
-    created_at = models.DateTimeField(auto_now_add=True, verbose_name="생성일시")
-    updated_at = models.DateTimeField(auto_now=True, verbose_name="수정일시")
-    
-    class Meta:
-        verbose_name = "규격 매핑"
-        verbose_name_plural = "규격 매핑 목록"
-        ordering = ['raw_label']
-
-    def __str__(self):
-        return f"{self.raw_label} → {self.tier_code.tier_code}"
-
-class FishAuctionData(models.Model):
-    """
-    수산물 경매 데이터 모델
-    전국 도매시장 정산 경락가격 요약 정보 API에서 수집한 데이터를 저장합니다.
-    """
-    # 기본 정보
-    collection_timestamp = models.DateTimeField(auto_now_add=True, verbose_name="수집일시")
-    auction_date = models.DateField(verbose_name="경락일")
-    target_species = models.CharField(max_length=50, verbose_name="수집어종")
-    
-    # 도매시장 정보
-    market_name = models.CharField(max_length=100, verbose_name="도매시장명")
-    market_code = models.CharField(max_length=20, verbose_name="도매시장코드")
-    corporation_name = models.CharField(max_length=100, verbose_name="도매법인명")
-    corporation_code = models.CharField(max_length=20, verbose_name="도매법인코드")
-    
-    # 품목 정보
-    product_name = models.CharField(max_length=100, verbose_name="품목명")
-    product_code = models.CharField(max_length=20, verbose_name="품목코드")
-    species_name = models.CharField(max_length=100, verbose_name="품종명")
-    species_code = models.CharField(max_length=20, verbose_name="품종코드")
-    
-    # 거래 정보
-    trade_unit_quantity = models.IntegerField(null=True, blank=True, verbose_name="거래단위수량")
-    standard = models.CharField(max_length=50, verbose_name="규격")
-    standard_code = models.CharField(max_length=20, verbose_name="규격코드")
-    grade = models.CharField(max_length=50, verbose_name="등급")
-    grade_code = models.CharField(max_length=20, verbose_name="등급코드")
-    
-    # 산지 정보
-    origin_code = models.CharField(max_length=20, verbose_name="산지코드")
-    origin_name = models.CharField(max_length=100, verbose_name="산지명")
-    
-    # 가격 정보
-    min_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True, verbose_name="최저가")
-    avg_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True, verbose_name="평균가")
-    max_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True, verbose_name="최고가")
-    trade_quantity = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True, verbose_name="거래량")
-    trade_count = models.IntegerField(null=True, blank=True, verbose_name="건수")
-    
-    # 규격 표준화 필드 (새로 추가)
-    tier_code = models.ForeignKey(FishWeightTier, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="표준 등급")
-    avg_weight_kg = models.FloatField(null=True, blank=True, verbose_name="평균 무게(kg)")
-    
-    # 데이터 품질 관리
-    is_valid = models.BooleanField(default=True, verbose_name="유효성")
-    data_source = models.CharField(max_length=50, default='AGRICULTURE_API', verbose_name="데이터출처")
-    
-    class Meta:
-        verbose_name = "수산물 경매 데이터"
-        verbose_name_plural = "수산물 경매 데이터 목록"
-        ordering = ['-auction_date', '-collection_timestamp']
-        indexes = [
-            models.Index(fields=['auction_date']),
-            models.Index(fields=['target_species']),
-            models.Index(fields=['market_name']),
-            models.Index(fields=['product_name']),
-            models.Index(fields=['tier_code']),  # 새로 추가
-        ]
-
-    def __str__(self):
-        return f"{self.auction_date} / {self.market_name} / {self.product_name} / {self.avg_price}원"
+        return self.size_name_kr
 
 # ===================================================================
 # 2. 외부 데이터 모델 (AI 예측 Feature)
@@ -194,36 +110,26 @@ class ActualAuctionPrice(models.Model):
     def __str__(self):
         return f"{self.trade_date} / {self.market.market_name_kr} / {self.fish_species.item_small_category_name_kr} / {self.auction_price}원"
 
-class MonthlyAveragePrice(models.Model):
+class ActualCatchVolume(models.Model):
     """
-    월간 평균 가격 데이터 모델
-    서울시농수산식품공사 월간등락품목(월평균가격) CSV 데이터를 저장합니다.
+    실제 어획량 데이터 모델
+    KOSIS 어업생산동향조사 API 데이터를 저장합니다. [cite: 86]
     """
-    data_month = models.DateField(verbose_name="데이터 월")  # YYYY-MM-01 형식
-    fish_species = models.ForeignKey(FishSpecies, on_delete=models.PROTECT, verbose_name="어종")
-    market = models.ForeignKey(WholesaleMarket, on_delete=models.PROTECT, verbose_name="도매시장")
-    average_price = models.DecimalField(max_digits=12, decimal_places=2, verbose_name="월평균가격(원/kg)")
-    price_change = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True, verbose_name="가격변동률(%)")
-    volume_traded = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True, verbose_name="거래량(kg)")
-    data_source = models.CharField(max_length=50, default='SEOUL_FISH_MARKET', verbose_name="데이터 출처")
-    
-    # 추가 필드들
-    fish_type = models.CharField(max_length=20, choices=[
-        ('NATURAL', '자연산'),
-        ('CULTURED', '양식'),
-        ('UNKNOWN', '미분류')
-    ], default='UNKNOWN', verbose_name="어종 구분")
-    grade = models.CharField(max_length=10, null=True, blank=True, verbose_name="등급")
-    unit = models.CharField(max_length=20, null=True, blank=True, verbose_name="단위")
-    
+    data_period = models.DateField(verbose_name="수록 시점 (월 단위)")  # [cite: 94]
+    fishery_type_code = models.CharField(max_length=50, verbose_name="어업별 코드")  # [cite: 99]
+    fish_species = models.ForeignKey(FishSpecies, on_delete=models.PROTECT, verbose_name="어종")  # [cite: 101]
+    admin_division_code = models.CharField(max_length=50, verbose_name="행정구역 코드")  # [cite: 103]
+    catch_volume = models.DecimalField(max_digits=15, decimal_places=2, verbose_name="생산량(톤)")  # [cite: 95]
+    catch_amount = models.DecimalField(max_digits=20, decimal_places=2, verbose_name="생산금액(천원)")  # [cite: 95]
+    last_modified_date = models.DateField(verbose_name="최종 수정일")  # [cite: 97]
+
     class Meta:
-        verbose_name = "월간 평균 가격"
-        verbose_name_plural = "월간 평균 가격 목록"
-        ordering = ['-data_month']
-        unique_together = ('data_month', 'fish_species', 'market', 'fish_type', 'grade')  # 같은 월, 같은 어종, 같은 시장, 같은 구분, 같은 등급은 중복 불가
+        verbose_name = "실제 어획량"
+        verbose_name_plural = "실제 어획량 목록"
+        ordering = ['-data_period']
 
     def __str__(self):
-        return f"{self.data_month.strftime('%Y-%m')} / {self.fish_species.item_small_category_name_kr}({self.get_fish_type_display()}) / {self.average_price}원/kg"
+        return f"{self.data_period.strftime('%Y-%m')} / {self.fish_species.item_small_category_name_kr} / {self.catch_volume}톤"
 
 class ExternalEnvironmentalData(models.Model):
     """
@@ -244,26 +150,3 @@ class ExternalEnvironmentalData(models.Model):
 
     def __str__(self):
         return f"{self.data_timestamp} / {self.location_identifier} / {self.data_type}: {self.value}{self.unit}"
-
-
-class ActualCatchVolume(models.Model):
-    """
-    실제 어획량 데이터 모델
-    KOSIS 통계청에서 제공하는 월별 어획량 데이터를 저장합니다.
-    """
-    data_period = models.DateField(verbose_name="데이터 기간")  # YYYY-MM-01 형식
-    fish_species = models.ForeignKey(FishSpecies, on_delete=models.PROTECT, verbose_name="어종")
-    fishery_type_code = models.CharField(max_length=20, verbose_name="어업 종류 코드")
-    admin_division_code = models.CharField(max_length=20, verbose_name="행정구역 코드")
-    catch_volume = models.DecimalField(max_digits=15, decimal_places=2, verbose_name="어획량(톤)")
-    catch_amount = models.DecimalField(max_digits=15, decimal_places=2, verbose_name="어획금액(천원)")
-    last_modified_date = models.DateField(auto_now=True, verbose_name="최종 수정일")
-
-    class Meta:
-        verbose_name = "실제 어획량"
-        verbose_name_plural = "실제 어획량 목록"
-        ordering = ['-data_period']
-        unique_together = ('data_period', 'fish_species', 'fishery_type_code', 'admin_division_code')
-
-    def __str__(self):
-        return f"{self.data_period} / {self.fish_species.item_small_category_name_kr} / {self.catch_volume}톤"

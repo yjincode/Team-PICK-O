@@ -1,579 +1,389 @@
-from rest_framework import status, permissions
-from rest_framework.decorators import api_view, permission_classes, parser_classes
-from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
-from rest_framework.response import Response
-from rest_framework.views import APIView
-from rest_framework.generics import ListAPIView, RetrieveAPIView, CreateAPIView
-from rest_framework.pagination import PageNumberPagination
-from django.db.models import Count, Avg, Q
-from django.shortcuts import get_object_or_404
-from django.contrib.auth.models import User
+import json
+import os
+from django.views import View
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
-from django.views.decorators.cache import cache_page
-from drf_spectacular.utils import extend_schema, OpenApiParameter
-from drf_spectacular.types import OpenApiTypes
+from django.core.files.storage import default_storage
+from django.core.files.base import ContentFile
+from django.utils import timezone
+from core.middleware import get_user_queryset_filter
+from .models import FishAnalysis, DiseaseDetection, DiseaseClass
+from business.models import User
 import logging
-from collections import Counter
-from datetime import datetime, timedelta
-
-from .models import FishAnalysis, DiseaseDetection, AnalysisSession
-from .serializers import (
-    FishAnalysisSerializer,
-    AnalysisRequestSerializer,
-    AnalysisResponseSerializer,
-    BatchAnalysisRequestSerializer,
-    HealthSummarySerializer,
-    AnalysisSessionSerializer,
-    AnalysisSessionDetailSerializer,
-    ModelStatusSerializer,
-    SupportedFormatsSerializer,
-    MobileAnalysisRequestSerializer
-)
-from .analyzer import django_fish_analyzer
-from .flounder_analyzer import flounder_analyzer
 
 logger = logging.getLogger(__name__)
 
-# 지원되는 이미지 형식
-SUPPORTED_IMAGE_TYPES = {
-    "image/jpeg", "image/jpg", "image/png", "image/bmp", "image/tiff"
-}
 
-# 최대 파일 크기 (10MB)
-MAX_FILE_SIZE = 10 * 1024 * 1024
-
-
-class StandardResultsSetPagination(PageNumberPagination):
-    """표준 페이지네이션"""
-    page_size = 20
-    page_size_query_param = 'page_size'
-    max_page_size = 100
-
-
-@extend_schema(
-    summary="생선 상태 분석",
-    description="업로드된 생선 이미지를 분석하여 종류, 건강 상태, 질병을 판단합니다.",
-    request=AnalysisRequestSerializer,
-    responses={
-        201: FishAnalysisSerializer,
-        400: "잘못된 요청",
-        500: "서버 오류"
-    },
-    tags=["생선 분석"]
-)
-@api_view(['POST'])
-@parser_classes([MultiPartParser, FormParser])
-@permission_classes([permissions.IsAuthenticatedOrReadOnly])
-def analyze_fish_image(request):
-    """단일 생선 이미지 분석 API"""
+@method_decorator(csrf_exempt, name='dispatch')
+class FishAnalysisView(View):
+    """어류 질병 분석 API - Django View 기반 JWT 미들웨어 인증"""
     
-    try:
-        # 요청 데이터 검증
-        serializer = AnalysisRequestSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(
-                {"error": "요청 데이터가 유효하지 않습니다.", "details": serializer.errors},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+    def post(self, request):
+        """이미지 분석 요청 - 데이터베이스 저장 없이 즉시 결과 반환"""
+        # 미들웨어에서 설정된 사용자 정보 확인
+        if not hasattr(request, 'user_id') or not request.user_id:
+            return JsonResponse({'error': '사용자 인증이 필요합니다.'}, status=401)
         
-        validated_data = serializer.validated_data
-        image_file = validated_data['image']
-        
-        logger.info(f"🔍 이미지 분석 시작 - 파일명: {image_file.name}, 크기: {image_file.size} bytes")
-        
-        # 세션 처리
-        session = None
-        session_name = validated_data.get('session_name')
-        if session_name and request.user.is_authenticated:
-            session, created = AnalysisSession.objects.get_or_create(
-                user=request.user,
-                name=session_name,
-                defaults={'description': f'세션 생성: {datetime.now()}'}
-            )
-        
-        # 이미지 바이트 읽기
-        image_bytes = image_file.read()
-        
-        # AI 분석 수행
-        analysis_result = django_fish_analyzer.analyze_image_sync(
-            image_bytes=image_bytes,
-            user=request.user if request.user.is_authenticated else None,
-            analyze_species=validated_data['analyze_species'],
-            analyze_health=validated_data['analyze_health'],
-            analyze_diseases=validated_data['analyze_diseases'],
-            confidence_threshold=validated_data['confidence_threshold'],
-            session=session
-        )
-        
-        # 응답 데이터 직렬화
-        response_serializer = FishAnalysisSerializer(
-            analysis_result, 
-            context={'request': request}
-        )
-        
-        logger.info(f"✅ 분석 완료 - ID: {analysis_result.id}")
-        
-        return Response(
-            response_serializer.data,
-            status=status.HTTP_201_CREATED
-        )
-        
-    except Exception as e:
-        logger.error(f"❌ 이미지 분석 실패: {str(e)}")
-        return Response(
-            {"error": f"분석 중 오류가 발생했습니다: {str(e)}"},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
-
-
-@extend_schema(
-    summary="배치 이미지 분석",
-    description="여러 이미지를 한 번에 분석합니다.",
-    request=BatchAnalysisRequestSerializer,
-    responses={
-        201: FishAnalysisSerializer(many=True),
-        400: "잘못된 요청"
-    },
-    tags=["생선 분석"]
-)
-@api_view(['POST'])
-@parser_classes([MultiPartParser, FormParser])
-@permission_classes([permissions.IsAuthenticatedOrReadOnly])
-def batch_analyze_fish_images(request):
-    """배치 이미지 분석 API"""
-    
-    try:
-        # FormData에서 여러 파일 처리
-        images = request.FILES.getlist('images')
-        
-        if len(images) > 10:
-            return Response(
-                {"error": "한 번에 최대 10개의 파일만 처리할 수 있습니다."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        # 기타 파라미터 추출
-        analyze_species = request.data.get('analyze_species', 'true').lower() == 'true'
-        analyze_health = request.data.get('analyze_health', 'true').lower() == 'true'
-        analyze_diseases = request.data.get('analyze_diseases', 'true').lower() == 'true'
-        confidence_threshold = float(request.data.get('confidence_threshold', 0.5))
-        session_name = request.data.get('session_name', f'배치분석_{datetime.now().strftime("%Y%m%d_%H%M%S")}')
-        
-        # 세션 생성
-        session = None
-        if request.user.is_authenticated:
-            session = AnalysisSession.objects.create(
-                user=request.user,
-                name=session_name,
-                description=f'배치 분석 - {len(images)}개 이미지'
-            )
-        
-        results = []
-        
-        for i, image_file in enumerate(images):
+        try:
+            # 업로드된 이미지 파일 확인
+            if 'image' not in request.FILES:
+                return JsonResponse({'error': '이미지 파일이 필요합니다.'}, status=400)
+            
+            image_file = request.FILES['image']
+            
+            # 파일 확장자 검증
+            allowed_extensions = ['.jpg', '.jpeg', '.png', '.bmp']
+            file_extension = os.path.splitext(image_file.name)[1].lower()
+            if file_extension not in allowed_extensions:
+                return JsonResponse({
+                    'error': f'지원되지 않는 파일 형식입니다. 허용 형식: {", ".join(allowed_extensions)}'
+                }, status=400)
+            
+            # 파일 크기 검증 (10MB 제한)
+            if image_file.size > 10 * 1024 * 1024:
+                return JsonResponse({'error': '파일 크기는 10MB를 초과할 수 없습니다.'}, status=400)
+            
+            logger.info(f"새로운 분석 시작 - 파일: {image_file.name} - 사용자: {request.user_id}")
+            
+            # 임시 파일로 저장하여 AI 서버에 전송
+            import tempfile
+            with tempfile.NamedTemporaryFile(suffix=f'_{image_file.name}', delete=False) as temp_file:
+                for chunk in image_file.chunks():
+                    temp_file.write(chunk)
+                temp_file_path = temp_file.name
+            
             try:
-                logger.info(f"🔍 배치 분석 [{i+1}/{len(images)}] - 파일명: {image_file.name}")
+                # AI 서버를 통한 즉시 분석
+                from .services.ai_client import ai_client
+                result = ai_client.analyze_image_sync(temp_file_path)
                 
-                # 파일 유효성 검사
-                if image_file.content_type not in SUPPORTED_IMAGE_TYPES:
-                    continue
-                    
-                if image_file.size > MAX_FILE_SIZE:
-                    continue
+                # 디버깅을 위한 AI 서버 응답 로깅
+                logger.info(f"AI 서버 원본 응답: {result}")
                 
-                # 이미지 분석
-                image_bytes = image_file.read()
-                analysis_result = django_fish_analyzer.analyze_image_sync(
-                    image_bytes=image_bytes,
-                    user=request.user if request.user.is_authenticated else None,
-                    analyze_species=analyze_species,
-                    analyze_health=analyze_health,
-                    analyze_diseases=analyze_diseases,
-                    confidence_threshold=confidence_threshold,
-                    session=session
-                )
-                
-                results.append(analysis_result)
-                
-            except Exception as e:
-                logger.error(f"❌ 파일 {image_file.name} 분석 실패: {str(e)}")
-                continue
-        
-        # 결과 직렬화
-        response_serializer = FishAnalysisSerializer(
-            results, 
-            many=True, 
-            context={'request': request}
-        )
-        
-        logger.info(f"✅ 배치 분석 완료 - {len(results)}개 처리")
-        
-        return Response(
-            response_serializer.data,
-            status=status.HTTP_201_CREATED
-        )
-        
-    except Exception as e:
-        logger.error(f"❌ 배치 분석 실패: {str(e)}")
-        return Response(
-            {"error": f"배치 분석 중 오류가 발생했습니다: {str(e)}"},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
-
-
-@extend_schema(
-    summary="건강 상태 요약",
-    description="분석 결과들의 전체 건강 상태를 요약합니다.",
-    parameters=[
-        OpenApiParameter("days", OpenApiTypes.INT, description="최근 N일 데이터 (기본: 30일)"),
-        OpenApiParameter("user_id", OpenApiTypes.INT, description="특정 사용자 데이터만 조회"),
-        OpenApiParameter("session_id", OpenApiTypes.UUID, description="특정 세션 데이터만 조회"),
-    ],
-    responses={200: HealthSummarySerializer},
-    tags=["생선 분석"]
-)
-@api_view(['GET'])
-@permission_classes([permissions.IsAuthenticatedOrReadOnly])
-def get_health_summary(request):
-    """건강 상태 요약 API"""
-    
-    try:
-        # 쿼리 파라미터 처리
-        days = int(request.GET.get('days', 30))
-        user_id = request.GET.get('user_id')
-        session_id = request.GET.get('session_id')
-        
-        # 날짜 필터
-        date_from = datetime.now() - timedelta(days=days)
-        queryset = FishAnalysis.objects.filter(created_at__gte=date_from)
-        
-        # 사용자 필터
-        if user_id and request.user.is_authenticated:
-            if request.user.is_staff or str(request.user.id) == user_id:
-                queryset = queryset.filter(user_id=user_id)
-        
-        # 세션 필터
-        if session_id:
-            queryset = queryset.filter(session_id=session_id)
-        
-        # 권한 확인 (본인 데이터만 조회)
-        if not request.user.is_staff and request.user.is_authenticated:
-            queryset = queryset.filter(user=request.user)
-        
-        # 통계 계산
-        total_count = queryset.count()
-        
-        if total_count == 0:
-            return Response({
-                "total_fish_count": 0,
-                "healthy_count": 0,
-                "diseased_count": 0,
-                "suspicious_count": 0,
-                "unknown_count": 0,
-                "health_percentage": 0,
-                "most_common_disease": None,
-                "risk_level": "low",
-                "average_confidence": 0,
-                "processing_time_avg": 0
-            })
-        
-        # 건강 상태별 개수
-        health_stats = queryset.values('overall_health').annotate(count=Count('id'))
-        health_counts = {item['overall_health']: item['count'] for item in health_stats}
-        
-        healthy_count = health_counts.get('healthy', 0)
-        diseased_count = health_counts.get('diseased', 0)
-        suspicious_count = health_counts.get('suspicious', 0)
-        unknown_count = health_counts.get('unknown', 0)
-        
-        health_percentage = (healthy_count / total_count) * 100
-        
-        # 가장 흔한 질병 찾기
-        most_common_disease = None
-        disease_stats = DiseaseDetection.objects.filter(
-            analysis__in=queryset
-        ).values('disease_type').annotate(count=Count('id')).order_by('-count')
-        
-        if disease_stats:
-            most_common_disease = disease_stats[0]['disease_type']
-        
-        # 위험 수준 결정
-        if health_percentage >= 80:
-            risk_level = "low"
-        elif health_percentage >= 50:
-            risk_level = "medium"
-        else:
-            risk_level = "high"
-        
-        # 평균값 계산
-        averages = queryset.aggregate(
-            avg_confidence=Avg('health_confidence'),
-            avg_processing_time=Avg('processing_time')
-        )
-        
-        summary_data = {
-            "total_fish_count": total_count,
-            "healthy_count": healthy_count,
-            "diseased_count": diseased_count,
-            "suspicious_count": suspicious_count,
-            "unknown_count": unknown_count,
-            "health_percentage": round(health_percentage, 2),
-            "most_common_disease": most_common_disease,
-            "risk_level": risk_level,
-            "average_confidence": round(averages['avg_confidence'] or 0, 3),
-            "processing_time_avg": round(averages['avg_processing_time'] or 0, 3)
-        }
-        
-        return Response(summary_data)
-        
-    except Exception as e:
-        logger.error(f"❌ 건강 상태 요약 생성 실패: {str(e)}")
-        return Response(
-            {"error": f"요약 생성 중 오류가 발생했습니다: {str(e)}"},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
-
-
-@extend_schema(
-    summary="지원되는 파일 형식 조회",
-    description="지원되는 이미지 파일 형식과 제한사항을 반환합니다.",
-    responses={200: SupportedFormatsSerializer},
-    tags=["시스템 정보"]
-)
-@api_view(['GET'])
-def get_supported_formats(request):
-    """지원되는 파일 형식 조회 API"""
-    return Response({
-        "supported_formats": list(SUPPORTED_IMAGE_TYPES),
-        "max_file_size_mb": MAX_FILE_SIZE // (1024 * 1024),
-        "max_batch_files": 10
-    })
-
-
-@extend_schema(
-    summary="AI 모델 상태 확인",
-    description="AI 모델 로드 상태를 확인합니다.",
-    responses={200: ModelStatusSerializer},
-    tags=["시스템 정보"]
-)
-@api_view(['GET'])
-@method_decorator(cache_page(60), name='dispatch')  # 1분 캐시
-def get_model_status(request):
-    """AI 모델 상태 확인 API"""
-    model_status = django_fish_analyzer.get_model_status()
-    return Response(model_status)
-
-
-@extend_schema(
-    summary="AI 모델 초기화",
-    description="AI 모델을 수동으로 초기화합니다.",
-    responses={200: "초기화 성공", 500: "초기화 실패"},
-    tags=["시스템 관리"]
-)
-@api_view(['POST'])
-@permission_classes([permissions.IsAdminUser])
-def initialize_models(request):
-    """AI 모델 초기화 API (관리자 전용)"""
-    try:
-        django_fish_analyzer.initialize_models()
-        return Response({
-            "success": True,
-            "message": "모델 초기화가 완료되었습니다.",
-            "model_loaded": django_fish_analyzer.model_loaded
-        })
-    except Exception as e:
-        logger.error(f"❌ 모델 초기화 실패: {str(e)}")
-        return Response(
-            {"success": False, "error": f"모델 초기화 실패: {str(e)}"},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
-
-
-class AnalysisHistoryListView(ListAPIView):
-    """분석 기록 조회 (페이지네이션 지원)"""
-    
-    serializer_class = FishAnalysisSerializer
-    pagination_class = StandardResultsSetPagination
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
-    
-    def get_queryset(self):
-        queryset = FishAnalysis.objects.select_related('user', 'session').prefetch_related(
-            'detection_boxes', 'diseases'
-        )
-        
-        # 본인 데이터만 조회 (관리자는 모든 데이터)
-        if not self.request.user.is_staff and self.request.user.is_authenticated:
-            queryset = queryset.filter(user=self.request.user)
-        
-        # 필터링
-        species = self.request.GET.get('species')
-        if species:
-            queryset = queryset.filter(fish_species=species)
-        
-        health = self.request.GET.get('health')
-        if health:
-            queryset = queryset.filter(overall_health=health)
-        
-        days = self.request.GET.get('days')
-        if days:
-            date_from = datetime.now() - timedelta(days=int(days))
-            queryset = queryset.filter(created_at__gte=date_from)
-        
-        return queryset.order_by('-created_at')
-
-
-class AnalysisDetailView(RetrieveAPIView):
-    """분석 결과 상세 조회"""
-    
-    serializer_class = FishAnalysisSerializer
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
-    lookup_field = 'id'
-    
-    def get_queryset(self):
-        queryset = FishAnalysis.objects.select_related('user', 'session').prefetch_related(
-            'detection_boxes', 'diseases'
-        )
-        
-        # 본인 데이터만 조회 (관리자는 모든 데이터)
-        if not self.request.user.is_staff and self.request.user.is_authenticated:
-            queryset = queryset.filter(user=self.request.user)
-        
-        return queryset
-
-
-class AnalysisSessionListView(ListAPIView):
-    """분석 세션 목록 조회"""
-    
-    serializer_class = AnalysisSessionSerializer
-    pagination_class = StandardResultsSetPagination
-    permission_classes = [permissions.IsAuthenticated]
-    
-    def get_queryset(self):
-        return AnalysisSession.objects.filter(
-            user=self.request.user
-        ).order_by('-created_at')
-
-
-class AnalysisSessionDetailView(RetrieveAPIView):
-    """분석 세션 상세 조회"""
-    
-    serializer_class = AnalysisSessionDetailSerializer
-    permission_classes = [permissions.IsAuthenticated]
-    lookup_field = 'id'
-    
-    def get_queryset(self):
-        return AnalysisSession.objects.filter(
-            user=self.request.user
-        ).prefetch_related('analyses__detection_boxes', 'analyses__diseases')
-
-
-# 모바일 앱 전용 API
-@extend_schema(
-    summary="모바일 앱용 생선 분석",
-    description="모바일 앱에서 Base64 이미지나 파일을 분석합니다.",
-    request=MobileAnalysisRequestSerializer,
-    responses={201: FishAnalysisSerializer},
-    tags=["모바일 API"]
-)
-@api_view(['POST'])
-@parser_classes([MultiPartParser, FormParser, JSONParser])
-@permission_classes([permissions.IsAuthenticatedOrReadOnly])
-def mobile_analyze_fish_image(request):
-    """모바일 앱용 생선 이미지 분석 API"""
-    
-    # 기본 분석 로직과 동일하지만 추가 메타데이터 처리
-    return analyze_fish_image(request)
-
-
-# 광어 질병 분석 전용 API
-@extend_schema(
-    summary="광어 질병 분석",
-    description="광어 이미지를 분석하여 YOLO 모델로 광어를 탐지하고 질병 의심 부분을 표기합니다.",
-    request={
-        'multipart/form-data': {
-            'type': 'object',
-            'properties': {
-                'image': {'type': 'string', 'format': 'binary', 'description': '분석할 광어 이미지'},
-            },
-            'required': ['image']
-        }
-    },
-    responses={
-        200: {
-            'type': 'object',
-            'properties': {
-                'success': {'type': 'boolean'},
-                'message': {'type': 'string'},
-                'flounder_detected': {'type': 'boolean'},
-                'flounder_count': {'type': 'integer'},
-                'disease_regions': {
-                    'type': 'array',
-                    'items': {
-                        'type': 'object',
-                        'properties': {
-                            'bbox': {'type': 'array', 'items': {'type': 'integer'}},
-                            'disease_type': {'type': 'string'},
-                            'disease_name': {'type': 'string'},
-                            'confidence': {'type': 'number'},
-                            'severity': {'type': 'string'},
-                            'description': {'type': 'string'}
-                        }
+                if result['success']:
+                    # AI 서버 통합 응답을 프론트엔드 기대 구조로 변환
+                    response_data = {
+                        'success': True,
+                        'message': result.get('message', '이미지 분석이 완료되었습니다.'),
+                        'overall_health_status': result.get('overall_health_status'),
+                        'total_detections': result.get('total_detections', 0),
+                        'yolo_confidence_avg': result.get('yolo_confidence_avg', 0.0),
+                        'detections': [],
+                        'model_info': result.get('model_info'),
+                        'image_info': result.get('image_info')
                     }
-                },
-                'annotated_image': {'type': 'string', 'description': 'Base64 encoded annotated image'},
-                'confidence_scores': {'type': 'object'}
-            }
-        },
-        400: "잘못된 요청",
-        500: "서버 오류"
-    },
-    tags=["광어 질병 분석"]
-)
-@api_view(['POST'])
-@parser_classes([MultiPartParser, FormParser])
-@permission_classes([permissions.AllowAny])  # 인증 불필요한 1회성 분석
-def analyze_flounder_disease(request):
-    """광어 질병 분석 API - 1회성 분석, 데이터베이스 저장 없음"""
+                    
+                    # AI 서버의 새로운 건강도 평가 데이터 추가
+                    if result.get('health_evaluation'):
+                        response_data['health_evaluation'] = result['health_evaluation']
+                    if result.get('health_grade_info'):
+                        response_data['health_grade_info'] = result['health_grade_info']
+                    
+                    # detections 배열을 프론트엔드가 기대하는 구조로 변환
+                    ai_detections = result.get('detections', [])
+                    health_evaluation = result.get('health_evaluation', {})
+                    health_grade_info = result.get('health_grade_info', {})
+                    image_info = result.get('image_info', {})
+                    
+                    # 이미지 크기 정보 추출
+                    img_width = image_info.get('width', 1)
+                    img_height = image_info.get('height', 1)
+                    
+                    logger.info(f"AI 서버 detections 원본: {ai_detections}")
+                    logger.info(f"이미지 크기: {img_width}x{img_height}")
+                    
+                    for i, detection in enumerate(ai_detections):
+                        logger.info(f"Detection {i}: {detection}")
+                        
+                        # AI 서버는 bbox를 중첩 객체로 반환하고 이미 정규화된 좌표임
+                        bbox = detection.get('bbox', {})
+                        
+                        converted_detection = {
+                            'bbox_x': bbox.get('x', 0) if isinstance(bbox, dict) else 0,
+                            'bbox_y': bbox.get('y', 0) if isinstance(bbox, dict) else 0,
+                            'bbox_width': bbox.get('width', 0) if isinstance(bbox, dict) else 0,
+                            'bbox_height': bbox.get('height', 0) if isinstance(bbox, dict) else 0,
+                            'confidence': detection.get('yolo_confidence', 0),
+                            'class_name': detection.get('class_name', ''),
+                            'disease': detection.get('disease')  # VGG 분류 결과
+                        }
+                        
+                        # 디버깅을 위한 로깅
+                        logger.info(f"AI 서버 bbox (이미 정규화됨): x={converted_detection['bbox_x']:.4f}, y={converted_detection['bbox_y']:.4f}, w={converted_detection['bbox_width']:.4f}, h={converted_detection['bbox_height']:.4f}")
+                        logger.info(f"confidence: {converted_detection['confidence']}")
+                        
+                        response_data['detections'].append(converted_detection)
+                    
+                    return JsonResponse(response_data, status=200)
+                else:
+                    # AI 서버 오류 처리 - 명확한 실패 메시지 반환
+                    error_type = result.get('error_type', 'analysis_error')
+                    error_message = result.get('error', '분석 중 오류가 발생했습니다.')
+                    
+                    # 에러 타입별 사용자 친화적 메시지 설정
+                    if error_type == 'fish_validation_failed' or '어류가 아닙니다' in error_message or 'is_fish' in error_message:
+                        user_message = '업로드하신 이미지는 어류가 아닙니다. 광어 사진을 업로드해 주세요.'
+                    elif error_type == 'multiple_fish_detected' or '여러 마리' in error_message:
+                        user_message = '한 마리의 광어가 선명하게 나온 사진을 업로드해 주세요. 여러 마리가 함께 있는 사진은 정확한 분석이 어렵습니다.'
+                    elif error_type == 'connection_error':
+                        user_message = 'AI 분석 서버에 연결할 수 없습니다. 잠시 후 다시 시도해주세요.'
+                    elif error_type == 'timeout':
+                        user_message = 'AI 분석 처리 시간이 초과되었습니다. 이미지 크기를 줄이거나 잠시 후 다시 시도해주세요.'
+                    elif error_type == 'compatibility_error':
+                        user_message = 'AI 모델 호환성 문제가 발생했습니다. 관리자에게 문의해주세요.'
+                    elif 'EfficientNet' in error_message or 'efficientnet' in error_message.lower() or error_type == 'efficientnet_model_unavailable' or error_type == 'efficientnet_classification_failed':
+                        user_message = '어종 질병 분류 모델을 사용할 수 없습니다. 학습된 모델이 로드되지 않았거나 손상되었을 수 있습니다.'
+                    elif 'YOLO' in error_message or 'yolo' in error_message.lower():
+                        user_message = '증상 탐지 모델에 문제가 발생했습니다. 현재 분석을 수행할 수 없습니다.'
+                    else:
+                        user_message = '어류 질병 분석에 실패했습니다. 잠시 후 다시 시도해주세요.'
+                    
+                    error_response = {
+                        'success': False,
+                        'message': user_message,
+                        'error': error_message,
+                        'error_type': error_type,
+                        'analysis_status': 'failed',
+                        'timestamp': timezone.now().isoformat()
+                    }
+                    
+                    # 호환성 문제인 경우 해결 방안 포함
+                    if 'solution' in result:
+                        error_response['solution'] = result['solution']
+                    
+                    # 기술적 상세 정보 (디버깅용)
+                    if hasattr(request, 'user_id') and str(request.user_id) in ['1', 'admin']:  # 관리자용
+                        error_response['technical_details'] = {
+                            'ai_server_response': result,
+                            'debug_info': 'AI 서버 응답 실패'
+                        }
+                    
+                    return JsonResponse(error_response, status=503)  # 서비스 일시 불가
+                    
+            finally:
+                # 임시 파일 정리
+                try:
+                    os.unlink(temp_file_path)
+                except:
+                    pass
+            
+        except Exception as e:
+            logger.error(f"분석 요청 처리 중 오류: {str(e)}")
+            return JsonResponse({
+                'success': False,
+                'error': '분석 요청 처리 중 오류가 발생했습니다.',
+                'error_detail': str(e)
+            }, status=500)
     
-    try:
-        # 이미지 파일 검증
-        if 'image' not in request.FILES:
-            return Response(
-                {"error": "이미지 파일이 필요합니다."},
-                status=status.HTTP_400_BAD_REQUEST
+    def get(self, request):
+        """사용자의 분석 목록 조회"""
+        if not hasattr(request, 'user_id') or not request.user_id:
+            return JsonResponse({'error': '사용자 인증이 필요합니다.'}, status=401)
+        
+        try:
+            # 페이징 파라미터
+            page = int(request.GET.get('page', 1))
+            page_size = int(request.GET.get('page_size', 10))
+            offset = (page - 1) * page_size
+            
+            # 사용자별 분석 목록 조회
+            queryset = FishAnalysis.objects.filter(**get_user_queryset_filter(request))
+            total_count = queryset.count()
+            analyses = queryset[offset:offset + page_size]
+            
+            # 직렬화
+            data = []
+            for analysis in analyses:
+                data.append({
+                    'id': analysis.id,
+                    'status': analysis.status,
+                    'overall_health_status': analysis.overall_health_status,
+                    'total_detections': analysis.total_detections,
+                    'yolo_confidence_avg': analysis.yolo_confidence_avg,
+                    'original_image_url': analysis.original_image.url if analysis.original_image else None,
+                    'processed_image_url': analysis.processed_image.url if analysis.processed_image else None,
+                    'created_at': analysis.created_at.isoformat(),
+                    'completed_at': analysis.completed_at.isoformat() if analysis.completed_at else None
+                })
+            
+            return JsonResponse({
+                'results': data,
+                'total_count': total_count,
+                'page': page,
+                'page_size': page_size,
+                'has_next': offset + page_size < total_count
+            })
+            
+        except Exception as e:
+            logger.error(f"분석 목록 조회 중 오류: {str(e)}")
+            return JsonResponse({'error': '분석 목록을 불러오는데 실패했습니다.'}, status=500)
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class FishAnalysisDetailView(View):
+    """특정 분석 결과 상세 조회"""
+    
+    def get(self, request, analysis_id):
+        """분석 결과 상세 조회"""
+        if not hasattr(request, 'user_id') or not request.user_id:
+            return JsonResponse({'error': '사용자 인증이 필요합니다.'}, status=401)
+        
+        try:
+            # 사용자 소유 분석만 조회 가능
+            analysis = FishAnalysis.objects.select_related('user').prefetch_related(
+                'detections'
+            ).get(
+                id=analysis_id,
+                **get_user_queryset_filter(request)
             )
+            
+            # 탐지 결과들
+            detections_data = []
+            for detection in analysis.detections.all():
+                detections_data.append({
+                    'id': detection.id,
+                    'bbox_x': detection.bbox_x,
+                    'bbox_y': detection.bbox_y,
+                    'bbox_width': detection.bbox_width,
+                    'bbox_height': detection.bbox_height,
+                    'yolo_confidence': detection.yolo_confidence,
+                    'disease_class': detection.disease_class,
+                    'disease_name_ko': detection.disease_name_ko,
+                    'vgg_confidence': detection.vgg_confidence,
+                    'severity': detection.severity,
+                    'description': detection.description,
+                    'treatment_recommendation': detection.treatment_recommendation,
+                    'cropped_image_url': detection.cropped_image.url if detection.cropped_image else None,
+                    'created_at': detection.created_at.isoformat()
+                })
+            
+            # 상세 정보
+            data = {
+                'id': analysis.id,
+                'status': analysis.status,
+                'overall_health_status': analysis.overall_health_status,
+                'total_detections': analysis.total_detections,
+                'yolo_confidence_avg': analysis.yolo_confidence_avg,
+                'original_image_url': analysis.original_image.url if analysis.original_image else None,
+                'processed_image_url': analysis.processed_image.url if analysis.processed_image else None,
+                'detections': detections_data,
+                'created_at': analysis.created_at.isoformat(),
+                'completed_at': analysis.completed_at.isoformat() if analysis.completed_at else None
+            }
+            
+            return JsonResponse(data)
+            
+        except FishAnalysis.DoesNotExist:
+            return JsonResponse({'error': '분석 결과를 찾을 수 없습니다.'}, status=404)
+        except Exception as e:
+            logger.error(f"분석 상세 조회 중 오류: {str(e)}")
+            return JsonResponse({'error': '분석 결과를 불러오는데 실패했습니다.'}, status=500)
+    
+    def delete(self, request, analysis_id):
+        """분석 결과 삭제"""
+        if not hasattr(request, 'user_id') or not request.user_id:
+            return JsonResponse({'error': '사용자 인증이 필요합니다.'}, status=401)
         
-        image_file = request.FILES['image']
-        
-        # 파일 타입 검증
-        if image_file.content_type not in SUPPORTED_IMAGE_TYPES:
-            return Response(
-                {"error": f"지원되지 않는 파일 형식입니다. 지원 형식: {', '.join(SUPPORTED_IMAGE_TYPES)}"},
-                status=status.HTTP_400_BAD_REQUEST
+        try:
+            # 사용자 소유 분석만 삭제 가능
+            analysis = FishAnalysis.objects.get(
+                id=analysis_id,
+                **get_user_queryset_filter(request)
             )
+            
+            # 관련 파일들 삭제
+            if analysis.original_image:
+                analysis.original_image.delete()
+            if analysis.processed_image:
+                analysis.processed_image.delete()
+                
+            # 크롭된 이미지들도 삭제
+            for detection in analysis.detections.all():
+                if detection.cropped_image:
+                    detection.cropped_image.delete()
+            
+            analysis_id_copy = analysis.id
+            analysis.delete()
+            
+            logger.info(f"분석 결과 삭제 완료: {analysis_id_copy}")
+            
+            return JsonResponse({'message': '분석 결과가 삭제되었습니다.'})
+            
+        except FishAnalysis.DoesNotExist:
+            return JsonResponse({'error': '분석 결과를 찾을 수 없습니다.'}, status=404)
+        except Exception as e:
+            logger.error(f"분석 결과 삭제 중 오류: {str(e)}")
+            return JsonResponse({'error': '분석 결과 삭제에 실패했습니다.'}, status=500)
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class EfficientNetClassificationView(View):
+    """EfficientNet 질병 분류 API - 전체 이미지 처리"""
+    
+    def post(self, request):
+        """EfficientNet을 사용한 전체 이미지 질병 분류"""
+        # 미들웨어에서 설정된 사용자 정보 확인
+        if not hasattr(request, 'user_id') or not request.user_id:
+            return JsonResponse({'error': '사용자 인증이 필요합니다.'}, status=401)
         
-        # 파일 크기 검증
-        if image_file.size > MAX_FILE_SIZE:
-            return Response(
-                {"error": f"파일 크기가 너무 큽니다. 최대 {MAX_FILE_SIZE // (1024*1024)}MB까지 허용됩니다."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        logger.info(f"🐟 광어 질병 분석 시작 - 파일명: {image_file.name}, 크기: {image_file.size} bytes")
-        
-        # 이미지 바이트 읽기
-        image_bytes = image_file.read()
-        
-        # 광어 질병 분석 수행
-        analysis_result = flounder_analyzer.analyze_flounder_image(image_bytes)
-        
-        logger.info(f"✅ 광어 질병 분석 완료 - 성공: {analysis_result['success']}")
-        
-        return Response(analysis_result, status=status.HTTP_200_OK)
-        
-    except Exception as e:
-        logger.error(f"❌ 광어 질병 분석 실패: {str(e)}")
-        return Response(
-            {"error": f"분석 중 오류가 발생했습니다: {str(e)}"},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
+        try:
+            # 업로드된 이미지 파일 확인
+            if 'image' not in request.FILES:
+                return JsonResponse({'error': '이미지 파일이 필요합니다.'}, status=400)
+            
+            image_file = request.FILES['image']
+            
+            logger.info(f"EfficientNet 전체 이미지 분류 요청 - 파일: {image_file.name}")
+            
+            # 임시 파일로 저장
+            import tempfile
+            import os
+            
+            with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(image_file.name)[1]) as temp_file:
+                for chunk in image_file.chunks():
+                    temp_file.write(chunk)
+                temp_file_path = temp_file.name
+            
+            try:
+                # AI 서버 EfficientNet 분류 전용 엔드포인트 호출
+                from .services.ai_client import ai_client
+                result = ai_client.classify_full_image_sync(temp_file_path)
+            finally:
+                # 임시 파일 정리
+                if os.path.exists(temp_file_path):
+                    os.unlink(temp_file_path)
+            
+            if result['success']:
+                # AI 서버 응답을 그대로 전달 (불필요한 변환 제거)
+                return JsonResponse(result, status=200)
+            else:
+                # EfficientNet 전체 이미지 분류 실패 처리
+                error_type = result.get('error_type', 'classification_error')
+                error_message = result.get('error', 'EfficientNet 전체 이미지 분류 중 오류가 발생했습니다.')
+                
+                # 에러 타입별 사용자 친화적 메시지
+                if error_type == 'connection_error':
+                    user_message = 'AI 분석 서버에 연결할 수 없습니다.'
+                elif error_type == 'timeout':
+                    user_message = 'EfficientNet 질병 분류 처리 시간이 초과되었습니다.'
+                elif 'EfficientNet' in error_message or 'model' in error_message.lower():
+                    user_message = '질병 분류 모델을 사용할 수 없습니다. 현재 분석을 수행할 수 없습니다.'
+                else:
+                    user_message = '질병 분류에 실패했습니다. 현재 이 기능을 사용할 수 없습니다.'
+                
+                return JsonResponse({
+                    'success': False,
+                    'message': user_message,
+                    'error': error_message,
+                    'error_type': error_type,
+                    'analysis_status': 'classification_failed'
+                }, status=503)
+            
+        except Exception as e:
+            logger.error(f"EfficientNet 전체 이미지 분류 요청 처리 중 오류: {str(e)}")
+            return JsonResponse({
+                'success': False,
+                'error': 'EfficientNet 전체 이미지 분류 요청 처리 중 오류가 발생했습니다.',
+                'error_detail': str(e)
+            }, status=500)

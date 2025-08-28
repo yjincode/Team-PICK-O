@@ -2,7 +2,6 @@ import os
 import uuid
 import json
 from datetime import datetime
-from django.db.models.fields import RegisterLookupMixin
 from django.views import View
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
@@ -28,7 +27,6 @@ from fish_registry.serializers import FishTypeSerializer
 from business.models import Business
 from business.serializers import BusinessSerializer
 from .models import DocumentRequest
-from datetime import date
 
 @method_decorator(csrf_exempt, name='dispatch')
 class OrderUploadView(View):
@@ -1472,44 +1470,3 @@ class UpdateOrderView(View):
                 'error': '주문 수정 처리 중 오류 발생',
                 'details': str(e)
             }, status=500)
-
-
-@api_view(['GET'])
-def predict_overdue(request):
-    results = []
-    today = date.today()
-    for b in Business.objects.all():
-        try:
-            oldest_unpaid_order = (
-                Order.objects.filter(business_id=b.id)
-                .order_by('order_datetime')
-                .first()
-            )
-            if oldest_unpaid_order:
-                overdue_days = (today - oldest_unpaid_order.order_datetime.date()).days
-            else:
-                overdue_days = 0
-
-            if overdue_days > 20:
-                risk = "높음"
-            elif overdue_days > 10:
-                risk = "보통"
-            else:
-                risk = "낮음"
-            
-            results.append({
-                "id": b.id,
-                "business_name": b.business_name,
-                "risk": risk,
-                "overdue_days": overdue_days,
-            })
-        except Exception as e:
-            print(f"거래처 {b.id}({b.business_name}) 처리 중 오류: {e}")
-            results.append({
-                "id": b.id,
-                "business_name": b.business_name,
-                "risk": "오류",
-                "error": str(e),
-            })
-    return Response(results) 
-

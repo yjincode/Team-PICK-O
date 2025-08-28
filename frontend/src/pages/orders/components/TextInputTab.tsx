@@ -1,4 +1,7 @@
-
+/**
+ * 텍스트 입력 탭 컴포넌트
+ * 텍스트를 입력하여 주문을 등록하는 탭입니다.
+ */
 import { useState, useEffect } from "react"
 import { Button } from "../../../components/ui/button"
 import { Label } from "../../../components/ui/label"
@@ -8,7 +11,7 @@ import { Input } from "../../../components/ui/input"
 import { businessApi, fishTypeApi } from "../../../lib/api"
 import { parseVoiceOrderWithAPI, validateAndCompleteOrder } from "../../../utils/orderParser"
 import type { Business, FishType } from "../../../types"
-import { fetchParsedOrder } from "../../../utils/orderParser"
+
 interface ParsedOrderData {
   business_name?: string;
   phone_number?: string;
@@ -36,7 +39,7 @@ interface TextInputTabProps {
   onOrderParsed?: (orderData: ParsedOrderData) => void
 }
 
- const TextInputTab: React.FC<TextInputTabProps> = ({
+const TextInputTab: React.FC<TextInputTabProps> = ({
   textInput,
   setTextInput,
   onParse: _onParse,
@@ -52,19 +55,7 @@ interface TextInputTabProps {
   const [fishTypes, setFishTypes] = useState<FishType[]>([])
   const [parsedOrder, setParsedOrder] = useState<ParsedOrderData | null>(null)
   const [isLocalProcessing, setIsLocalProcessing] = useState<boolean>(false)
-  useEffect(() => {
-    if (parsedOrder?.business_name && businesses.length > 0) {
-      const matched = businesses.find(
-        (b) =>
-          b.business_name === parsedOrder.business_name &&
-          (!parsedOrder.phone_number || b.phone_number === parsedOrder.phone_number)
-      );
-      if (matched && matched.id !== selectedBusinessId) {
-        onBusinessChange?.(matched.id);
-      }
-    }
-  }, [parsedOrder, businesses, onBusinessChange, selectedBusinessId]);
-  
+
   // 거래처 목록 로드
   useEffect(() => {
     const fetchBusinesses = async () => {
@@ -121,36 +112,12 @@ interface TextInputTabProps {
     setParsedOrder(null)
     
     try {
-      const basicOrderData = await fetchParsedOrder(textInput) // API 연동 버전 사용
+      const basicOrderData = await parseVoiceOrderWithAPI(textInput) // API 연동 버전 사용
       
       if (basicOrderData.items && basicOrderData.items.length > 0) {
         const validatedOrderData = validateAndCompleteOrder(basicOrderData)
-        // ✅ 거래처 자동 매칭
-if (validatedOrderData.business_name) {
-  const matched = businesses.find(
-    (b) =>
-      b.business_name === validatedOrderData.business_name &&
-      (!validatedOrderData.phone_number || b.phone_number === validatedOrderData.phone_number)
-  )
-  if (matched) {
-    onBusinessChange?.(matched.id)
-  }
-}
-
+        
         setParsedOrder(validatedOrderData)
-        const response = await businessApi.getAll()
-        let businessData: Business[] = []
-        
-        if (response && Array.isArray(response)) {
-          businessData = response
-        } else if (response && Array.isArray(response.results)) {
-          businessData = response.results
-        } else if (response && Array.isArray(response.results)) {
-          businessData = response.results
-        }
-        
-        setBusinesses(businessData)
-        console.log('✅ 주문 데이터:', validatedOrderData)
         onOrderParsed?.(validatedOrderData)
       } else {
         console.warn('⚠️ 주문 품목을 찾을 수 없습니다:', textInput)

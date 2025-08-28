@@ -108,10 +108,38 @@ services:
       retries: 5
       start_period: 30s
 
-
+  # AI Server (FastAPI - YOLO + VGG)
+  aiserver:
+    image: ${AISERVER_IMAGE:-python:3.11-slim}
+    container_name: teamPicko-aiserver
+    ports:
+      - "8001:8001"
+    environment:
+      - PYTHONPATH=/app
+      - PYTHONUNBUFFERED=1
+      - TF_CPP_MIN_LOG_LEVEL=2
+      - CUDA_VISIBLE_DEVICES=""
+      # VGG 모델 설정
+      - VGG16_MODEL_PATH=/app/models/vgg16/best_model.h5
+      - YOLO_MODEL_PATH=/app/models/yolo/yolo11n.pt
+    volumes:
+      # AI 모델 파일들을 호스트에서 마운트 (배포 시 별도 설정 필요)
+      - aiserver-models:/app/models
+      - aiserver-logs:/app/logs
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
 
 volumes:
   postgres-data:
     name: teamPicko-postgres-data
   backend-logs:
     name: teamPicko-backend-logs
+  aiserver-models:
+    name: teamPicko-aiserver-models
+  aiserver-logs:
+    name: teamPicko-aiserver-logs

@@ -48,6 +48,7 @@ const menuItems: MenuItem[] = [
     items: [
       { title: "어종 재고", url: "/inventory" },
       { title: "어종 관리", url: "/inventory/fish-form" },
+      { title: "AI 질병분석", url: "/inventory/disease-analysis" },
     ],
   },
   {

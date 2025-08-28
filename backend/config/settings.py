@@ -17,6 +17,9 @@ load_dotenv(BASE_DIR / '.env')
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
+# AI Server settings
+AI_SERVER_URL = os.getenv('AI_SERVER_URL', 'http://localhost:8002')
+
 # Tesseract OCR Configuration
 TESSERACT_CMD = os.getenv('TESSERACT_CMD', '/usr/bin/tesseract')
 TESSERACT_TESSDATA_DIR = os.getenv('TESSERACT_TESSDATA_DIR', '/usr/share/tesseract-ocr/4.00/tessdata')
@@ -78,7 +81,7 @@ THIRD_PARTY_APPS = [
 LOCAL_APPS = [
     'core',  # 공통 모듈 (인증 등)
     'business',  # 고객 관리 앱
-    # 'fish_analysis',  # 광어 질병 분석 기능 (PyTorch 의존성으로 임시 비활성화)
+    'fish_analysis',  # 어류 질병 분석 (YOLO11 + VGG16)
     'accounts',
     'dashboard',
     'order',
@@ -270,8 +273,16 @@ FIREBASE_ADMIN_CREDENTIALS = os.path.join(BASE_DIR, 'firebase-admin-key.json')
 
 # Firebase Admin SDK 초기화 확인
 FIREBASE_ADMIN_INITIALIZED = False
-if os.path.exists(FIREBASE_ADMIN_CREDENTIALS):
-    FIREBASE_ADMIN_INITIALIZED = True
+try:
+    if os.path.exists(FIREBASE_ADMIN_CREDENTIALS):
+        FIREBASE_ADMIN_INITIALIZED = True
+        print("✅ Firebase Admin SDK 인증서 파일 발견")
+    else:
+        print("⚠️ Firebase Admin SDK 인증서 파일이 없습니다.")
+        print(f"   경로: {FIREBASE_ADMIN_CREDENTIALS}")
+        print("   Firebase Console에서 Service Account Key를 다운로드하세요.")
+except Exception as e:
+    print(f"❌ Firebase Admin SDK 설정 오류: {e}")
 
 # REST Framework configuration
 REST_FRAMEWORK = {
@@ -407,7 +418,6 @@ WEATHER_API_KEY = os.getenv('WEATHER_API_KEY')
 KOSIS_API_KEY = os.getenv('KOSIS_API_KEY')
 KHOA_API_KEY = os.getenv('KHOA_API_KEY')  # 한국해양조사원 API 키
 AGRICULTURE_API_KEY = os.getenv('AGRICULTURE_API_KEY')  # 농림축산식품부 API 키
-NIFS_API_KEY = os.getenv('NIFS_API_KEY')  # 국립수산과학원 API 키
 
 # Create necessary directories
 os.makedirs(BASE_DIR / 'logs', exist_ok=True)

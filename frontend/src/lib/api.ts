@@ -34,7 +34,7 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000
 // axios 인스턴스 생성
 const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 10000,
+  timeout: 10000, // 기본 타임아웃
   headers: {
     'Content-Type': 'application/json',
   },
@@ -231,11 +231,6 @@ export const businessApi = {
   delete: async (id: number): Promise<ApiResponse<void>> => {
     const response = await api.delete(`/business/customers/${id}/`)
     return response.data
-  },
-
-  getOverdueRisk: async (): Promise<any[]> => {
-    const response = await api.get('/business/predict_overdue/');
-    return response.data;
   },
 }
 
@@ -665,6 +660,111 @@ export const sttApi = {
     }
 
     return await response.json()
+  },
+}
+
+// 어류 질병 분석 API
+export const fishAnalysisApi = {
+  // 이미지 분석 요청 - AI 서버 메인 파이프라인 사용
+  analyze: async (imageFile: File): Promise<{
+    success: boolean;
+    message?: string;
+    overall_health_status?: string;
+    health_evaluation?: any;
+    health_grade_info?: any;
+    total_detections?: number;
+    yolo_confidence_avg?: number;
+    detections?: any[];
+    model_info?: any;
+    image_info?: any;
+    error?: string;
+    error_type?: string;
+    solution?: any;
+    vgg_available?: boolean;
+  }> => {
+    const formData = new FormData()
+    formData.append('image', imageFile)
+
+    // AI 서버의 메인 분석 파이프라인 사용 (ViT 검증 → 배경 제거 → YOLO + VGG)
+    const response = await api.post('/analysis/predict/', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+      timeout: 120000, // 분석 요청은 2분 타임아웃
+    })
+
+    return response.data
+  },
+
+  // 분석 목록 조회
+  getAll: async (params?: { 
+    page?: number; 
+    page_size?: number;
+  }): Promise<{
+    results: Array<{
+      id: number;
+      status: string;
+      overall_health_status: string;
+      total_detections: number;
+      yolo_confidence_avg: number;
+      original_image_url: string;
+      processed_image_url: string;
+      created_at: string;
+      completed_at: string;
+    }>;
+    total_count: number;
+    page: number;
+    page_size: number;
+    has_next: boolean;
+  }> => {
+    const response = await api.get('/fish-analysis/analyze/', { params })
+    return response.data
+  },
+
+  // 분석 결과 상세 조회
+  getById: async (analysisId: number): Promise<{
+    id: number;
+    status: string;
+    overall_health_status: string;
+    total_detections: number;
+    yolo_confidence_avg: number;
+    original_image_url: string;
+    processed_image_url: string;
+    detections: Array<{
+      id: number;
+      bbox_x: number;
+      bbox_y: number;
+      bbox_width: number;
+      bbox_height: number;
+      yolo_confidence: number;
+      disease_class: string;
+      disease_name_ko: string;
+      vgg_confidence: number;
+      severity: string;
+      description: string;
+      treatment_recommendation: string;
+      cropped_image_url: string;
+      created_at: string;
+    }>;
+    created_at: string;
+    completed_at: string;
+    // 오류 관련 필드
+    error_type?: string;
+    solution?: {
+      steps: string[];
+      technical_details: string;
+    };
+  }> => {
+    const response = await api.get(`/fish-analysis/analyze/${analysisId}/`)
+    return response.data
+  },
+
+  // 분석 결과 삭제
+  delete: async (analysisId: number): Promise<{
+    message: string;
+  }> => {
+    const response = await api.delete(`/fish-analysis/analyze/${analysisId}/`)
+    return response.data
   },
 }
 
