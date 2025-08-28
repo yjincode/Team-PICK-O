@@ -33,4 +33,5 @@ urlpatterns = [
     # STT 관련 API
     path('transcription/<uuid:transcription_id>/status/', TranscriptionStatusView.as_view(), name='transcription-status'),
     path('transcription/<uuid:transcription_id>/create-order/', TranscriptionToOrderView.as_view(), name='transcription-to-order'),
+
 ]

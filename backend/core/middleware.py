@@ -23,6 +23,9 @@ class JWTAuthMiddleware:
         '/api/v1/payments/toss/request/',  # 결제 요청 (pending Payment 생성)
         '/api/v1/payments/toss/confirm/',  # 결제 확정 (웹훅용)
 
+        # 기상청 날씨 및 경보 API (인증 불필요)
+        '/api/v1/dashboard/weather/',  # 기상청 API 전체 경로 제외
+
         '/static/',
         '/media/',
         '/api/docs/',

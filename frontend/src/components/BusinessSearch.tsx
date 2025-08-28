@@ -9,33 +9,47 @@ import { Card } from "./ui/card"
 import { Search, User, Phone, Check } from "lucide-react"
 import type { Business } from "../types"
 import { formatPhoneNumber } from "../utils/phoneFormatter";
+import { businessApi, orderApi } from "../lib/api"
 
 interface BusinessSearchProps {
   onSelect: (business: Business) => void;
   onClose: () => void;
 }
 
-// 목업 거래처 데이터 제거 - API에서 가져올 예정
-const mockBusinesses: Business[] = []
-
 const BusinessSearch: React.FC<BusinessSearchProps> = ({ onSelect, onClose }) => {
   const [searchTerm, setSearchTerm] = useState("")
   const [filteredBusinesses, setFilteredBusinesses] = useState<Business[]>([])
   const [selectedBusiness, setSelectedBusiness] = useState<Business | null>(null)
+  const [loading, setLoading] = useState(false)
 
   // 검색어에 따른 거래처 필터링
   useEffect(() => {
     if (!searchTerm.trim()) {
-      setFilteredBusinesses(mockBusinesses)
+      setFilteredBusinesses([])
       return
     }
 
-    const filtered = mockBusinesses.filter(business => 
-      business.business_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      business.phone_number.includes(searchTerm) ||
-      business.address?.toLowerCase().includes(searchTerm.toLowerCase())
-    )
-    setFilteredBusinesses(filtered)
+    const fetchBusinesses = async () => {
+      try {
+        setLoading(true)
+        const response = await businessApi.getAll({ page: 1, page_size: 20 })
+        // 서버에서 필터링이 안 된 경우 프론트에서 검색어 필터
+        const filtered = response.results.filter((b) =>
+          b.business_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          b.phone_number.includes(searchTerm) ||
+          b.address?.toLowerCase().includes(searchTerm.toLowerCase())
+        )
+        setFilteredBusinesses(filtered)
+      } catch (err) {
+        console.error("거래처 검색 오류:", err)
+        setFilteredBusinesses([])
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    const debounce = setTimeout(fetchBusinesses, 300) // 0.3초 디바운스
+    return () => clearTimeout(debounce)
   }, [searchTerm])
 
   const handleSelect = (business: Business) => {
@@ -69,6 +83,51 @@ const BusinessSearch: React.FC<BusinessSearchProps> = ({ onSelect, onClose }) =>
               className="pl-10"
             />
           </div>
+
+
+{/* 검색 결과 */}
+<div className="space-y-2 max-h-96 overflow-y-auto">
+            {loading && <div className="text-gray-500 text-center py-4">검색 중...</div>}
+
+            {!loading && filteredBusinesses.length === 0 && searchTerm && (
+              <div className="text-center text-gray-500 py-4">검색 결과가 없습니다.</div>
+            )}
+
+            {filteredBusinesses.map((business) => (
+              <div
+                key={business.id}
+                className={`p-3 border rounded-lg cursor-pointer transition-colors ${
+                  selectedBusiness?.id === business.id
+                    ? "border-blue-500 bg-blue-50"
+                    : "border-gray-200 hover:border-gray-300"
+                }`}
+                onClick={() => handleSelect(business)}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center space-x-2 mb-1">
+                      <User className="h-4 w-4 text-gray-400" />
+                      <span className="font-medium">{business.business_name}</span>
+                      {selectedBusiness?.id === business.id && (
+                        <Check className="h-4 w-4 text-blue-500" />
+                      )}
+                    </div>
+                    <div className="flex items-center space-x-2 text-sm text-gray-600">
+                      <Phone className="h-3 w-3" />
+                      <span>{formatPhoneNumber(business.phone_number)}</span>
+                    </div>
+                    {business.address && (
+                      <div className="text-sm text-gray-500 mt-1">📍 {business.address}</div>
+                    )}
+                    {business.memo && (
+                      <div className="text-sm text-gray-500 mt-1">📝 {business.memo}</div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
 
           {/* 거래처 목록 */}
           <div className="space-y-2 max-h-96 overflow-y-auto">

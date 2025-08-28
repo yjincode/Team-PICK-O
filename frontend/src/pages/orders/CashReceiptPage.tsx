@@ -63,13 +63,11 @@ const CashReceiptPage: React.FC = () => {
         
         // 1. 주문 정보 조회
         const orderResponse = await orderApi.getById(parseInt(id))
-        console.log('📦 주문 정보 조회 결과:', orderResponse)
         setOrder(orderResponse)
         
         // 2. 사용자 정보 조회 (공급자 정보)
                  try {
            const userResponse: any = await authApi.getCurrentUser()
-           console.log('👤 사용자 정보 조회 결과:', userResponse)
            if (userResponse.success && userResponse.data) {
              const userData = userResponse.data
              const supplierData = {
@@ -80,11 +78,9 @@ const CashReceiptPage: React.FC = () => {
                business_type: '수산물 도매', // 기본값
                business_category: '수산물' // 기본값
              }
-             console.log('🏢 공급자 정보 설정:', supplierData)
              setSupplierInfo(supplierData)
            } else {
              // success: false인 경우 기본 공급자 정보 설정
-             console.log('🔄 success: false - 기본 공급자 정보 설정 시작')
              const defaultSupplier = {
                business_name: '곰표수산',
                business_number: '123-45-67890',
@@ -93,9 +89,7 @@ const CashReceiptPage: React.FC = () => {
                business_type: '수산물 도매',
                business_category: '수산물'
              }
-             console.log('🏢 기본 공급자 정보 설정:', defaultSupplier)
              setSupplierInfo(defaultSupplier)
-             console.log('✅ setSupplierInfo 호출 완료')
            }
          } catch (error) {
            console.error('사용자 정보 조회 실패:', error)
@@ -108,7 +102,6 @@ const CashReceiptPage: React.FC = () => {
              business_type: '수산물 도매',
              business_category: '수산물'
            }
-           console.log('🏢 기본 공급자 정보 설정:', defaultSupplier)
            setSupplierInfo(defaultSupplier)
          }
         
@@ -122,22 +115,13 @@ const CashReceiptPage: React.FC = () => {
             business_type: '수산물 도매', // 주문에 업태 정보가 없음
             business_category: '수산물' // 주문에 종목 정보가 없음
           }
-          console.log('🛒 공급받는자 정보 설정:', buyerData)
           setBuyerInfo(buyerData)
         }
         
         // 4. 실제 문서 요청 정보 조회
         try {
-          const docRequests = await getDocumentRequests(parseInt(id))
-          console.log('📋 문서 요청 조회 결과:', docRequests)
-          
+          const docRequests = await getDocumentRequests(parseInt(id))          
           if (docRequests.cash_receipt) {
-            // 실제 현금영수증 요청 데이터가 있는 경우
-            console.log('✅ 현금영수증 요청 데이터 발견:', docRequests.cash_receipt)
-            console.log('🔍 cash_receipt 객체의 모든 키:', Object.keys(docRequests.cash_receipt))
-            console.log('🔍 identifier 값:', (docRequests.cash_receipt as any).identifier)
-            console.log('🔍 receipt_type 값:', (docRequests.cash_receipt as any).receipt_type)
-            console.log('🔍 special_request 값:', (docRequests.cash_receipt as any).special_request)
             setDocumentRequest({
               id: docRequests.cash_receipt.id,
               status: docRequests.cash_receipt.status,
@@ -148,7 +132,6 @@ const CashReceiptPage: React.FC = () => {
             })
           } else {
             // 현금영수증 요청이 없는 경우 기본 정보
-            console.log('⚠️ 현금영수증 요청 데이터 없음, 기본 정보 설정')
             setDocumentRequest({
               id: parseInt(id),
               status: 'completed',
@@ -174,11 +157,6 @@ const CashReceiptPage: React.FC = () => {
         console.error('데이터 조회 실패:', error)
       } finally {
         setLoading(false)
-        // 상태 설정 완료 후 디버깅
-        console.log('🔍 상태 설정 완료 후 확인:')
-        console.log('  - order:', order)
-        console.log('  - documentRequest:', documentRequest)
-        console.log('  - supplierInfo:', supplierInfo)
         console.log('  - buyerInfo:', buyerInfo)
       }
     }

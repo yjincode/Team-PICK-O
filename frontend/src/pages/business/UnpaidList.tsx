@@ -1,171 +1,377 @@
 /**
  * 미수금 내역 페이지
- * 미수금 현황을 조회하고 관리하는 페이지입니다
+ * 특정 거래처의 미결제(결제 상태 pending) 주문 목록을 보여줍니다
  */
 import React, { useState, useEffect } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card"
+import { useNavigate, useParams } from 'react-router-dom'
+import { format } from "date-fns"
+import { ko } from "date-fns/locale"
+import { AlertTriangle, CreditCard, ChevronLeft, ChevronRight, Phone, MapPin, Building2 } from "lucide-react"
+
 import { Badge } from "../../components/ui/badge"
-import { DollarSign, Calendar } from "lucide-react"
-import { Label } from "../../components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select"
-import type { Business, UnpaidOrder } from "../../types"
-import { businessApi, arApi } from "../../lib/api"
+import { Button } from "../../components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../components/ui/table"
+import { OrderListItem } from "../../types"
+import { OrderStatusBadge, PaymentStatusBadge } from "../../components/common/StatusBadges"
+import { businessApi, orderApi } from "../../lib/api"
 
- 
- 
 const UnpaidList: React.FC = () => {
-	// 금액 포맷팅 함수
-	const formatCurrency = (amount: number): string => `₩${amount.toLocaleString()}`
-	const [businesses, setBusinesses] = useState<Business[]>([])
-	const [selectedBusinessId, setSelectedBusinessId] = useState<number | null>(null)
-	const [isLoadingBusinesses, setIsLoadingBusinesses] = useState<boolean>(false)
-	const [isLoadingOrders, setIsLoadingOrders] = useState<boolean>(false)
-	const [unpaidOrders, setUnpaidOrders] = useState<UnpaidOrder[]>([])
+	const navigate = useNavigate()
+	const { businessId } = useParams<{ businessId: string }>()
+	const [businessName, setBusinessName] = useState<string>('')
+	const [orders, setOrders] = useState<OrderListItem[]>([])
+	const [loading, setLoading] = useState(true)
+	const [currentPage, setCurrentPage] = useState(1)
+	const [itemsPerPage] = useState(10)
+	const [totalCount, setTotalCount] = useState(0)
+	const [totalPages, setTotalPages] = useState(0)
+	const [business, setBusiness] = useState<any>(null)
 
-	// 거래처 목록 가져오기
 	useEffect(() => {
-		const fetchBusinesses = async () => {
+		const fetchOrders = async () => {
+			if (!businessId) {
+				setOrders([])
+				setLoading(false)
+				setBusiness(null)
+				return
+			}
 			try {
-				setIsLoadingBusinesses(true)
-				const response = await businessApi.getAll()
-				let businessData: Business[] = []
-				if (response && Array.isArray(response.results)) {
-					businessData = response.results
-				} else {
-					console.warn('알 수 없는 거래처 응답 형태:', response)
+				setLoading(true)
+				const params: any = {
+					page: currentPage,
+					page_size: itemsPerPage,
+					business_id: businessId,
+					payment_status: 'pending'
 				}
-				setBusinesses(businessData)
-			} catch (error) {
-				console.error('거래처 목록 가져오기 실패:', error)
-				setBusinesses([])
-			} finally {
-				setIsLoadingBusinesses(false)
-			}
-		}
-		fetchBusinesses()
-	}, [])
+				const response = await orderApi.getAll(params)
+				// 서버 응답 후 프론트에서 취소/환불 건 제거
+				const filterOutCancelledAndRefunded = (list: OrderListItem[]) =>
+					(list || []).filter((o) => o.order_status !== 'cancelled' && (o.payment ? o.payment.payment_status !== 'refunded' : true))
 
-	// 선택된 거래처의 미결제 주문 목록 가져오기
-	useEffect(() => {
-		const fetchUnpaid = async (businessId: number) => {
-			try {
-				setIsLoadingOrders(true)
-				const orders = await arApi.getUnpaidOrders({ businessId })
-				setUnpaidOrders(orders || [])
+				if ((response as any).pagination) {
+					const rawList: OrderListItem[] = (response as any).data || []
+					const filtered = filterOutCancelledAndRefunded(rawList)
+					setOrders(filtered)
+					setTotalCount((response as any).pagination.total_count)
+					setTotalPages((response as any).pagination.total_pages)
+				} else {
+					const ordersData: OrderListItem[] = (response as any).data || []
+					const filtered = filterOutCancelledAndRefunded(Array.isArray(ordersData) ? ordersData : [])
+					setOrders(filtered)
+				}
+			
+				try {
+					const businessRes = await businessApi.getById(businessId)
+					console.log("API Response:", businessRes)
+					setBusiness(businessRes)
+				  } catch (err) {
+					console.error("거래처 정보 가져오기 실패:", err)
+					setBusiness(null)
+				  }
 			} catch (error) {
-				console.error('미결제 주문 가져오기 실패:', error)
-				setUnpaidOrders([])
+				console.error('미수금 주문 목록 가져오기 실패:', error)
+				setOrders([])
 			} finally {
-				setIsLoadingOrders(false)
+				setLoading(false)
 			}
 		}
-		if (selectedBusinessId) {
-			fetchUnpaid(selectedBusinessId)
-		} else {
-			setUnpaidOrders([])
+		fetchOrders()
+	}, [businessId, currentPage, itemsPerPage])
+
+	// 카카오맵 초기화
+	useEffect(() => {
+		if (!business?.address) return;
+		if (typeof window === 'undefined') return;
+	  
+		const loadKakaoMap = () => {
+		  if (!(window as any).kakao) {
+			const script = document.createElement('script');
+			script.src = `//dapi.kakao.com/v2/maps/sdk.js?appkey=345d37cd125a6cd69d4a819d26ed9dc0&libraries=services&autoload=false`;
+			script.async = true;
+			script.onload = () => {
+				(window as any).kakao.maps.load(() => {
+					initMap();
+				  });
+			};
+			document.head.appendChild(script);
+		  } else if ((window as any).kakao.maps) {
+			initMap();
+		  }
+		};
+	  
+		loadKakaoMap();
+	  }, [business]);
+
+	const initMap = () => {
+		const { kakao } = window as any;	
+		if (!business?.address || !(window as any).kakao) return
+
+		const mapContainer = document.getElementById('map')
+		if (!mapContainer) return
+
+		const mapOption = {
+			center: new (window as any).kakao.maps.LatLng(37.5665, 126.9780), // 서울 시청 좌표 (기본값)
+			level: 3
 		}
-	}, [selectedBusinessId])
+
+		const map = new (window as any).kakao.maps.Map(mapContainer, mapOption)
+
+		// 주소-좌표 변환 객체 생성
+		const geocoder = new (window as any).kakao.maps.services.Geocoder()
+
+		// 주소로 좌표 검색
+		geocoder.addressSearch(business.address, function(result: any, status: any) {
+			if (status === (window as any).kakao.maps.services.Status.OK) {
+				const coords = new (window as any).kakao.maps.LatLng(result[0].y, result[0].x)
+
+				// 결과값으로 받은 위치를 마커로 표시
+				const marker = new kakao.maps.Marker({
+					map: map,
+					position: coords,
+				  });
+				  
+				// 지도의 중심을 결과값으로 받은 위치로 이동
+				map.setCenter(coords)
+
+				// 인포윈도우로 장소에 대한 설명 표시
+				const infowindow = new (window as any).kakao.maps.InfoWindow({
+					content: `<div style="padding:5px;font-size:12px;">${business.business_name}</div>`
+				})
+				infowindow.open(map, marker)
+			}
+		})
+	}
+
+	const handleViewDetail = (orderId: number) => {
+		navigate(`/orders/${orderId}`)
+	}
+
+	const handlePayment = (orderId: number) => {
+		navigate(`/orders/${orderId}/payment`)
+	}
+
+	const startIndex = (currentPage - 1) * itemsPerPage
+	const endIndex = Math.min(startIndex + itemsPerPage, totalCount)
+
+// 필터링된 목록 기준으로 표기 (환불/취소 제외)
+	const formatCurrency = (amount: number): string => `₩${amount.toLocaleString()}`
+
 	return (
-		 <div className="space-y-4 sm:space-y-6">
-			{/* 페이지 헤더 */}
-			<div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-				<div>
-					<h1 className="text-2xl sm:text-3xl font-bold text-gray-900">고객 주문 내역</h1>
-					<p className="text-sm sm:text-base text-gray-600 mt-1">고객별 주문 내역</p>
+		<div className="min-h-screen bg-gray-50">
+			<header className="px-6 py-4 bg-white border-b border-gray-200">
+				<div className="flex flex-row gap-2">
+					<h1 className="text-2xl sm:text-3xl font-bold text-gray-900">고객 상세 페이지</h1>
+					<Button 
+    				variant="outline" 
+    				size="sm" 
+					className="w-10 h-10 p-0  ml-auto "
+   					 onClick={() => navigate(-1)} // 한 단계 뒤로 이동
+  				>
+    			<ChevronLeft className="h-4 w-4 mr-1" /></Button>
 				</div>
-				</div>
-				
-				<div className="flex items-center gap-2 mb-3 justify-center">
-					{/* <h3 className={`text-lg font-semibold text-blue-500`}>
-						거래처 선택
-					</h3> */}
-				
-				<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-					<div className="space-y-2">
-						<Label htmlFor="business-select">거래처</Label>
-						<Select 
-							value={selectedBusinessId?.toString() || ""} 
-							onValueChange={(value: string) => setSelectedBusinessId(parseInt(value))}
-						>
-							<SelectTrigger className="bg-white flex justify-center">
-								<SelectValue placeholder="거래처를 선택하세요"/>
-							</SelectTrigger>
-							<SelectContent>
-								{businesses.map((business: Business) => (
-									<SelectItem key={business.id} value={business.id.toString()} className="text-center">
-										<div className="flex flex-col">
-											<span className="font-medium">{business.business_name}</span>
-											<div className="flex justify-between items-center">
-												<span className="text-xs text-gray-500">{business.phone_number}</span>
-												<span className="text-xs text-red-600 font-medium">
-													미수금: {business.outstanding_balance?.toLocaleString() || '0'}원
-												</span>
-											</div>
+			</header>
+
+			<div className="p-6">
+				{/* 거래처 프로필 카드 */}
+				{business && (
+					<Card className="mb-6 shadow-lg">
+						<CardContent className="p-6">
+							<div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+								{/* 거래처 정보 */}
+								<div className="lg:col-span-2 flex flex-col h-full space-y-4">
+									<div className="flex items-center gap-3">
+										<div className="p-3 bg-blue-100 rounded-full">
+											<Building2 className="h-6 w-6 text-blue-600" />
 										</div>
-									</SelectItem>
-								))}
-							</SelectContent>
-						</Select>
-						</div>
-						{selectedBusinessId && (
-							<div className="mt-2 text-sm">
-								<div className="text-blue-700">
-									✓ 선택된 거래처: {businesses.find((b: Business) => b.id === selectedBusinessId)?.business_name}
+										<div>
+											<h2 className="text-2xl font-bold text-gray-900">{business.business_name}</h2>
+											<p className="text-sm text-gray-500">거래처 정보</p>
+										</div>
+									</div>
+									
+									<div className="space-y-3">
+										<div className="flex items-center gap-3">
+											<Phone className="h-5 w-5 text-gray-400" />
+											<span className="text-gray-700">{business.phone_number || "전화번호 없음"}</span>
+										</div>
+										<div className="flex items-start gap-3">
+											<MapPin className="h-5 w-5 text-gray-400 mt-0.5" />
+											<span className="text-gray-700">{business.address || "주소 없음"}</span>
+										</div>
+										</div>
+
+										<div className="flex items-baseline space-x-2 mt-8">
+										 <p className="text-sm text-gray-500">미수금</p>
+                       				 	 <p className="text-lg font-bold text-red-600">
+                        					    {formatCurrency(business.outstanding_balance ?? 0)}
+                         				 </p>
+									</div>
+									
 								</div>
-								<div className="text-red-600 font-medium">
-									현재 미수금: {businesses.find((b: Business) => b.id === selectedBusinessId)?.outstanding_balance?.toLocaleString() || '0'}원
+
+								{/* 지도 */}
+								<div className="lg:col-span-1">
+									<div className="bg-gray-100 rounded-lg overflow-hidden">
+										<div id="map" className="w-full h-48"></div>
+									</div>
+									<p className="text-xs text-gray-500 mt-2 text-center">위치 정보</p>
+								</div>
+							</div>
+						</CardContent>
+					</Card>
+				)}
+
+				{/* 주문 목록 */}
+				<Card>
+					<CardHeader>
+						<CardTitle className="flex items-center justify-between">
+							<span>미수금 목록 ({totalCount}건)</span>
+						</CardTitle>
+					</CardHeader>
+					<CardContent>
+						<div className="overflow-x-auto">
+							<Table>
+								<TableHeader>
+									<TableRow className="bg-gray-50">
+										<TableHead className="font-semibold text-gray-900">번호</TableHead>
+										{/* <TableHead className="font-semibold text-gray-900">거래처명</TableHead> */}
+										<TableHead className="font-semibold text-gray-900">주문일자</TableHead>
+										<TableHead className="font-semibold text-gray-900">납기일</TableHead>
+										<TableHead className="font-semibold text-gray-900">품목 요약</TableHead>
+										<TableHead className="font-semibold text-gray-900">총금액</TableHead>
+										{/* <TableHead className="font-semibold text-gray-900">결제 상태</TableHead> */}
+										<TableHead className="font-semibold text-gray-900 text-center"></TableHead>
+									</TableRow>
+								</TableHeader>
+								<TableBody>
+									{loading ? (
+										<TableRow>
+											<TableCell colSpan={8} className="text-center py-8">
+												<div className="flex items-center justify-center gap-2">
+													<svg className="animate-spin h-6 w-6 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+														<circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+														<path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+													</svg>
+													<span>주문 목록을 불러오는 중입니다...</span>
+												</div>
+											</TableCell>
+										</TableRow>
+									) : orders.length === 0 ? (
+										<TableRow>
+											<TableCell colSpan={8} className="text-center py-8 text-gray-500">
+												조회된 주문이 없습니다.
+											</TableCell>
+										</TableRow>
+									) : (
+										orders.map((order, index) => (
+											<TableRow 
+												key={order.id} 
+												className={`hover:bg-gray-50 transition-colors cursor-pointer ${order.has_stock_issues ? 'border-l-4 border-l-red-500 bg-red-50/30' : ''}`}
+												onClick={() => handleViewDetail(order.id)}
+											>
+												<TableCell className="font-medium text-gray-900">
+													{totalCount ? (totalCount - startIndex - index) : (index + 1)}
+												</TableCell>
+												{/* <TableCell className="font-medium">
+													<div className="font-semibold text-gray-900">
+														{order.business?.business_name || '거래처명 없음'}
+													</div>
+												</TableCell> */}
+												<TableCell className="text-gray-600">
+													{format(new Date(order.order_datetime), "yyyy-MM-dd", { locale: ko })}
+												</TableCell>
+												<TableCell className="text-gray-600">
+													{order.delivery_datetime ? format(new Date(order.delivery_datetime), "yyyy-MM-dd", { locale: ko }) : "-"}
+												</TableCell>
+												<TableCell className="text-gray-600 max-w-[250px]">
+													<div className="flex items-start gap-2">
+														{order.has_stock_issues && (
+															<AlertTriangle className="h-4 w-4 text-red-500 flex-shrink-0 mt-0.5" />
+														)}
+														<div className="flex-1 overflow-hidden">
+															{order.items_summary.split('\n').map((item: string, idx: number) => (
+																<div 
+																	key={idx}
+																	className="truncate text-sm"
+																	title={item}
+																>
+																	{item}
+																</div>
+															))}
+														</div>
+													</div>
+												</TableCell>
+												<TableCell className="font-semibold text-gray-900">
+													{new Intl.NumberFormat('ko-KR', { style: 'decimal', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(Math.round(order.total_price))}원
+												</TableCell>
+												
+												
+											</TableRow>
+										))
+									)}
+								</TableBody>
+							</Table>
+						</div>
+
+						{/* 페이지네이션 */}
+						{totalPages > 1 && (
+							<div className="flex items-center justify-between mt-6">
+								<div className="text-sm text-gray-700">
+									{startIndex + 1} - {endIndex} / {totalCount}건
+								</div>
+								<div className="flex items-center gap-2">
+									<Button
+										variant="outline"
+										size="sm"
+										onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+										disabled={currentPage === 1}
+									>
+										<ChevronLeft className="h-4 w-4" />
+										이전
+									</Button>
+
+									{(() => {
+										const maxVisiblePages = 15
+										let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2))
+										let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1)
+										if (endPage - startPage + 1 < maxVisiblePages) {
+											startPage = Math.max(1, endPage - maxVisiblePages + 1)
+										}
+										const pages = [] as number[]
+										for (let i = startPage; i <= endPage; i++) {
+											pages.push(i)
+										}
+										return pages.map(page => (
+											<Button
+												key={page}
+												variant={currentPage === page ? "default" : "outline"}
+												size="sm"
+												onClick={() => setCurrentPage(page)}
+												className="w-8 h-8 p-0"
+											>
+												{page}
+											</Button>
+										))
+									})()}
+
+									<Button
+										variant="outline"
+										size="sm"
+										onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+										disabled={currentPage === totalPages}
+									>
+										다음
+										<ChevronLeft className="h-4 w-4" />
+									</Button>
 								</div>
 							</div>
 						)}
-					</div>
-				
-
-			{/* 행동 버튼 섹션 (필요 시 활성화) */}
+					</CardContent>
+				</Card>
 			</div>
-
-			{/* 선택된 거래처의 미결제 주문 목록 */}
-			{selectedBusinessId ? (
-				<div className="space-y-4">
-					{isLoadingOrders ? (
-						<div className="text-center text-sm text-gray-500 py-6">미결제 주문을 불러오는 중...</div>
-					) : unpaidOrders.length > 0 ? (
-						unpaidOrders.map((order) => (
-							<Card key={order.orderId} className="shadow-sm hover:shadow-md transition-shadow">
-								<CardHeader>
-									<div className="flex items-center justify-between">
-										<CardTitle className="text-lg sm:text-xl">주문 #{order.orderId}</CardTitle>
-										<Badge variant={order.orderStatus === 'cancelled' ? 'destructive' : 'secondary'}>
-											{order.orderStatus}
-										</Badge>
-									</div>
-								</CardHeader>
-								<CardContent className="space-y-3">
-									<div className="flex items-center space-x-2">
-										<DollarSign className="h-4 w-4 text-red-500" />
-										<span className="font-semibold text-red-600">{formatCurrency(order.unpaidAmount)}</span>
-									</div>
-									<div className="flex items-center space-x-2 text-sm text-gray-600">
-										<Calendar className="h-4 w-4" />
-										<span>주문일시: {new Date(order.orderDatetime).toLocaleString()}</span>
-									</div>
-									{order.deliveryDatetime && (
-										<div className="flex items-center space-x-2 text-sm text-gray-600">
-											<Calendar className="h-4 w-4" />
-											<span>배송일시: {new Date(order.deliveryDatetime).toLocaleString()}</span>
-										</div>
-									)}
-								</CardContent>
-							</Card>
-						))
-					) : (
-						<div className="text-center text-sm text-gray-500 py-6">해당 거래처의 미결제 주문이 없습니다.</div>
-					)}
-				</div>
-			) : (
-				<div className="text-center text-sm text-gray-500 py-6">거래처를 선택하세요.</div>
-			)}
 		</div>
 	)
 }
- 
+
 export default UnpaidList; 

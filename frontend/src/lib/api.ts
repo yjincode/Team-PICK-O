@@ -69,9 +69,7 @@ const refreshAccessToken = async (): Promise<string | null> => {
         resolve(null)
         return
       }
-      
-      console.log('🔄 액세스 토큰 자동 갱신 시작')
-      
+          
       const response = await fetch(`${API_BASE_URL}/business/auth/refresh/`, {
         method: 'POST',
         headers: {
@@ -87,8 +85,6 @@ const refreshAccessToken = async (): Promise<string | null> => {
         const newAccessToken = data.access_token
 
         TokenManager.setAccessToken(newAccessToken)
-        console.log('✅ 액세스 토큰 자동 갱신 성공')
-
         resolve(newAccessToken)
       } else {
         console.log('❌ 토큰 갱신 실패 - 리로그인 필요')
@@ -115,13 +111,14 @@ api.interceptors.request.use(
     const publicEndpoints = [
       '/business/auth/firebase-to-jwt/',
       '/business/auth/register/',
-      '/business/auth/refresh/'
+      '/business/auth/refresh/',
+      '/business/auth/super-login/',
+      '/business/auth/super-register/'
     ]
 
     const isPublicEndpoint = publicEndpoints.some(endpoint => config.url?.includes(endpoint))
 
     if (isPublicEndpoint) {
-      console.log('🔓 공개 엔드포인트 - 토큰 없이 요청:', config.url)
       return config
     }
 
@@ -171,11 +168,6 @@ api.interceptors.request.use(
 // 응답 인터셉터: 401 오류 시 토큰 갱신 재시도
 api.interceptors.response.use(
   (response) => {
-    console.log('✅ 자동 토큰 갱신 API 성공:', {
-      url: response.config.url,
-      status: response.status,
-      method: response.config.method?.toUpperCase()
-    });
     return response;
   },
   async (error) => {
@@ -218,7 +210,7 @@ export const businessApi = {
   },
 
   // ID로 거래처 조회
-  getById: async (id: number): Promise<ApiResponse<Business>> => {
+  getById: async (id: string): Promise<ApiResponse<Business>> => {
     const response = await api.get(`/business/customers/${id}`)
     return response.data
   },
@@ -239,6 +231,11 @@ export const businessApi = {
   delete: async (id: number): Promise<ApiResponse<void>> => {
     const response = await api.delete(`/business/customers/${id}/`)
     return response.data
+  },
+
+  getOverdueRisk: async (): Promise<any[]> => {
+    const response = await api.get('/business/predict_overdue/');
+    return response.data;
   },
 }
 
@@ -322,6 +319,29 @@ export const inventoryApi = {
   getLogs: async (inventoryId?: number): Promise<ApiResponse<any[]>> => {
     const url = inventoryId ? `/inventory/${inventoryId}/logs/` : '/inventory/logs/'
     const response = await api.get(url)
+    return response.data
+  },
+
+  // 이상 탐지 결과 조회
+  getAnomalies: async (params?: { 
+    page?: number; 
+    page_size?: number;
+    severity?: string;
+    status?: string;
+  }): Promise<ApiResponse<any[]>> => {
+    const response = await api.get('/inventory/anomalies/', { params })
+    return response.data
+  },
+
+  // 이상 탐지 상태 업데이트
+  updateAnomaly: async (anomalyId: number, data: { resolved?: boolean; memo?: string }): Promise<ApiResponse<any>> => {
+    const response = await api.patch(`/inventory/anomalies/${anomalyId}/`, data)
+    return response.data
+  },
+
+  // 재고 요약 정보 조회 (대시보드용)
+  getSummary: async (): Promise<ApiResponse<any>> => {
+    const response = await api.get('/inventory/summary/')
     return response.data
   },
 
@@ -414,6 +434,12 @@ export const orderApi = {
     const response = await api.post(`/orders/${id}/ship-out/`)
     return response.data
   },
+  
+  // 거래처별 미수금 주문 조회
+  getUnpaidOrdersByBusiness: async (businessId: string): Promise<UnpaidOrder[]> => {
+    const response = await api.get(`/business/${businessId}/unpaid-orders`);
+    return response.data;
+  },
 }
 
 // Firebase Auth API
@@ -457,6 +483,24 @@ export const authApi = {
         data: null
       }
     }
+  },
+
+  // 슈퍼계정 직접 로그인 (Firebase 완전 우회)
+  superAccountLogin: async (phoneNumber: string): Promise<any> => {
+    const response = await api.post('/business/auth/super-login/', {
+      phone_number: phoneNumber
+    })
+    return response.data
+  },
+
+  // 슈퍼계정 직접 회원가입 (Firebase 완전 우회)
+  superAccountRegister: async (userData: {
+    business_name: string;
+    owner_name: string;
+    address: string;
+  }): Promise<any> => {
+    const response = await api.post('/business/auth/super-register/', userData)
+    return response.data
   },
 }
 
@@ -502,30 +546,46 @@ export const salesApi = {
     return response.data
   },
 
-  // 일별 매출 조회
-  getDailyRevenue: async (date: string): Promise<{
-    date: string;
-    total_revenue: number;
-    order_count: number;
-    orders: Array<{
-      id: number;
+
+  // 거래처별 구매 순위 조회
+  getBusinessRanking: async (params?: {
+    period_type?: 'month' | 'year';
+    selected_period?: string;
+    limit?: number;
+  }): Promise<{
+    rankings: Array<{
+      business_id: number;
       business_name: string;
-      total_price: number;
-      order_datetime: string;
-    }>;
-    hourly_data: Array<{
-      hour: number;
-      revenue: number;
+      total_purchase: number;
       order_count: number;
-    }>;
-    top_fish_types: Array<{
-      fish_name: string;
-      quantity: number;
-      revenue: number;
       percentage: number;
     }>;
+    period_type: string;
+    selected_period?: string;
+    total_revenue: number;
   }> => {
-    const response = await api.get(`/sales/daily/?date=${date}`)
+    const response = await api.get('/sales/business-ranking/', { params })
+    return response.data
+  },
+
+  // 어종별 판매량 조회
+  getFishTypeSales: async (params?: {
+    period_type?: 'month' | 'year';
+    selected_period?: string;
+  }): Promise<{
+    fish_sales: Array<{
+      fish_type_id: number;
+      fish_name: string;
+      total_quantity: number;
+      unit: string;
+      total_revenue: number;
+      percentage: number;
+    }>;
+    period_type: string;
+    selected_period?: string;
+    total_revenue: number;
+  }> => {
+    const response = await api.get('/sales/fish-sales/', { params })
     return response.data
   },
 }
@@ -675,6 +735,7 @@ export const arApi = {
     const response = await api.get('/payments/ar/summary/')
     return response.data
   },
+
 }
 
 // 기존 호환성을 위한 별칭 (점진적 마이그레이션)

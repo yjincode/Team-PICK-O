@@ -10,7 +10,9 @@ import { Search, ShoppingCart, AlertTriangle, DollarSign } from "lucide-react"
 import { WeatherWidget } from "../../components/common/WeatherWidget"
 import { StatsCard } from "../../components/common/StatsCard"
 import { OrderStatusBadge } from "../../components/common/OrderStatusBadge"
-import { dashboardApi } from "../../lib/api"
+import Header from "../../components/layout/Header"
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts"
+import { dashboardApi, salesApi, orderApi } from "../../lib/api"
 
 // 대시보드 데이터 타입 정의
 interface DashboardStats {
@@ -40,11 +42,19 @@ interface LowStockItem {
   status: string;
 }
 
+interface WeeklySalesData {
+  date: string;
+  revenue: number;
+  order_count: number;
+}
+
 const Dashboard: React.FC = () => {
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [recentOrders, setRecentOrders] = useState<RecentOrder[]>([])
   const [lowStockItems, setLowStockItems] = useState<LowStockItem[]>([])
+  const [weeklySalesData, setWeeklySalesData] = useState<WeeklySalesData[]>([])
   const [loading, setLoading] = useState(true)
+  const [salesLoading, setSalesLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   // 원화 포맷팅 함수
@@ -55,6 +65,78 @@ const Dashboard: React.FC = () => {
       return `₩${Math.round(amount / 10000)}만`
     } else {
       return `₩${amount.toLocaleString()}`
+    }
+  }
+
+  // 최근 7일간 주문 데이터 로딩 (미결제 포함)
+  const loadWeeklySalesData = async () => {
+    try {
+      setSalesLoading(true)
+      
+      // 오늘부터 7일 전까지의 날짜 범위 계산
+      const endDate = new Date()
+      const startDate = new Date()
+      startDate.setDate(endDate.getDate() - 6) // 7일간 (오늘 포함)
+      
+      // 7일간의 날짜별 데이터를 직접 orderApi로 조회
+      const weeklyData: WeeklySalesData[] = []
+      
+      for (let i = 6; i >= 0; i--) {
+        const currentDate = new Date()
+        currentDate.setDate(endDate.getDate() - i)
+        const dateStr = currentDate.toISOString().split('T')[0]
+        
+        try {
+          // 해당 날짜의 모든 주문 조회 (결제상태 관계없이)
+          const ordersResponse = await orderApi.getAll({
+            date: dateStr,
+            payment_status: 'all', // 미결제 포함 모든 주문
+            page_size: 1000 // 해당 날짜의 모든 주문
+          })
+          
+          // 해당 날짜 주문들의 총 금액과 건수 계산
+          let dayRevenue = 0
+          let dayOrderCount = 0
+          
+          console.log(`📊 ${dateStr} 주문 응답:`, ordersResponse)
+          
+          if (ordersResponse.data) {
+            ordersResponse.data.forEach(order => {
+              // 주문일자가 해당 날짜와 일치하는지 확인
+              const orderDate = new Date(order.order_datetime).toISOString().split('T')[0]
+              console.log(`🔍 주문 ${order.id}: 날짜=${orderDate}, 금액=${order.total_price}`)
+              if (orderDate === dateStr) {
+                dayRevenue += order.total_price || 0
+                dayOrderCount += 1
+              }
+            })
+          }
+          
+          console.log(`📈 ${dateStr} 총 금액: ${dayRevenue}, 주문수: ${dayOrderCount}`)
+          
+          weeklyData.push({
+            date: `${currentDate.getMonth() + 1}/${currentDate.getDate()}`,
+            revenue: dayRevenue,
+            order_count: dayOrderCount
+          })
+          
+        } catch (dayErr) {
+          console.error(`${dateStr} 주문 데이터 로딩 실패:`, dayErr)
+          // 에러 시 0값으로 추가
+          weeklyData.push({
+            date: `${currentDate.getMonth() + 1}/${currentDate.getDate()}`,
+            revenue: 0,
+            order_count: 0
+          })
+        }
+      }
+      
+      setWeeklySalesData(weeklyData)
+      
+    } catch (err) {
+      console.error('주간 주문 데이터 로딩 실패:', err)
+    } finally {
+      setSalesLoading(false)
     }
   }
 
@@ -85,10 +167,12 @@ const Dashboard: React.FC = () => {
     }
 
     loadDashboardData()
+    loadWeeklySalesData() // 주간 매출 데이터도 함께 로딩
   }, [])
+  
   return (
     <div className="space-y-4 sm:space-y-6">
-      {/* 헤더: 검색 및 날씨 위젯 */}
+      {/* 헤더: 검색, 날씨 위젯, 프로필/알림 */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div className="flex items-center space-x-3 flex-1 max-w-md">
           <div className="relative flex-1">
@@ -100,8 +184,16 @@ const Dashboard: React.FC = () => {
           </div>
           <Button className="bg-accent-blue hover:bg-accent-blue/90 h-12 px-6 touch-target flex-shrink-0">검색</Button>
         </div>
-        <div className="w-full sm:w-auto">
-          <WeatherWidget />
+        
+        {/* 우측 영역: 날씨 위젯 + 프로필/알림 */}
+        <div className="flex items-center space-x-4">
+          {/* 날씨 위젯 */}
+          <div className="w-full sm:w-52">
+            <WeatherWidget />
+          </div>
+          
+          {/* 프로필 및 알림 위젯 */}
+          <Header />
         </div>
       </div>
 
@@ -168,12 +260,72 @@ const Dashboard: React.FC = () => {
 
         <Card className="shadow-sm">
           <CardHeader>
-            <CardTitle className="text-base sm:text-lg font-semibold text-gray-800">매출 현황</CardTitle>
+            <CardTitle className="text-base sm:text-lg font-semibold text-gray-800 flex items-center justify-between">
+              <span>
+                매출 현황
+                <span className="text-sm font-normal text-gray-500 ml-2">(최근 7일)</span>
+              </span>
+              <span className="text-xs font-normal text-orange-600 bg-orange-50 px-2 py-1 rounded">미결제 포함</span>
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="h-48 sm:h-64 bg-gray-100 rounded-lg flex items-center justify-center">
-              <p className="text-gray-500 text-sm sm:text-base">Chart will be displayed here</p>
-            </div>
+            {salesLoading ? (
+              <div className="h-48 sm:h-64 bg-gray-100 rounded-lg flex items-center justify-center">
+                <div className="text-gray-500 text-sm sm:text-base">주문 데이터를 불러오는 중...</div>
+              </div>
+            ) : weeklySalesData.length > 0 ? (
+              <div className="h-48 sm:h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={weeklySalesData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                    <XAxis 
+                      dataKey="date" 
+                      tick={{ fontSize: 12 }}
+                      stroke="#666"
+                    />
+                    <YAxis 
+                      tickFormatter={(value) => {
+                        if (value >= 10000000) {
+                          return `${(value / 10000000).toFixed(0)}억`
+                        } else if (value >= 10000) {
+                          return `${(value / 10000).toFixed(0)}만`
+                        } else if (value >= 1000) {
+                          return `${(value / 1000).toFixed(0)}천`
+                        }
+                        return value.toString()
+                      }}
+                      tick={{ fontSize: 12 }}
+                      stroke="#666"
+                    />
+                    <Tooltip
+                      formatter={(value: number) => [formatCurrency(value), '주문금액']}
+                      labelFormatter={(label) => `${label}일`}
+                      contentStyle={{
+                        backgroundColor: 'white',
+                        border: '1px solid #e2e8f0',
+                        borderRadius: '8px',
+                        fontSize: '14px'
+                      }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="revenue"
+                      stroke="#3b82f6"
+                      strokeWidth={3}
+                      dot={{ fill: '#3b82f6', strokeWidth: 2, r: 4 }}
+                      activeDot={{ r: 6, fill: '#1d4ed8' }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <div className="h-48 sm:h-64 bg-gray-100 rounded-lg flex items-center justify-center">
+                <div className="text-center">
+                  <p className="text-gray-500 text-sm sm:text-base mb-2">주문 데이터가 없습니다</p>
+                  <p className="text-gray-400 text-xs sm:text-sm">최근 7일간 주문이 없습니다</p>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -285,4 +437,4 @@ const Dashboard: React.FC = () => {
   )
 }
 
-export default Dashboard; 
+export default Dashboard 

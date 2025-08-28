@@ -16,6 +16,8 @@ import { useKakaoPostcode } from "../../hooks/useKakaoPostcode";
 import { KakaoAddress } from "../../types/kakao";
 import { formatPhoneNumber } from "../../utils/phoneFormatter";
 import { formatCurrency } from "@/lib/utils";    
+import { useNavigate } from "react-router-dom"; // 추가
+
 
 import {
   Pagination,
@@ -28,6 +30,10 @@ import {
 } from "../../components/ui/pagination";
 import { Business } from "../../types";
 
+interface BusinessSearchProps {
+  onSelect: (business: Business) => void;
+  onClose: () => void;
+}
 
 interface Order {
   id: number;
@@ -37,9 +43,8 @@ interface Order {
 }
 
 // 이 코드는 컴포넌트 내부에서 useEffect로 처리해야 합니다
-
-
 const BusinessList: React.FC = () => {
+  const navigate = useNavigate(); 
   const [businesses, setBusinesses] = useState<Business[]>([]);
   const [isLoadingBusinesses, setIsLoadingBusinesses] = useState<boolean>(false);
   const [hasInitialized, setHasInitialized] = useState<boolean>(false);
@@ -47,23 +52,21 @@ const BusinessList: React.FC = () => {
   const [pageSize] = useState(10); // 고정값, 필요시 변경 가능
   const [count, setCount] = useState(0); // 전체 개수
   const [orders, setOrders] = useState<Order[]>([]);
-
+  const [filteredBusinesses, setFilteredBusinesses] = useState<Business[]>([]);
+  const [searchTerm, setSearchTerm] = useState<string>("")
   const { user, isAuthenticated, loading } = useAuth();
 
   const [showUnpaid, setShowUnpaid] = useState(false);
   const [selectedBusiness, setSelectedBusiness] = useState<Business | null>(null);
-
+  const [overdueRisks, setOverdueRisks] = useState<Record<number, string>>({});
   // 거래처 목록을 가져오는 함수 (재사용 가능)
   const fetchBusinesses = async (pageNum = page) => {
     if (isLoadingBusinesses) {
-      console.log('⏸️ 이미 로딩 중이므로 API 호출 생략');
       return;
     }
     try {
-      console.log('🔄 거래처 목록 API 호출 시작 - 페이지:', pageNum);
       setIsLoadingBusinesses(true);
       const res = await businessApi.getAll({ page: pageNum, page_size: pageSize });
-      console.log("✅ API 응답:", res);
       console.log("📊 응답 데이터 - count:", res.count, "results 개수:", res.results?.length);
       // 다양한 응답 구조에 대응
       let data: any = null;
@@ -103,8 +106,19 @@ const BusinessList: React.FC = () => {
     try {
       // 주문 목록 (기존 order API 사용)
       const ordersRes = await orderApi.getAll();
-      const ordersData = Array.isArray(ordersRes) ? ordersRes : ordersRes.data || [];
+      console.log("✅ 주문 API 응답:", ordersRes);
+      
+      const ordersData: Order[] = (Array.isArray(ordersRes) ? ordersRes : ordersRes.data || []).map((o: any) => ({
+        id: o.id,
+        business_id: o.business_id ?? 0,
+        total_price: Number(o.total_price || 0),
+        order_datetime: o.order_datetime || '',
+      })); 
+
+      console.log("📝 가공된 ordersData:", ordersData);
       const sumByBusiness: Record<number, { orders: number }> = {};
+
+      setOrders(ordersData);
 
       for (const o of ordersData) {
         const businessId = o.business_id;
@@ -158,30 +172,36 @@ const BusinessList: React.FC = () => {
 
   // AuthContext 로딩이 완료되면 API 호출 (인증 여부와 관계없이)
   useEffect(() => {
-    console.log('🔍 useEffect 실행됨:', {
-      loading,
-      isAuthenticated,
-      user: !!user,
-      hasInitialized
-    });
-
     // AuthContext 로딩 중이면 대기
     if (loading) {
-      console.log('⏳ AuthContext 로딩 중, API 호출 대기...');
       return;
     }
 
     // 이미 초기화했으면 더 이상 호출하지 않음
     if (hasInitialized) {
-      console.log('✅ 이미 초기화 완료됨');
       return;
     }
-
-    console.log('🚀 거래처 목록 로드 (인증 상태와 관계없이)');
     setHasInitialized(true);
     fetchBusinesses(1); // 첫 페이지 로드
     fetchUnpaidStats();
   }, [loading, hasInitialized]);
+
+
+  // 검색어에 따라 거래처 필터링
+  useEffect(() => {
+    if (!searchTerm.trim()) {
+      setFilteredBusinesses(businesses);
+    } else {
+      const term = searchTerm.toLowerCase();
+      setFilteredBusinesses(
+        businesses.filter(
+          (b) =>
+            b.business_name.toLowerCase().includes(term) ||
+            (b.phone_number && b.phone_number.replace(/-/g, "").includes(term.replace(/-/g, "")))
+        )
+      );
+    }
+  }, [businesses, searchTerm]);
 
   // 페이지 변경 시 목록 새로고침
   useEffect(() => {
@@ -191,7 +211,6 @@ const BusinessList: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page]);
 
-  const [searchTerm, setSearchTerm] = useState<string>("")
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false)
   const [isRegistering, setIsRegistering] = useState<boolean>(false)
   const [isEditModalOpen, setIsEditModalOpen] = useState<boolean>(false)
@@ -217,7 +236,38 @@ const BusinessList: React.FC = () => {
     return `${onlyNumbers.slice(0, 3)}-${onlyNumbers.slice(3, 7)}-${onlyNumbers.slice(7)}`;
   };
 
-
+  useEffect(() => {
+    const fetchOverdueRisks = async () => {
+      try {
+        const res = await businessApi.getOverdueRisk();
+        // res: [{id: 1, business_name: "...", risk: "높음"}, ...]
+        const riskMap: Record<number, string> = {};
+        
+        // 연체 위험 알림 전송
+        res.forEach((item) => {
+          riskMap[item.id] = item.risk;
+          
+          // 30일 이상 연체된 경우 알림 전송
+          if (item.overdue_days >= 30) {
+            // 커스텀 이벤트로 알림 전송
+            const notificationEvent = new CustomEvent('overdueAlert', {
+              detail: {
+                businessName: item.business_name,
+                overdueDays: item.overdue_days,
+                risk: item.risk
+              }
+            });
+            window.dispatchEvent(notificationEvent);
+          }
+        });
+        
+        setOverdueRisks(riskMap);
+      } catch (e) {
+        console.error("연체 위험 예측 데이터 불러오기 실패:", e);
+      }
+    };
+    fetchOverdueRisks();
+  }, []);
 
   // 수정 모달용 주소검색 훅
   const { openPostcode: openEditPostcode } = useKakaoPostcode({
@@ -549,7 +599,7 @@ const BusinessList: React.FC = () => {
                 placeholder="거래처명, 전화번호로 검색..."
                 className="pl-10 bg-white border-gray-200"
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
             <Button variant="outline" className="flex-shrink-0">검색</Button>
@@ -582,17 +632,42 @@ const BusinessList: React.FC = () => {
           </div>
         ) : (
           <>
-            {businesses && businesses.length > 0 ? (
-              businesses.map((business) => {
+            {filteredBusinesses && filteredBusinesses.length > 0 ? (
+              filteredBusinesses.map((business) => {
                 const oldestOrderDate = getOldestOrderDate(business.id, orders);
                 const overdueDays = calculateOverdueDays(oldestOrderDate);
+                const risk = overdueRisks[business.id] || "없음";
                 
                return (
                 <Card key={business.id} className="shadow-sm hover:shadow-md transition-shadow">
                   <CardContent className="p-4 sm:p-6">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                       <div className="flex-1">
-                        <h3 className="text-lg sm:text-xl font-semibold text-gray-900">{business.business_name}</h3>
+                        <h3 className="text-lg sm:text-xl font-semibold text-gray-900">{business.business_name}
+                        <span
+                            style={{
+                              marginLeft: 8,
+                              padding: "2px 8px",
+                              borderRadius: 8,
+                              background:
+                                risk === "높음"
+                                  ? "#fee2e2"
+                                  : risk === "보통"
+                                  ? "#fef9c3"
+                                  : "#dcfce7",
+                              color:
+                                risk === "높음"
+                                  ? "#dc2626"
+                                  : risk === "보통"
+                                  ? "#b45309"
+                                  : "#15803d",
+                              fontWeight: 600,
+                              fontSize: 12,
+                            }}
+                          >
+                            {risk}
+                          </span>
+                        </h3>
                         <p className="text-sm text-gray-600 mt-1">
                           <Phone className="inline h-3 w-3 mr-1" />
                           {formatPhoneNumber(business.phone_number)}
@@ -616,8 +691,7 @@ const BusinessList: React.FC = () => {
                         </div>
                         <div className="flex space-x-2">
                           <Button variant="outline" size="sm" onClick={() => {
-                              setSelectedBusiness(business);
-                              setShowUnpaid(true);
+                              navigate(`/business/${business.id}`); 
                           }}>
                             <Eye className="h-4 w-4 mr-2" />상세
                           </Button>

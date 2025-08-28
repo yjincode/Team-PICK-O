@@ -13,6 +13,7 @@ import { BarChart3, TrendingUp, TrendingDown, DollarSign, Calendar, ChevronDown 
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } from "recharts";
 import { salesApi } from "../../lib/api";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
+import { Crown, Trophy, TrendingUp as TrendUp } from "lucide-react";
 
 
 // 매출 데이터 타입 정의
@@ -32,39 +33,34 @@ interface SalesStats {
   selected_period?: string;
 }
 
-interface DailyRevenue {
-  date: string;
-  total_revenue: number;
-  order_count: number;
-  orders: Array<{
-    id: number;
-    business_name: string;
-    total_price: number;
-    order_datetime: string;
-  }>;
-  hourly_data: Array<{
-    hour: number;
-    revenue: number;
-    order_count: number;
-  }>;
-  top_fish_types: Array<{
-    fish_name: string;
-    quantity: number;
-    revenue: number;
-    percentage: number;
-  }>;
-}
 
 type PeriodType = 'month' | 'year';
+
+// 거래처 구매 순위 데이터 타입
+interface BusinessRanking {
+  business_id: number;
+  business_name: string;
+  total_purchase: number;
+  order_count: number;
+  percentage: number;
+}
+
+// 어종별 판매량 데이터 타입
+interface FishTypeSales {
+  fish_type_id: number;
+  fish_name: string;
+  total_quantity: number;
+  unit: string;
+  total_revenue: number;
+  percentage: number;
+}
 
 
 
 export default function SalesChart() {
   // 상태 관리
   const [salesStats, setSalesStats] = useState<SalesStats | null>(null)
-  const [dailyRevenue, setDailyRevenue] = useState<DailyRevenue | null>(null)
   const [periodType, setPeriodType] = useState<PeriodType>('month')
-  const [selectedDate, setSelectedDate] = useState<string>('')
   const [selectedPeriod, setSelectedPeriod] = useState<string>(() => {
     // 디폴트값: 현재 달
     const now = new Date()
@@ -72,9 +68,54 @@ export default function SalesChart() {
   })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [businessRankings, setBusinessRankings] = useState<BusinessRanking[]>([])
+  const [fishTypeSales, setFishTypeSales] = useState<FishTypeSales[]>([])
+  const [loadingRankings, setLoadingRankings] = useState(false)
+  const [loadingFishSales, setLoadingFishSales] = useState(false)
 
   // 금액 포맷팅 함수
   const formatCurrency = (amount: number) => `₩${amount.toLocaleString()}`
+
+  // 거래처 구매 순위 데이터 로드
+  const loadBusinessRankings = async () => {
+    try {
+      setLoadingRankings(true)
+      
+      const params: any = { 
+        period_type: periodType,
+        selected_period: selectedPeriod || undefined,
+        limit: 10 // 상위 10개 거래처만
+      }
+      
+      const data = await salesApi.getBusinessRanking(params)
+      setBusinessRankings(data.rankings)
+    } catch (err) {
+      console.error('거래처 순위 데이터 로드 실패:', err)
+      setBusinessRankings([])
+    } finally {
+      setLoadingRankings(false)
+    }
+  }
+
+  // 어종별 판매량 데이터 로드
+  const loadFishTypeSales = async () => {
+    try {
+      setLoadingFishSales(true)
+      
+      const params: any = { 
+        period_type: periodType,
+        selected_period: selectedPeriod || undefined
+      }
+      
+      const data = await salesApi.getFishTypeSales(params)
+      setFishTypeSales(data.fish_sales)
+    } catch (err) {
+      console.error('어종별 판매량 데이터 로드 실패:', err)
+      setFishTypeSales([])
+    } finally {
+      setLoadingFishSales(false)
+    }
+  }
 
   // 매출 통계 데이터 로드
   const loadSalesStats = async () => {
@@ -194,38 +235,15 @@ export default function SalesChart() {
     }
   }
 
-  // 일별 매출 데이터 로드
-  const loadDailyRevenue = async (date: Date) => {
-    try {
-      const dateString = date.toISOString().split('T')[0]
-      const data = await salesApi.getDailyRevenue(dateString)
-      setDailyRevenue(data)
-    } catch (err) {
-      console.error('일별 매출 데이터 로드 실패:', err)
-    }
-  }
 
   // 컴포넌트 마운트 시 데이터 로드 (selectedPeriod 의존성 추가)
   useEffect(() => {
     loadSalesStats()
+    loadBusinessRankings()
+    loadFishTypeSales()
   }, [periodType, selectedPeriod])
 
-  // 날짜 선택 시 일별 매출 조회
-  useEffect(() => {
-    if (selectedDate) {
-      const date = new Date(selectedDate)
-      loadDailyRevenue(date)
-    }
-  }, [selectedDate])
 
-  // 기간 변경 시 데이터 다시 로드
-  useEffect(() => {
-    if (selectedPeriod) {
-      loadSalesStats()
-    } else {
-      loadSalesStats()
-    }
-  }, [selectedPeriod])
 
   // 최고 매출 기간 찾기 (월 또는 일)
   const getHighestPeriod = () => {
@@ -321,25 +339,6 @@ export default function SalesChart() {
     return options
   }
 
-  // 일별 조회를 위한 날짜 옵션 생성 (최근 30일)
-  const getDailyOptions = () => {
-    const options = []
-    const now = new Date()
-    
-    for (let i = 0; i < 30; i++) {
-      const date = new Date(now.getTime() - (i * 24 * 60 * 60 * 1000))
-      const value = date.toISOString().split('T')[0]
-      const label = date.toLocaleDateString('ko-KR', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-        weekday: 'short'
-      })
-      options.push({ value, label })
-    }
-    
-    return options
-  }
 
   // 차트 색상 팔레트
   const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8', '#82CA9D', '#FFC658', '#FF7C7C']
@@ -412,246 +411,10 @@ export default function SalesChart() {
               </SelectContent>
             </Select>
             
-            {/* 일별 매출 조회 드롭다운 */}
-            <Select value={selectedDate} onValueChange={setSelectedDate}>
-              <SelectTrigger className="w-full sm:w-[220px]">
-                <Calendar className="h-4 w-4 mr-2" />
-                <SelectValue placeholder="일별 매출 조회" />
-              </SelectTrigger>
-              <SelectContent>
-                {getDailyOptions().map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
           </div>
         </div>
       </div>
 
-      {/* 일별 매출 상세 분석 */}
-      {selectedDate && dailyRevenue && (
-        <div className="space-y-6">
-          {/* 일별 매출 요약 */}
-          <Card className="shadow-sm">
-            <CardHeader>
-              <CardTitle className="text-lg font-semibold text-gray-800">
-                {new Date(selectedDate).toLocaleDateString('ko-KR', {
-                  year: 'numeric',
-                  month: 'long', 
-                  day: 'numeric',
-                  weekday: 'long'
-                })} 매출 현황
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="text-center p-4 bg-blue-50 rounded-lg">
-                  <div className="text-2xl font-bold text-blue-600 mb-1">
-                    {formatCurrency(dailyRevenue.total_revenue)}
-                  </div>
-                  <div className="text-sm text-gray-600">총 매출</div>
-                </div>
-                <div className="text-center p-4 bg-green-50 rounded-lg">
-                  <div className="text-2xl font-bold text-green-600 mb-1">
-                    {dailyRevenue.order_count}건
-                  </div>
-                  <div className="text-sm text-gray-600">총 주문 수</div>
-                </div>
-                <div className="text-center p-4 bg-purple-50 rounded-lg">
-                  <div className="text-2xl font-bold text-purple-600 mb-1">
-                    {dailyRevenue.order_count > 0 ? formatCurrency(dailyRevenue.total_revenue / dailyRevenue.order_count) : '₩0'}
-                  </div>
-                  <div className="text-sm text-gray-600">평균 주문 금액</div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* 시간대별 매출 분석 */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Card className="shadow-sm">
-              <CardHeader>
-                <CardTitle className="text-lg font-semibold text-gray-800">시간대별 매출</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={dailyRevenue.hourly_data}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis 
-                      dataKey="hour" 
-                      tickFormatter={(hour) => `${hour}시`}
-                    />
-                    <YAxis 
-                      tickFormatter={(value) => {
-                        if (value >= 100000000) {
-                          return `${(value / 100000000).toFixed(0)}억원`
-                        } else if (value >= 10000000) {
-                          return `${(value / 10000000).toFixed(0)}천만원`
-                        } else if (value >= 1000000) {
-                          return `${(value / 1000000).toFixed(0)}백만원`
-                        } else if (value >= 10000) {
-                          return `${(value / 10000).toFixed(0)}만원`
-                        } else if (value >= 1000) {
-                          return `${(value / 1000).toFixed(0)}천원`
-                        } else {
-                          return `${value.toLocaleString()}원`
-                        }
-                      }}
-                    />
-                    <Tooltip 
-                      formatter={(value: number) => [formatCurrency(value), '매출']}
-                      labelFormatter={(hour) => `${hour}시`}
-                    />
-                    <Bar dataKey="revenue" fill="#3b82f6" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-
-            <Card className="shadow-sm">
-              <CardHeader>
-                <CardTitle className="text-lg font-semibold text-gray-800">시간대별 주문 수</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
-                  <LineChart data={dailyRevenue.hourly_data}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis 
-                      dataKey="hour" 
-                      tickFormatter={(hour) => `${hour}시`}
-                    />
-                    <YAxis />
-                    <Tooltip 
-                      formatter={(value: number) => [value, '주문 수']}
-                      labelFormatter={(hour) => `${hour}시`}
-                    />
-                    <Line 
-                      type="monotone" 
-                      dataKey="order_count" 
-                      stroke="#10b981" 
-                      strokeWidth={3}
-                      dot={{ fill: '#10b981', strokeWidth: 2, r: 4 }}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* 어종별 매출 분석 */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Card className="shadow-sm">
-              <CardHeader>
-                <CardTitle className="text-lg font-semibold text-gray-800">어종별 매출 비중</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {dailyRevenue.top_fish_types.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={300}>
-                    <PieChart>
-                      <Pie
-                        data={dailyRevenue.top_fish_types}
-                        cx="50%"
-                        cy="50%"
-                        outerRadius={80}
-                        fill="#8884d8"
-                        dataKey="percentage"
-                        label={({ fish_name, percentage }) => `${fish_name} ${percentage}%`}
-                      >
-                        {dailyRevenue.top_fish_types.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip 
-                        formatter={(value: number, name, props) => [
-                          `${value}% (${formatCurrency(props.payload.revenue)})`,
-                          '비중'
-                        ]}
-                      />
-                    </PieChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="text-center py-12 text-gray-500">
-                    <div className="text-lg mb-2">어종별 데이터 없음</div>
-                    <div className="text-sm">주문 내역에 어종 정보가 없습니다.</div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card className="shadow-sm">
-              <CardHeader>
-                <CardTitle className="text-lg font-semibold text-gray-800">상위 어종 상세</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {dailyRevenue.top_fish_types.length > 0 ? (
-                  <div className="space-y-3">
-                    {dailyRevenue.top_fish_types.map((fish, index) => (
-                      <div key={fish.fish_name} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                        <div className="flex items-center space-x-3">
-                          <div 
-                            className="w-4 h-4 rounded-full" 
-                            style={{ backgroundColor: COLORS[index % COLORS.length] }}
-                          ></div>
-                          <div>
-                            <div className="font-medium text-gray-900">{fish.fish_name}</div>
-                            <div className="text-sm text-gray-600">{fish.quantity}개 판매</div>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <div className="font-semibold text-gray-900">{formatCurrency(fish.revenue)}</div>
-                          <div className="text-sm text-gray-600">{fish.percentage}%</div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-12 text-gray-500">
-                    <div className="text-lg mb-2">어종별 데이터 없음</div>
-                    <div className="text-sm">주문 내역에 어종 정보가 없습니다.</div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* 주문 내역 */}
-          <Card className="shadow-sm">
-            <CardHeader>
-              <CardTitle className="text-lg font-semibold text-gray-800">주문 내역</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {dailyRevenue.orders.length > 0 ? (
-                <div className="space-y-2 max-h-64 overflow-y-auto">
-                  {dailyRevenue.orders.map((order) => (
-                    <div key={order.id} className="p-3 bg-gray-50 rounded-lg text-sm border">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <div className="font-medium text-gray-900">{order.business_name}</div>
-                          <div className="text-gray-600 text-xs">
-                            주문 #{order.id} • {new Date(order.order_datetime).toLocaleTimeString('ko-KR')}
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <div className="font-semibold text-blue-600">
-                            {formatCurrency(order.total_price)}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-8 text-gray-500">
-                  <Calendar className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                  <p>해당 날짜에 주문이 없습니다.</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      )}
 
       {/* 요약 통계 카드들 */}
       {loading ? (
@@ -824,54 +587,176 @@ export default function SalesChart() {
               </LineChart>
             </ResponsiveContainer>
 
-            {/* 월별 매출 데이터 */}
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mt-6">
-              {salesStats.monthly_data.map((monthData, index) => {
-                const prevRevenue = index > 0 ? salesStats.monthly_data[index - 1].revenue : monthData.revenue
-                const change = prevRevenue > 0 ? ((monthData.revenue - prevRevenue) / prevRevenue) * 100 : 0
-                const isPositive = change >= 0
-                
-                return (
-                  <div key={monthData.month} className="text-center p-3 bg-gray-50 rounded-lg">
-                    <p className="text-sm font-medium text-gray-700">
-                      {(() => {
-                        if (typeof monthData.month === 'string') {
-                          // 일별 데이터 (2024-12-01)
-                          if (monthData.month.includes('-') && monthData.month.split('-').length === 3) {
-                            const day = parseInt(monthData.month.split('-')[2])
-                            return `${day}일`
-                          }
-                          // 월별 데이터 (2024-12)
-                          if (monthData.month.includes('-') && monthData.month.split('-').length === 2) {
-                            const month = parseInt(monthData.month.split('-')[1])
-                            return `${month}월`
-                          }
-                        }
-                        return monthData.month
-                      })()
-                    }</p>
-                    <p className="text-lg font-bold text-gray-900">{formatCurrency(monthData.revenue)}</p>
-                    <p className="text-xs text-gray-500">{monthData.order_count}건</p>
-                    {index > 0 && (
-                      <div className="flex items-center justify-center space-x-1 mt-1">
-                        {isPositive ? (
-                          <TrendingUp className="h-3 w-3 text-green-600" />
-                        ) : (
-                          <TrendingDown className="h-3 w-3 text-red-600" />
-                        )}
-                        <span className={`text-xs ${isPositive ? "text-green-600" : "text-red-600"}`}>
-                          {isPositive ? "+" : ""}
-                          {change.toFixed(1)}%
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
           </CardContent>
         </Card>
       )}
+
+      {/* 거래처별 구매량 순위 & 어종별 판매량 섹션 */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* 왼쪽: 거래처별 구매량 순위 */}
+        <Card className="shadow-sm flex flex-col" style={{ height: '600px' }}>
+          <CardHeader className="flex-shrink-0 pb-4">
+            <CardTitle className="text-xl font-semibold text-gray-800 flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <Trophy className="h-6 w-6 text-yellow-600" />
+                <span>거래처 구매 순위</span>
+              </div>
+              <span className="text-sm font-normal text-blue-600 bg-blue-50 px-2 py-1 rounded">금액기준</span>
+            </CardTitle>
+            <p className="text-sm text-gray-600">
+              {getCurrentPeriodText()} 기준 상위 구매 거래처
+            </p>
+          </CardHeader>
+          <CardContent className="flex-1 overflow-hidden flex flex-col p-6 pt-0">
+            <div className="flex-1 overflow-y-auto pr-2 -mr-2">
+            {loadingRankings ? (
+              <div className="space-y-3">
+                {Array.from({ length: 5 }).map((_, index) => (
+                  <div key={index} className="animate-pulse">
+                    <div className="h-16 bg-gray-200 rounded-lg"></div>
+                  </div>
+                ))}
+              </div>
+            ) : businessRankings.length > 0 ? (
+              <div className="space-y-3">
+                {businessRankings.map((business, index) => (
+                  <div 
+                    key={business.business_id} 
+                    className="p-4 bg-gradient-to-r from-blue-50 to-white rounded-lg border border-gray-100 hover:shadow-md transition-shadow"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-3 min-w-0 flex-1">
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0 ${
+                          index === 0 ? 'bg-yellow-500' : 
+                          index === 1 ? 'bg-gray-400' : 
+                          index === 2 ? 'bg-orange-400' : 'bg-blue-500'
+                        }`}>
+                          {index + 1}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="font-semibold text-gray-900 text-lg truncate">
+                            {business.business_name}
+                          </div>
+                          <div className="text-sm text-gray-600">
+                            총 {business.order_count}건 주문
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-right flex-shrink-0 ml-3">
+                        <div className="font-bold text-blue-600 text-lg">
+                          {formatCurrency(business.total_purchase)}
+                        </div>
+                        <div className="text-sm text-gray-500">
+                          {business.percentage.toFixed(1)}%
+                        </div>
+                      </div>
+                    </div>
+                    {/* 진행률 바 */}
+                    <div className="mt-3">
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div 
+                          className="bg-blue-500 h-2 rounded-full transition-all duration-300"
+                          style={{ width: `${business.percentage}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8 text-gray-500">
+                <Trophy className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                <p>거래처 데이터가 없습니다.</p>
+              </div>
+            )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* 오른쪽: 어종별 판매량 원형 그래프 */}
+        <Card className="shadow-sm flex flex-col" style={{ height: '600px' }}>
+          <CardHeader className="flex-shrink-0 pb-4">
+            <CardTitle className="text-xl font-semibold text-gray-800 flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <BarChart3 className="h-6 w-6 text-green-600" />
+                <span>어종별 판매량</span>
+              </div>
+              <span className="text-sm font-normal text-green-600 bg-green-50 px-2 py-1 rounded">금액기준</span>
+            </CardTitle>
+            <p className="text-sm text-gray-600">
+              {getCurrentPeriodText()} 기준 어종별 판매 비중
+            </p>
+          </CardHeader>
+          <CardContent className="flex-1 overflow-hidden flex flex-col p-6 pt-0">
+            {loadingFishSales ? (
+              <div className="flex items-center justify-center h-80">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600"></div>
+              </div>
+            ) : fishTypeSales.length > 0 ? (
+              <>
+                {/* 원형 그래프 */}
+                <div className="h-56 flex-shrink-0 mb-4">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={fishTypeSales.slice(0, 5)}
+                        cx="50%"
+                        cy="50%"
+                        outerRadius={70}
+                        fill="#8884d8"
+                        dataKey="percentage"
+                        label={({ fish_name, percentage }) => 
+                          percentage > 5 ? fish_name : ''
+                        }
+                        labelLine={false}
+                      >
+                        {fishTypeSales.slice(0, 5).map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip 
+                        formatter={(value: number, name, props) => [
+                          `${value.toFixed(1)}% (${props.payload.total_quantity}${props.payload.unit}, ${formatCurrency(props.payload.total_revenue)})`,
+                          '판매 비중'
+                        ]}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                
+                {/* 어종별 상세 정보 */}
+                <div className="flex-1 overflow-y-auto pr-2 -mr-2">
+                  <div className="space-y-2">
+                    {fishTypeSales.map((fish, index) => (
+                      <div key={fish.fish_type_id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <div className="flex items-center space-x-3">
+                          <div 
+                            className="w-4 h-4 rounded-full flex-shrink-0" 
+                            style={{ backgroundColor: COLORS[index % COLORS.length] }}
+                          ></div>
+                          <div className="min-w-0">
+                            <div className="font-medium text-gray-900 truncate">{fish.fish_name}</div>
+                            <div className="text-sm text-gray-600">{fish.total_quantity}{fish.unit} 판매</div>
+                          </div>
+                        </div>
+                        <div className="text-right flex-shrink-0 ml-2">
+                          <div className="font-semibold text-gray-900">{formatCurrency(fish.total_revenue)}</div>
+                          <div className="text-sm text-gray-600">{fish.percentage.toFixed(1)}%</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="text-center py-8 text-gray-500">
+                <BarChart3 className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                <p>어종별 판매 데이터가 없습니다.</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
 
     </div>
   )

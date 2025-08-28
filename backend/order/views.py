@@ -2,6 +2,7 @@ import os
 import uuid
 import json
 from datetime import datetime
+from django.db.models.fields import RegisterLookupMixin
 from django.views import View
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
@@ -27,6 +28,7 @@ from fish_registry.serializers import FishTypeSerializer
 from business.models import Business
 from business.serializers import BusinessSerializer
 from .models import DocumentRequest
+from datetime import date
 
 @method_decorator(csrf_exempt, name='dispatch')
 class OrderUploadView(View):
@@ -546,7 +548,9 @@ class OrderUploadView(View):
                 # 어종명으로 FishType 찾기
                 try:
                     fish_type = FishType.objects.get(name=item['fish_name'])
-                    unit_price = 20000  # 기본 가격 (실제로는 시세 데이터에서 가져와야 함)
+                    
+                    # 어종의 기본 단가 사용 (없으면 기본값)
+                    unit_price = fish_type.default_price if fish_type.default_price else 20000
                     
                     order_items.append({
                         'fish_type_id': fish_type.id,
@@ -710,20 +714,20 @@ class OrderListView(View):
         # 결제 상태별 필터링 (Payment 모델의 역방향 관계 사용)
         payment_status_filter = request.GET.get('payment_status')
         if payment_status_filter and payment_status_filter != 'all':
+            from payment.models import Payment
             if payment_status_filter == 'paid':
-                # Payment 모델에서 order를 통해 역방향 조회
-                from payment.models import Payment
                 paid_order_ids = Payment.objects.filter(payment_status='paid').values_list('order_id', flat=True)
                 orders_queryset = orders_queryset.filter(id__in=paid_order_ids)
             elif payment_status_filter == 'pending':
-                # 결제 정보가 없거나 pending 상태
-                from payment.models import Payment
-                pending_order_ids = Payment.objects.filter(payment_status='pending').values_list('order_id', flat=True)
-                orders_queryset = orders_queryset.exclude(id__in=Payment.objects.filter(payment_status='paid').values_list('order_id', flat=True))
+                # 미수금: 결제되지 않았고(refunded 포함하지 않음), 주문이 취소되지 않은 건만
+                excluded_statuses = ['paid', 'refunded']
+                excluded_ids = Payment.objects.filter(payment_status__in=excluded_statuses).values_list('order_id', flat=True)
+                orders_queryset = orders_queryset.exclude(id__in=excluded_ids)
+                orders_queryset = orders_queryset.exclude(order_status='cancelled')
             elif payment_status_filter == 'refunded':
-                from payment.models import Payment
                 refunded_order_ids = Payment.objects.filter(payment_status='refunded').values_list('order_id', flat=True)
                 orders_queryset = orders_queryset.filter(id__in=refunded_order_ids)
+        # payment_status='all' 또는 지정되지 않은 경우: 모든 주문 (필터링 안함)
         
         # 날짜별 필터링
         date_filter = request.GET.get('date')
@@ -1288,6 +1292,21 @@ class ShipOutOrderView(View):
                         inventory.save()
                         inventory.refresh_from_db()  # F 표현식 갱신
                         
+                        # 출고 로그 생성
+                        from inventory.models import InventoryLog
+                        InventoryLog.objects.create(
+                            inventory=inventory,
+                            fish_type=order_item.fish_type,
+                            type='out',
+                            change=-quantity,
+                            before_quantity=old_stock,
+                            after_quantity=inventory.stock_quantity,
+                            unit=order_item.unit,
+                            source_type='order_shipout',
+                            memo=f'주문 #{order.id} 출고 처리',
+                            updated_by_id=request.user_id
+                        )
+                        
                         print(f"✅ 출고 완료 재고차감: {order_item.fish_type.name} - 재고:{old_stock}→{inventory.stock_quantity}, 주문:{old_ordered}→{inventory.ordered_quantity} (-{quantity})")
                     else:
                         print(f"⚠️ 재고차감 실패: {order_item.fish_type.name} - 재고 없음")
@@ -1453,4 +1472,44 @@ class UpdateOrderView(View):
                 'error': '주문 수정 처리 중 오류 발생',
                 'details': str(e)
             }, status=500)
+
+
+@api_view(['GET'])
+def predict_overdue(request):
+    results = []
+    today = date.today()
+    for b in Business.objects.all():
+        try:
+            oldest_unpaid_order = (
+                Order.objects.filter(business_id=b.id)
+                .order_by('order_datetime')
+                .first()
+            )
+            if oldest_unpaid_order:
+                overdue_days = (today - oldest_unpaid_order.order_datetime.date()).days
+            else:
+                overdue_days = 0
+
+            if overdue_days > 20:
+                risk = "높음"
+            elif overdue_days > 10:
+                risk = "보통"
+            else:
+                risk = "낮음"
+            
+            results.append({
+                "id": b.id,
+                "business_name": b.business_name,
+                "risk": risk,
+                "overdue_days": overdue_days,
+            })
+        except Exception as e:
+            print(f"거래처 {b.id}({b.business_name}) 처리 중 오류: {e}")
+            results.append({
+                "id": b.id,
+                "business_name": b.business_name,
+                "risk": "오류",
+                "error": str(e),
+            })
+    return Response(results) 
 

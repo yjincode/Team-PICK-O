@@ -140,10 +140,8 @@ const VoiceUploadTab: React.FC<VoiceUploadTabProps> = ({
     setParsedOrder(null)
     
     try {
-      console.log('🎤 STT 변환 시작:', file.name)
       const result = await sttApi.transcribe(file, 'ko')
       
-      console.log('✅ STT 변환 완료:', result.transcription)
       setTranscribedText(result.transcription)
       onTranscriptionComplete?.(result.transcription)
       

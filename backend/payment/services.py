@@ -367,14 +367,31 @@ class PaymentService:
     @staticmethod
     @transaction.atomic
     def restore_stock_on_cancel(order):
-        """주문 취소/환불시 주문수량만 감소 (재고수량은 건드리지 않음)"""
+        """주문 취소/환불시 재고 복원 및 입출고 로그 생성"""
         try:
             from inventory.models import Inventory
+            from inventory.services import InventoryService
             from django.db.models import F
             
-            logger.info(f"주문 취소에 따른 주문수량 감소 시작: 주문 {order.id}")
+            logger.info(f"주문 취소에 따른 재고 복원 시작: 주문 {order.id}")
             
-            # 주문 항목별로 주문수량만 감소
+            # 1. 재고 입출고 로그 생성 (환불로 인한 재고 증가)
+            try:
+                logs_created, anomalies_detected = InventoryService.process_order_stock_update(
+                    order=order,
+                    order_items=order.items.all(),
+                    action='cancel'
+                )
+                logger.info(f"✅ 재고 자동 복원 완료: {len(logs_created)}개 로그, {len(anomalies_detected)}개 이상 탐지")
+                
+                if anomalies_detected:
+                    logger.warning(f"⚠️ 이상 탐지됨: {[a.anomaly_type for a in anomalies_detected]}")
+                    
+            except Exception as e:
+                logger.error(f"⚠️ 재고 자동 복원 실패: {e}")
+                # 재고 복원 실패해도 주문 취소는 진행되도록 에러를 발생시키지 않음
+            
+            # 2. 주문수량 감소 (기존 로직 유지)
             order_items = order.items.all()
             restored_items = []
             
@@ -405,13 +422,13 @@ class PaymentService:
                 else:
                     logger.warning(f"주문수량 감소 실패: {item.fish_type.name} - 재고 없음")
             
-            logger.info(f"주문수량 감소 완료: 주문 {order.id}, 처리 항목 {len(restored_items)}개")
+            logger.info(f"재고 복원 및 주문수량 감소 완료: 주문 {order.id}, 처리 항목 {len(restored_items)}개")
             
             return restored_items
             
         except Exception as e:
-            logger.error(f"주문수량 감소 실패: 주문 {order.id}, 오류: {e}")
-            # 주문수량 감소 실패해도 주문 취소는 진행되도록 에러를 발생시키지 않음
+            logger.error(f"재고 복원 실패: 주문 {order.id}, 오류: {e}")
+            # 재고 복원 실패해도 주문 취소는 진행되도록 에러를 발생시키지 않음
             return []
     
     @staticmethod
