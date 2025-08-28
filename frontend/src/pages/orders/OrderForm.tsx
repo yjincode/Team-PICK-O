@@ -875,7 +875,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
         <div className="px-0 mb-4">
           <Tabs value={formData.source_type} onValueChange={(value: string) => handleInputChange("source_type", value)}>
             <TabsList className="grid w-full grid-cols-4 h-auto p-0 bg-transparent rounded-none border-b-2 border-gray-200">
-              {/* <TabsTrigger 
+              <TabsTrigger 
                 value="voice" 
                 className="data-[state=active]:bg-blue-500 data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-gray-700 h-16 font-medium transition-all duration-200 border-r border-gray-200 last:border-r-0 rounded-tl-lg first:rounded-tl-lg"
               >
@@ -883,7 +883,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
                   <Mic className="h-5 w-5" />
                   <span className="text-sm">음성</span>
                 </div>
-              </TabsTrigger> */}
+              </TabsTrigger>
               <TabsTrigger 
                 value="text" 
                 className="data-[state=active]:bg-blue-500 data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-gray-700 h-16 font-medium transition-all duration-200 border-r border-gray-200 last:border-r-0 rounded-none"
@@ -902,7 +902,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
                   <span className="text-sm">수동</span>
                 </div>
               </TabsTrigger>
-              {/* <TabsTrigger 
+              <TabsTrigger 
                 value="image" 
                 className="data-[state=active]:bg-blue-500 data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-gray-700 h-16 font-medium transition-all duration-200 border-r border-gray-200 last:border-r-0 rounded-tr-lg last:rounded-tr-lg"
               >
@@ -910,7 +910,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
                   <Upload className="h-5 w-5" />
                   <span className="text-sm">이미지</span>
                 </div>
-              </TabsTrigger> */}
+              </TabsTrigger>
             </TabsList>
           </Tabs>
         </div>
