@@ -26,6 +26,9 @@ class JWTAuthMiddleware:
         # 기상청 날씨 및 경보 API (인증 불필요)
         '/api/v1/dashboard/weather/',  # 기상청 API 전체 경로 제외
 
+        # 예측 API (인증 불필요)
+        '/api/v1/prediction/',  # 예측 API 전체 경로 제외
+
         '/static/',
         '/media/',
         '/api/docs/',

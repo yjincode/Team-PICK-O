@@ -18,4 +18,7 @@ urlpatterns = [
     
     # 헬스 체크
     path('health/', views.health_check, name='health_check'),
+    
+    # 대시보드
+    path('dashboard/', views.dashboard_view, name='dashboard'),
 ]
