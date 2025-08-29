@@ -13,6 +13,7 @@ import { OrderStatusBadge } from "../../components/common/OrderStatusBadge"
 import Header from "../../components/layout/Header"
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts"
 import { dashboardApi, salesApi, orderApi } from "../../lib/api"
+import AuctionPriceChart from "../../components/charts/AuctionPriceChart"
 
 // 대시보드 데이터 타입 정의
 interface DashboardStats {
@@ -246,88 +247,8 @@ const Dashboard: React.FC = () => {
       )}
 
       {/* 차트 섹션 */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6">
-        <Card className="shadow-sm">
-          <CardHeader>
-            <CardTitle className="text-base sm:text-lg font-semibold text-gray-800">경매가 동향</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="h-48 sm:h-64 bg-gray-100 rounded-lg flex items-center justify-center">
-              <p className="text-gray-500 text-sm sm:text-base">Chart will be displayed here</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="shadow-sm">
-          <CardHeader>
-            <CardTitle className="text-base sm:text-lg font-semibold text-gray-800 flex items-center justify-between">
-              <span>
-                매출 현황
-                <span className="text-sm font-normal text-gray-500 ml-2">(최근 7일)</span>
-              </span>
-              <span className="text-xs font-normal text-orange-600 bg-orange-50 px-2 py-1 rounded">미결제 포함</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {salesLoading ? (
-              <div className="h-48 sm:h-64 bg-gray-100 rounded-lg flex items-center justify-center">
-                <div className="text-gray-500 text-sm sm:text-base">주문 데이터를 불러오는 중...</div>
-              </div>
-            ) : weeklySalesData.length > 0 ? (
-              <div className="h-48 sm:h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={weeklySalesData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                    <XAxis 
-                      dataKey="date" 
-                      tick={{ fontSize: 12 }}
-                      stroke="#666"
-                    />
-                    <YAxis 
-                      tickFormatter={(value) => {
-                        if (value >= 10000000) {
-                          return `${(value / 10000000).toFixed(0)}억`
-                        } else if (value >= 10000) {
-                          return `${(value / 10000).toFixed(0)}만`
-                        } else if (value >= 1000) {
-                          return `${(value / 1000).toFixed(0)}천`
-                        }
-                        return value.toString()
-                      }}
-                      tick={{ fontSize: 12 }}
-                      stroke="#666"
-                    />
-                    <Tooltip
-                      formatter={(value: number) => [formatCurrency(value), '주문금액']}
-                      labelFormatter={(label) => `${label}일`}
-                      contentStyle={{
-                        backgroundColor: 'white',
-                        border: '1px solid #e2e8f0',
-                        borderRadius: '8px',
-                        fontSize: '14px'
-                      }}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="revenue"
-                      stroke="#3b82f6"
-                      strokeWidth={3}
-                      dot={{ fill: '#3b82f6', strokeWidth: 2, r: 4 }}
-                      activeDot={{ r: 6, fill: '#1d4ed8' }}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            ) : (
-              <div className="h-48 sm:h-64 bg-gray-100 rounded-lg flex items-center justify-center">
-                <div className="text-center">
-                  <p className="text-gray-500 text-sm sm:text-base mb-2">주문 데이터가 없습니다</p>
-                  <p className="text-gray-400 text-xs sm:text-sm">최근 7일간 주문이 없습니다</p>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+      <div className="grid grid-cols-1 gap-4 sm:gap-6">
+        <AuctionPriceChart />
       </div>
 
       {/* 하단 섹션: 최근 주문 및 재고 현황 */}
