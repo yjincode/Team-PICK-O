@@ -1,0 +1,22 @@
+# FastAPI 및 서버 관련
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+python-multipart==0.0.6
+pydantic==2.5.0
+
+# AI 모델 관련
+ultralytics>=8.3.185
+tensorflow==2.16.2
+transformers>=4.30.0
+
+# 이미지 처리
+opencv-python==4.8.1.78
+pillow>=10.0.0
+numpy>=1.24.0
+
+# 기타 유틸리티
+python-dotenv==1.0.0
+requests>=2.31.0
+
+# 선택적 - 로깅 및 모니터링
+loguru==0.7.2

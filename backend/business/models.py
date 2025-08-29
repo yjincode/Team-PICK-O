@@ -34,7 +34,7 @@ class User(AbstractUser):
 class Business(models.Model):
     """거래처 모델"""
     id = models.AutoField(primary_key=True)
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='businesses', null=True, blank=True)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='businesses')
     business_name = models.CharField(max_length=100, verbose_name="거래처명")
     phone_number = models.CharField(
         max_length=15,
@@ -78,17 +78,3 @@ class Business(models.Model):
 
     def __str__(self):
         return self.business_name
-
-
-class RiskFeature(models.Model):
-    business_id = models.BigIntegerField()
-    snapshot_date = models.DateField()
-    total_orders_30d = models.IntegerField()
-    unpaid_amount_30d = models.DecimalField(max_digits=12, decimal_places=2)
-    avg_days_to_pay_90d = models.DecimalField(max_digits=6, decimal_places=2)
-    # ...
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        unique_together = ('business_id', 'snapshot_date')
-        index_together = [('business_id',), ('snapshot_date',)]
