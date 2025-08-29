@@ -1,0 +1,72 @@
+{
+  "0": {
+    "class_name": "viral_hemorrhagic_septicemia",
+    "disease_name_ko": "바이러스성출혈성패혈증",
+    "disease_name_en": "Viral Hemorrhagic Septicemia (VHS)",
+    "description": "바이러스에 의한 급성 전신 감염으로 출혈과 패혈증을 일으키는 질병",
+    "severity": "critical",
+    "symptoms": "출혈성 병변, 복부 팽만, 안구 돌출, 급격한 폐사",
+    "treatment": "항바이러스제 투여, 격리 치료, 지지 요법",
+    "prevention": "백신 접종, 스트레스 관리, 수질 개선"
+  },
+  "1": {
+    "class_name": "lymphocystis",
+    "disease_name_ko": "림포시스티스병",
+    "disease_name_en": "Lymphocystis Disease",
+    "description": "바이러스에 의한 피부 및 지느러미의 양성 종양 질병",
+    "severity": "moderate",
+    "symptoms": "피부와 지느러미에 흰색 또는 분홍색의 사마귀 같은 종양",
+    "treatment": "자연 치유 관찰, 2차 감염 방지, 수질 관리",
+    "prevention": "스트레스 감소, 적정 사육밀도 유지, 수질 관리"
+  },
+  "2": {
+    "class_name": "emaciation",
+    "disease_name_ko": "여윔병",
+    "disease_name_en": "Emaciation Disease",
+    "description": "영양 부족이나 만성 질병으로 인한 심각한 체중 감소",
+    "severity": "severe",
+    "symptoms": "심각한 체중 감소, 등뼈 돌출, 활동성 저하, 식욕 부진",
+    "treatment": "영양 강화 사료 급여, 원인 질병 치료, 환경 개선",
+    "prevention": "균형 잡힌 영양 공급, 정기 건강 검진, 스트레스 관리"
+  },
+  "3": {
+    "class_name": "scuticociliatosis",
+    "disease_name_ko": "스쿠티카병",
+    "disease_name_en": "Scuticociliatosis",
+    "description": "스쿠티카 원충에 의한 기생충성 질병",
+    "severity": "severe",
+    "symptoms": "피부 궤양, 출혈성 병변, 아가미 손상, 행동 이상",
+    "treatment": "항원충제 투여, 염수욕, 격리 치료",
+    "prevention": "수질 관리, 적정 수온 유지, 과밀 사육 방지"
+  },
+  "4": {
+    "class_name": "streptococcosis",
+    "disease_name_ko": "연쇄구균증",
+    "disease_name_en": "Streptococcosis",
+    "description": "연쇄구균에 의한 세균성 감염 질병",
+    "severity": "severe",
+    "symptoms": "안구 돌출, 복부 팽만, 출혈성 병변, 신경 증상",
+    "treatment": "항생제 치료, 격리, 수질 개선",
+    "prevention": "백신 접종, 스트레스 관리, 적정 사육밀도 유지"
+  },
+  "5": {
+    "class_name": "vibriosis",
+    "disease_name_ko": "비브리오병",
+    "disease_name_en": "Vibriosis",
+    "description": "비브리오균에 의한 세균성 감염 질병",
+    "severity": "severe",
+    "symptoms": "피부 궤양, 출혈성 병변, 복부 팽만, 지느러미 부패",
+    "treatment": "항생제 치료, 염수욕, 격리 치료",
+    "prevention": "수질 관리, 적정 염분 농도 유지, 스트레스 감소"
+  },
+  "6": {
+    "class_name": "edwardsiellosis",
+    "disease_name_ko": "에드워드병",
+    "disease_name_en": "Edwardsiellosis",
+    "description": "에드워드균에 의한 세균성 감염 질병",
+    "severity": "severe",
+    "symptoms": "피부 궤양, 복부 팽만, 출혈성 병변, 간 손상",
+    "treatment": "항생제 치료, 격리, 지지 요법",
+    "prevention": "수질 관리, 스트레스 감소, 적정 사육환경 유지"
+  }
+}
