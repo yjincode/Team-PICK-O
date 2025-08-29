@@ -53,7 +53,6 @@ const FishTypeManager: React.FC = () => {
       const response = await fishTypeApi.getAll()
       setFishTypes(response.data || [])
     } catch (error) {
-      console.error('어종 목록 불러오기 실패:', error)
       toast.error('어종 목록을 불러오는데 실패했습니다.')
     } finally {
       setLoading(false)
@@ -90,7 +89,6 @@ const FishTypeManager: React.FC = () => {
       resetForm()
       fetchFishTypes()
     } catch (error) {
-      console.error('어종 추가 실패:', error)
       toast.error('어종 추가에 실패했습니다.')
     }
   }
@@ -105,7 +103,6 @@ const FishTypeManager: React.FC = () => {
       resetForm()
       fetchFishTypes()
     } catch (error) {
-      console.error('어종 수정 실패:', error)
       toast.error('어종 수정에 실패했습니다.')
     }
   }
@@ -121,7 +118,6 @@ const FishTypeManager: React.FC = () => {
       toast.success('어종이 삭제되었습니다.')
       fetchFishTypes()
     } catch (error) {
-      console.error('어종 삭제 실패:', error)
       toast.error('어종 삭제에 실패했습니다.')
     }
   }

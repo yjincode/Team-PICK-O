@@ -44,7 +44,6 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({ className = '', us
         await loadWeatherData(newLocation);
       }
     } catch (error) {
-      console.error('사용자 주소 설정 실패:', error);
     }
   };
 
@@ -79,7 +78,6 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({ className = '', us
       setLastUpdated(new Date());
       setError(null);
     } catch (err) {
-      console.error('날씨 데이터 로딩 실패:', err);
       setError('날씨 정보를 불러올 수 없습니다.');
     } finally {
       setLoading(false);
@@ -108,7 +106,6 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({ className = '', us
       setCurrentLocation(newLocation);
       await loadWeatherData(newLocation);
     } catch (err) {
-      console.error('현재 위치 감지 실패:', err);
       setError('현재 위치를 감지할 수 없습니다.');
     } finally {
       setLoading(false);

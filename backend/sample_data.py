@@ -15,8 +15,7 @@ from decimal import Decimal
 import random
 from django.utils import timezone
 
-from django.contrib.auth.models import User
-from business.models import Business
+from business.models import Business, User
 from fish_registry.models import FishType
 from inventory.models import Inventory, StockTransaction
 from order.models import Order, OrderItem
@@ -25,13 +24,22 @@ from payment.models import Payment, CashReceipt, TaxInvoice
 def create_sample_data():
     print("🚀 수산물 샘플 데이터 생성 시작...")
     
-    # 사용자 확인
+    # 사용자 확인/생성
     try:
         user = User.objects.get(id=1)
-        print(f"✅ 사용자: {user.username} - ID: {user.id}")
+        print(f"✅ 기존 사용자: {user.username} (업체: {user.business_name}) - ID: {user.id}")
     except User.DoesNotExist:
-        print("❌ 사용자 ID 1번이 존재하지 않습니다.")
-        return
+        print("❌ 사용자 ID 1번이 존재하지 않습니다. 새로 생성합니다.")
+        user = User.objects.create_user(
+            username='admin',
+            email='admin@example.com',
+            password='admin123',
+            business_name='테스트 수산물 업체',
+            owner_name='관리자',
+            phone_number='010-1234-5678',
+            status='approved'
+        )
+        print(f"✅ 새 사용자 생성: {user.username} (업체: {user.business_name}) - ID: {user.id}")
     
     # 1. 거래처 생성 (12개로 축소, 상호명으로 변경)
     print("🏢 거래처 생성 중...")
@@ -55,7 +63,7 @@ def create_sample_data():
         business, created = Business.objects.get_or_create(
             business_name=biz_data['name'],
             defaults={
-                'phone_number': biz_data['phone'],
+                'phone_number': biz_data['phone'].replace('-', '')[:12],  # 하이픈 제거하고 12자리 제한
                 'address': biz_data['addr'],
                 'user': user
             }

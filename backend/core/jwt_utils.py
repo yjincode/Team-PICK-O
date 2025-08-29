@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 JWT_SECRET_KEY = getattr(settings, 'JWT_SECRET_KEY', 'your-super-secret-key-change-in-production')
 JWT_REFRESH_SECRET_KEY = getattr(settings, 'JWT_REFRESH_SECRET_KEY', 'refresh-super-secret-key-change-in-production')
 JWT_ALGORITHM = 'HS256'
-JWT_ACCESS_EXPIRATION_MINUTES = 15  # 액세스 토큰: 15분 (짧게)
+JWT_ACCESS_EXPIRATION_MINUTES = 30  # 액세스 토큰: 30분 (연장)
 JWT_REFRESH_EXPIRATION_DAYS = 7    # 리프레시 토큰: 7일 (길게)
 
 def generate_access_token(user):

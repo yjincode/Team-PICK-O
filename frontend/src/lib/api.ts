@@ -40,10 +40,6 @@ const api = axios.create({
   },
 })
 
-console.log('🚀 API 인스턴스 생성됨:', {
-  baseURL: API_BASE_URL,
-  fullURL: `${API_BASE_URL}/business/auth/firebase-to-jwt/`
-})
 
 
 // Request interceptor (JWT 토큰 전용, 매우 간단하고 빠름)
@@ -87,12 +83,10 @@ const refreshAccessToken = async (): Promise<string | null> => {
         TokenManager.setAccessToken(newAccessToken)
         resolve(newAccessToken)
       } else {
-        console.log('❌ 토큰 갱신 실패 - 리로그인 필요')
         TokenManager.removeTokens()
         resolve(null)
       }
     } catch (error) {
-      console.error('❌ 토큰 갱신 오류:', error)
       TokenManager.removeTokens()
       resolve(null)
     }
@@ -125,14 +119,13 @@ api.interceptors.request.use(
     // 일반 엔드포인트는 토큰 필요
     let accessToken = TokenManager.getAccessToken()
 
-    // 액세스 토큰이 없거나 만료된 경우 갱신 시도
-    if (!accessToken || !TokenManager.isAccessTokenValid()) {
-      console.log('🔄 액세스 토큰 갱신 필요')
+    // 액세스 토큰이 없거나 5분 이내 만료 예정인 경우 갱신 시도
+    const timeUntilExpiry = TokenManager.getAccessTokenTimeUntilExpiry()
+    if (!accessToken || !TokenManager.isAccessTokenValid() || timeUntilExpiry < 300) {  // 5분(300초) 이내 만료 시 갱신
       accessToken = await refreshAccessToken()
 
       // 갱신에 실패한 경우 토큰 제거만 하고 조용히 처리
       if (!accessToken) {
-        console.log('🚫 토큰 갱신 실패 - 인증되지 않은 요청')
         return Promise.reject({ 
           name: 'AuthenticationError',
           message: '인증이 필요합니다',
@@ -146,21 +139,9 @@ api.interceptors.request.use(
       config.headers.Authorization = `Bearer ${accessToken}`
     }
 
-
-
-    console.log('🚀 자동 토큰 갱신 API 요청:', {
-      url: config.url,
-      fullUrl: `${config.baseURL}${config.url}`,
-      method: config.method?.toUpperCase(),
-      hasAccessToken: !!accessToken,
-      tokenTimeLeft: TokenManager.getAccessTokenTimeUntilExpiry() + '초',
-      headers: config.headers
-    });
-
     return config
   },
   (error) => {
-    console.error('🚫 API 요청 오류:', error);
     return Promise.reject(error)
   }
 )
@@ -171,18 +152,9 @@ api.interceptors.response.use(
     return response;
   },
   async (error) => {
-    console.error('❌ API 오류:', {
-      url: error.config?.url,
-      status: error.response?.status,
-      method: error.config?.method?.toUpperCase(),
-      message: error.response?.data?.error || error.message
-    });
-
     // 401 오류 시 토큰 갱신 후 재시도
     if (error.response?.status === 401 && !error.config._retry) {
       error.config._retry = true;
-      
-      console.log('🔄 401 오류로 인한 토큰 갱신 및 재시도');
       
       const newAccessToken = await refreshAccessToken();
 
@@ -192,7 +164,6 @@ api.interceptors.response.use(
         return api(error.config);
       } else {
         // 토큰 갱신 실패 시 토큰 제거만 하고 리다이렉트는 AuthContext에 맡김
-        console.log('🚫 토큰 갱신 실패 - AuthContext에서 처리');
         TokenManager.removeTokens();
       }
     }
@@ -846,7 +817,7 @@ export { api }
 // JWT 토큰에서 사용자 정보 추출
 export const getUserInfoFromToken = (): { user_id?: number; business_name?: string } | null => {
   try {
-    const token = localStorage.getItem('accessToken')
+    const token = localStorage.getItem('access_token')  // TokenManager와 통일
     if (!token) return null
     
     // JWT 토큰의 payload 부분 디코딩 (base64)
@@ -859,7 +830,6 @@ export const getUserInfoFromToken = (): { user_id?: number; business_name?: stri
       business_name: decodedPayload.business_name
     }
   } catch (error) {
-    console.error('JWT 토큰 디코딩 실패:', error)
     return null
   }
 }
