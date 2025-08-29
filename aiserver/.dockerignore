@@ -58,3 +58,4 @@ docker-compose*.yml
 # 개발 도구
 debug_*.py
 test_*.py
+regularized_models_4years/

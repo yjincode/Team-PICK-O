@@ -74,22 +74,17 @@ const OrderList: React.FC = () => {
     const fetchBusinesses = async () => {
       try {
         setBusinessLoading(true)
-        console.log('🏢 거래처 목록 가져오기 시작...')
         const response = await businessApi.getAll({ page_size: 1000 }) // 모든 거래처 가져오기
         
-        console.log('🏢 거래처 API 응답:', response)
         
         // Django 페이지네이션 응답 구조 처리
         if (response.results && Array.isArray(response.results)) {
           // Django 페이지네이션 응답: {count, next, previous, results}
-          console.log('✅ 거래처 데이터 (Django 페이지네이션):', response.results.length, '개')
           setBusinesses(response.results)
         } else {
-          console.log('❌ 예상하지 못한 거래처 응답 형식:', response)
           setBusinesses([])
         }
       } catch (error) {
-        console.error('❌ 거래처 목록 가져오기 실패:', error)
         setBusinesses([])
       } finally {
         setBusinessLoading(false)
@@ -126,10 +121,8 @@ const OrderList: React.FC = () => {
         
         if (businessFilter !== 'all') {
           params.business_id = businessFilter
-          console.log('🏢 거래처 필터 적용:', businessFilter)
         }
         
-        console.log('📋 주문 목록 요청 파라미터:', params)
         const response = await orderApi.getAll(params)
         
         // 백엔드 페이지네이션 응답 처리
@@ -143,7 +136,6 @@ const OrderList: React.FC = () => {
           setOrders(Array.isArray(ordersData) ? ordersData : [])
         }
       } catch (error) {
-        console.error('주문 목록 가져오기 실패:', error)
         setOrders([])
       } finally {
         setLoading(false)
@@ -169,7 +161,6 @@ const OrderList: React.FC = () => {
   const handleNewOrder = (orderData: any) => {
     // PostgreSQL에서 자동 생성된 ID를 우선 사용
     if (!orderData.id && !orderData.order_id) {
-      console.error('❌ 주문 데이터에 ID가 없습니다:', orderData)
       toast.error('주문 ID를 받아올 수 없습니다.')
       return
     }
@@ -213,7 +204,6 @@ const OrderList: React.FC = () => {
         setShowOrderForm(false)
         toast.success('주문이 성공적으로 등록되었습니다!')
       } catch (error) {
-        console.error('주문 목록 새로고침 실패:', error)
         toast.error('주문 목록을 새로고침하는데 실패했습니다.')
       }
     }
@@ -226,7 +216,6 @@ const OrderList: React.FC = () => {
   // 상세보기 처리
   const handleViewDetail = (orderId: number) => {
     if (!orderId || orderId === undefined || isNaN(orderId)) {
-      console.error('잘못된 주문 ID:', orderId)
       toast.error('주문 ID가 올바르지 않습니다.')
       return
     }
@@ -299,7 +288,6 @@ const OrderList: React.FC = () => {
       }
       
     } catch (error: any) {
-      console.error('환불 처리 실패:', error)
       toast.error(error.response?.data?.error || '환불 처리 중 오류가 발생했습니다.')
     } finally {
       setProcessingRefund(false)
@@ -355,7 +343,6 @@ const OrderList: React.FC = () => {
       }
       
     } catch (error: any) {
-      console.error('주문 취소 실패:', error)
       toast.error(error.response?.data?.error || '주문 취소 중 오류가 발생했습니다.')
     } finally {
       setProcessingCancel(false)

@@ -114,14 +114,12 @@ const AddInventoryModal: React.FC<AddInventoryModalProps> = ({
   // 모달이 열릴 때마다 실행
   useEffect(() => {
     if (open) {
-      console.log('🚪 모달 열림, selectedFishType:', selectedFishType)
       // body 스크롤 방지
       document.body.style.overflow = 'hidden'
       loadFishTypes()
       
       // selectedFishType이 없으면 폼 초기화
       if (!selectedFishType || !selectedFishType.id) {
-        console.log('🔄 selectedFishType이 없어서 폼 초기화')
         resetForm()
       }
     } else {
@@ -180,22 +178,18 @@ const AddInventoryModal: React.FC<AddInventoryModalProps> = ({
 
   // 선택된 어종이 있으면 초기값 설정 (먼저 실행)
   useEffect(() => {
-    console.log('🔄 useEffect 실행 - selectedFishType:', selectedFishType, 'open:', open)
     
     if (selectedFishType && selectedFishType.id !== undefined && selectedFishType.id !== null) {
-      console.log('🎯 선택된 어종으로 초기값 설정:', selectedFishType)
       setFormData(prev => {
         const newData = {
           ...prev,
           fish_type_id: selectedFishType.id.toString(),
           unit: selectedFishType.unit || "박스"
         }
-        console.log('📝 폼 데이터 업데이트:', newData)
         return newData
       })
     } else if (open) {
       // selectedFishType이 없고 모달이 열려있으면 폼 초기화
-      console.log('🔄 빈 상태로 폼 초기화')
       resetForm()
     }
   }, [selectedFishType, open]) // selectedFishType과 open 모두 의존
@@ -214,12 +208,10 @@ const AddInventoryModal: React.FC<AddInventoryModalProps> = ({
         // 직접 배열인 경우 (예외 처리)
         fishTypeData = response
       } else {
-        console.warn('예상치 못한 응답 형태:', response)
       }
       
       setFishTypes(fishTypeData)
     } catch (error: any) {
-      console.error('❌ 어종 목록 로딩 에러:', error)
       toast.error('어종 목록을 불러오는데 실패했습니다')
       setFishTypes([])
     } finally {
@@ -309,17 +301,13 @@ const AddInventoryModal: React.FC<AddInventoryModalProps> = ({
       let response;
       if (mode === 'edit' && inventory) {
         // 수정 모드: 기존 재고에 수량 추가
-        console.log('📤 재고 추가 요청:', submitData)
         response = await inventoryApi.create(submitData) // 기존 API 재사용 (백엔드에서 중복 처리)
-        console.log('✅ 재고 추가 성공:', response)
         const quantity = parseFloat(formData.add_quantity)
         const action = quantity >= 0 ? '추가' : '수정'
         toast.success(`재고가 성공적으로 ${action}되었습니다: ${formData.add_quantity}`)
       } else {
         // 생성 모드: 새 재고 생성
-        console.log('📤 재고 추가 요청:', submitData)
         response = await inventoryApi.create(submitData)
-        console.log('✅ 재고 추가 성공:', response)
         const quantity = parseFloat(formData.add_quantity)
         const action = quantity >= 0 ? '추가' : '수정'
         toast.success(`재고가 성공적으로 ${action}되었습니다: ${formData.add_quantity}`)
@@ -329,7 +317,6 @@ const AddInventoryModal: React.FC<AddInventoryModalProps> = ({
       handleClose()
       onSuccess?.()
     } catch (error: any) {
-      console.error('❌ 재고 처리 에러:', error)
       
       let errorMessage = mode === 'edit' ? '재고 수정에 실패했습니다' : '재고 추가에 실패했습니다'
       if (error.response?.data?.error) {
@@ -350,7 +337,6 @@ const AddInventoryModal: React.FC<AddInventoryModalProps> = ({
 
   // selectedFishType이 없으면 빈 상태로 렌더링
   if (!selectedFishType || !selectedFishType.id) {
-    console.log('⚠️ selectedFishType이 없어서 빈 상태로 렌더링')
   }
 
   return (
@@ -417,7 +403,6 @@ const AddInventoryModal: React.FC<AddInventoryModalProps> = ({
                   </SelectTrigger>
                   <SelectContent className="z-[999999]">
                     {fishTypes.map((fishType) => {
-                      console.log('🐟 렌더링 어종:', fishType)
                       return (
                         <SelectItem key={fishType.id} value={fishType.id.toString()}>
                           {fishType.name} ({fishType.unit})

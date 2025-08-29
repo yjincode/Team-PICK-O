@@ -92,7 +92,6 @@ const CashReceiptPage: React.FC = () => {
              setSupplierInfo(defaultSupplier)
            }
          } catch (error) {
-           console.error('사용자 정보 조회 실패:', error)
            // 기본 공급자 정보 설정 (곰표수산)
            const defaultSupplier = {
              business_name: '곰표수산',
@@ -142,7 +141,6 @@ const CashReceiptPage: React.FC = () => {
             })
           }
         } catch (error) {
-          console.error('문서 요청 정보 조회 실패:', error)
           // 기본 정보로 설정
           setDocumentRequest({
             id: parseInt(id),
@@ -154,10 +152,8 @@ const CashReceiptPage: React.FC = () => {
           })
         }
       } catch (error) {
-        console.error('데이터 조회 실패:', error)
       } finally {
         setLoading(false)
-        console.log('  - buyerInfo:', buyerInfo)
       }
     }
 
@@ -195,7 +191,6 @@ const CashReceiptPage: React.FC = () => {
 
       pdf.save(`현금영수증_${order?.business_name}_${new Date().toISOString().split('T')[0]}.pdf`)
     } catch (error) {
-      console.error('PDF 생성 실패:', error)
     }
   }
 

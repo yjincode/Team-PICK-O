@@ -13,7 +13,6 @@ export const getCoordinatesFromAddress = async (address: string): Promise<{ lat:
     }
 
     const data = await response.json();
-    console.log('주소 검색 결과:', data);
     
     if (data.results && Array.isArray(data.results) && data.results.length > 0) {
       const result = data.results[0];
@@ -30,7 +29,6 @@ export const getCoordinatesFromAddress = async (address: string): Promise<{ lat:
     
     return null;
   } catch (error) {
-    console.error('주소 검색 오류:', error);
     return null;
   }
 };
@@ -49,7 +47,6 @@ export const setUserDefaultLocation = async (userAddress: string): Promise<UserL
       };
     } else {
       // 주소 변환 실패 시 서울로 기본 설정
-      console.warn('주소 변환 실패, 서울로 기본 설정');
       return {
         name: "서울",
         lat: 37.5665,
@@ -58,7 +55,6 @@ export const setUserDefaultLocation = async (userAddress: string): Promise<UserL
       };
     }
   } catch (error) {
-    console.error('사용자 주소 설정 실패:', error);
     // 에러 시 서울로 기본 설정
     return {
       name: "서울",
@@ -107,7 +103,6 @@ export const fetchWeatherData = async (lat: number = 37.5665, lon: number = 126.
     const data: OpenMeteoResponse = await response.json();
     return transformWeatherData(data, lat, lon);
     } catch (error) {
-    console.error('날씨 API 오류:', error);
       throw error;
     }
 };
@@ -148,12 +143,10 @@ export const fetchWeatherWarning = async (area?: string): Promise<WeatherWarning
     }
     
     const data = await response.json();
-    console.log('📋 경보 API 응답:', data);
     
     if (data.success && data.data && data.data.length > 0) {
       // 첫 번째 경보 정보 반환
       const warning = data.data[0];
-      console.log('⚠️ 경보 정보 발견:', warning);
   return {
         level: warning.level as WarningLevel,
         type: warning.type as WarningType,
@@ -164,11 +157,9 @@ export const fetchWeatherWarning = async (area?: string): Promise<WeatherWarning
     }
     
     // 경보가 없으면 null 반환
-    console.log('ℹ️ 발효 중인 경보가 없습니다.');
     return null;
     
   } catch (error) {
-    console.error('경보 정보 가져오기 실패:', error);
     // 에러 시 null 반환 (경보배너 숨김)
     return null;
   }
@@ -248,11 +239,9 @@ export const getLocationNameFromCoords = async (lat: number, lon: number): Promi
       }
     });
     
-    console.log('GPS 좌표 기반 지역명:', closestLocation);
     return closestLocation;
     
   } catch (error) {
-    console.error('지역명 변환 오류:', error);
     return '현재 위치';
   }
 };
