@@ -19,8 +19,8 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework import status
 
-# 모델 파일 경로
-MODEL_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'final_models')
+# 모델 파일 경로 (최종 정규화 모델)
+MODEL_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'regularized_models_4years')
 
 # 어종 매핑
 SPECIES_MAPPING = {
@@ -40,14 +40,14 @@ def load_models():
     
     for korean_name, english_name in SPECIES_MAPPING.items():
         try:
-            # LightGBM 모델 로드
-            lgb_model_path = os.path.join(MODEL_DIR, f'lightgbm_clean_{english_name}.txt')
+            # LightGBM 모델 로드 (2차 정규화 모델)
+            lgb_model_path = os.path.join(MODEL_DIR, f'lightgbm_reg2_{english_name}.txt')
             if os.path.exists(lgb_model_path):
                 lgb_model = lgb.Booster(model_file=lgb_model_path)
                 models[f'lgb_{english_name}'] = lgb_model
             
-            # XGBoost 모델 로드
-            xgb_model_path = os.path.join(MODEL_DIR, f'xgboost_clean_{english_name}.json')
+            # XGBoost 모델 로드 (2차 정규화 모델)
+            xgb_model_path = os.path.join(MODEL_DIR, f'xgboost_reg2_{english_name}.json')
             if os.path.exists(xgb_model_path):
                 xgb_model = xgb.XGBRegressor()
                 xgb_model.load_model(xgb_model_path)
@@ -318,3 +318,71 @@ def health_check(request):
             'status': 'unhealthy',
             'error': str(e)
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+def dashboard_view(request):
+    """대시보드 뷰"""
+    from django.shortcuts import render
+    
+    # 최근 7일간 예측 데이터 생성
+    today = datetime.now().date()
+    dates = [(today - timedelta(days=i)) for i in range(7)]
+    
+    # 모델 로드
+    models = load_models()
+    
+    # 어종별 데이터
+    species_mapping = {
+        'rockfish': '우럭',
+        'flounder': '넙치', 
+        'mullet': '숭어',
+        'red_sea_bream': '참돔',
+        'sea_bass': '광어'
+    }
+    
+    chart_data = {
+        'dates': [],
+        'species_data': {korean_name: [] for korean_name in species_mapping.values()},
+        'environmental_data': {
+            'water_temperature': [],
+            'temperature': []
+        }
+    }
+    
+    for target_date in reversed(dates):  # 오래된 날짜부터
+        target_date_str = target_date.strftime('%Y-%m-%d')
+        chart_data['dates'].append(target_date_str)
+        
+        try:
+            # 환경 데이터 조회
+            environmental_data = get_environmental_data_from_db(target_date_str)
+            
+            chart_data['environmental_data']['water_temperature'].append(
+                environmental_data.get('water_temperature', 0)
+            )
+            chart_data['environmental_data']['temperature'].append(
+                environmental_data.get('temperature', 0)
+            )
+            
+            # 각 어종별 예측
+            for species_name, korean_name in species_mapping.items():
+                result = predict_price(species_name, target_date_str, environmental_data, models)
+                
+                if result and 'error' not in result:
+                    chart_data['species_data'][korean_name].append(result['predicted_price'])
+                else:
+                    chart_data['species_data'][korean_name].append(0)
+                    
+        except Exception as e:
+            # 데이터가 없는 경우 0으로 채움
+            chart_data['environmental_data']['water_temperature'].append(0)
+            chart_data['environmental_data']['temperature'].append(0)
+            for korean_name in species_mapping.values():
+                chart_data['species_data'][korean_name].append(0)
+    
+    context = {
+        'chart_data': json.dumps(chart_data),
+        'species_list': json.dumps(list(species_mapping.values()))
+    }
+    
+    return render(request, 'prediction/dashboard.html', context)

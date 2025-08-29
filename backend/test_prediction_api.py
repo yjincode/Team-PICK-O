@@ -35,21 +35,13 @@ def test_supported_species():
         return False
 
 def test_single_species_prediction():
-    """단일 어종 예측 테스트"""
-    print("\n🎯 단일 어종 예측 테스트...")
+    """단일 어종 예측 테스트 (DB에서 환경 데이터 자동 조회)"""
+    print("\n🎯 단일 어종 예측 테스트 (DB 자동 조회)...")
     
-    # 테스트 데이터
+    # 테스트 데이터 (environmental_data 없이 - DB에서 자동 조회)
     test_data = {
         "species": "(활)우럭",
-        "target_date": "2024-12-01",
-        "environmental_data": {
-            "temperature": 15.5,
-            "water_temperature": 12.3,
-            "humidity": 65.0,
-            "precipitation": 0.0,
-            "wind_speed": 3.2,
-            "pressure": 1013.2
-        }
+        "target_date": "2025-08-27"  # 수집한 수온 데이터가 있는 날짜
     }
     
     try:
@@ -70,17 +62,9 @@ def test_all_species_prediction():
     """모든 어종 예측 테스트"""
     print("\n🎯 모든 어종 예측 테스트...")
     
-    # 테스트 데이터
+    # 테스트 데이터 (environmental_data 없이 - DB에서 자동 조회)
     test_data = {
-        "target_date": "2024-12-01",
-        "environmental_data": {
-            "temperature": 15.5,
-            "water_temperature": 12.3,
-            "humidity": 65.0,
-            "precipitation": 0.0,
-            "wind_speed": 3.2,
-            "pressure": 1013.2
-        }
+        "target_date": "2025-08-27"  # 수집한 수온 데이터가 있는 날짜
     }
     
     try:
