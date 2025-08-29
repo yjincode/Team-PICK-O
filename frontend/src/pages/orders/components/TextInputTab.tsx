@@ -2,6 +2,7 @@
  * 텍스트 입력 탭 컴포넌트
  * 텍스트를 입력하여 주문을 등록하는 탭입니다.
  */
+import { fetchParsedOrder } from "../../../utils/orderParser"
 import { useState, useEffect } from "react"
 import { Button } from "../../../components/ui/button"
 import { Label } from "../../../components/ui/label"
@@ -112,7 +113,7 @@ const TextInputTab: React.FC<TextInputTabProps> = ({
     setParsedOrder(null)
     
     try {
-      const basicOrderData = await parseVoiceOrderWithAPI(textInput) // API 연동 버전 사용
+      const basicOrderData = await fetchParsedOrder(textInput) // API 연동 버전 사용
       
       if (basicOrderData.items && basicOrderData.items.length > 0) {
         const validatedOrderData = validateAndCompleteOrder(basicOrderData)

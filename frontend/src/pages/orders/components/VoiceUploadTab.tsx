@@ -9,7 +9,7 @@ import { Input } from "../../../components/ui/input"
 import { Label } from "../../../components/ui/label"
 import { Mic, Upload, Play, Pause, Trash2, AlertCircle } from "lucide-react"
 import { sttApi, businessApi } from "../../../lib/api"
-import { validateAndCompleteOrder, parseVoiceOrderWithBusiness } from "../../../utils/orderParser"
+import { validateAndCompleteOrder, parseVoiceOrderWithBusiness, fetchParsedOrder } from "../../../utils/orderParser"
 import type { Business, FishType } from "../../../types"
 import { fishTypeApi } from "../../../lib/api"
 
@@ -57,6 +57,9 @@ const VoiceUploadTab: React.FC<VoiceUploadTabProps> = ({
   const [businesses, setBusinesses] = useState<Business[]>([])
   const [fishTypes, setFishTypes] = useState<FishType[]>([])
 
+
+
+  
   // 거래처 목록 로드
   useEffect(() => {
     const fetchBusinesses = async () => {
@@ -131,70 +134,70 @@ const VoiceUploadTab: React.FC<VoiceUploadTabProps> = ({
     setTranscribedText('')
     
     // STT 처리 시작
-    await transcribeAudio(file)
+    await parseVoiceFile(file)
   }
 
-  const transcribeAudio = async (file: File) => {
-    setIsProcessing(true)
-    setError('')
-    setParsedOrder(null)
+  // const transcribeAudio = async (file: File) => {
+  //   setIsProcessing(true)
+  //   setError('')
+  //   setParsedOrder(null)
     
-    try {
-      const result = await sttApi.transcribe(file, 'ko')
+  //   try {
+  //     // const result = await sttApi.transcribe(file, 'ko')
       
-      setTranscribedText(result.transcription)
-      onTranscriptionComplete?.(result.transcription)
+  //     // setTranscribedText(result.transcription)
+  //     // onTranscriptionComplete?.(result.transcription)
       
-      // 음성 텍스트를 주문 데이터로 파싱 시도 (거래처 매칭 포함)
-      try {
-        console.log('📝 주문 데이터 및 거래처 파싱 시작:', result.transcription)
-        const fullOrderData = await parseVoiceOrderWithBusiness(result.transcription)
+  //     // 음성 텍스트를 주문 데이터로 파싱 시도 (거래처 매칭 포함)
+  //     try {
+  //       // console.log('📝 주문 데이터 및 거래처 파싱 시작:', result.transcription)
+  //       const fullOrderData = await fetchParsedOrder(file)
         
-        if (fullOrderData.items && fullOrderData.items.length > 0) {
-          const validatedOrderData = validateAndCompleteOrder(fullOrderData)
-          console.log('🎯 파싱된 주문 데이터:', validatedOrderData)
-          console.log('🏢 매칭된 거래처:', fullOrderData.business)
+  //       if (fullOrderData.items && fullOrderData.items.length > 0) {
+  //         const validatedOrderData = validateAndCompleteOrder(fullOrderData)
+  //         console.log('🎯 파싱된 주문 데이터:', validatedOrderData)
+  //         console.log('🏢 매칭된 거래처:', fullOrderData.business)
           
-          setParsedOrder(validatedOrderData)
+  //         setParsedOrder(validatedOrderData)
           
-          // 거래처가 매칭된 경우 자동 선택
-          if (fullOrderData.business) {
-            onBusinessChange?.(fullOrderData.business.id)
-          }
+  //         // 거래처가 매칭된 경우 자동 선택
+  //         if (fullOrderData.business) {
+  //           onBusinessChange?.(fullOrderData.business.id)
+  //         }
           
-          // 배송일이 파싱된 경우 자동 설정
-          if (validatedOrderData.delivery_date) {
-            onDeliveryDateChange?.(validatedOrderData.delivery_date)
-          }
+  //         // 배송일이 파싱된 경우 자동 설정
+  //         if (validatedOrderData.delivery_date) {
+  //           onDeliveryDateChange?.(validatedOrderData.delivery_date)
+  //         }
           
-          // 파싱된 데이터를 상위 컴포넌트로 전달
-          onOrderParsed?.({ ...validatedOrderData, business: fullOrderData.business })
-        } else {
-          console.warn('⚠️ 주문 품목을 찾을 수 없습니다:', result.transcription)
-          // 파싱 실패해도 텍스트는 유지하고, 거래처만 있다면 표시
-          if (fullOrderData.business) {
-            console.log('🏢 거래처만 매칭됨:', fullOrderData.business)
-            setParsedOrder({ ...fullOrderData, items: [] })
-            onBusinessChange?.(fullOrderData.business.id)
-          } else {
-            setParsedOrder(null)
-          }
-        }
-      } catch (parseError) {
-        console.error('❌ 주문 파싱 실패:', parseError)
-        // 파싱 실패해도 STT 텍스트는 유지
-        setParsedOrder(null)
-      }
+  //         // 파싱된 데이터를 상위 컴포넌트로 전달
+  //         onOrderParsed?.({ ...validatedOrderData, business: fullOrderData.business })
+  //       } else {
+  //         console.warn('⚠️ 주문 품목을 찾을 수 없습니다:', result.transcription)
+  //         // 파싱 실패해도 텍스트는 유지하고, 거래처만 있다면 표시
+  //         if (fullOrderData.business) {
+  //           console.log('🏢 거래처만 매칭됨:', fullOrderData.business)
+  //           setParsedOrder({ ...fullOrderData, items: [] })
+  //           onBusinessChange?.(fullOrderData.business.id)
+  //         } else {
+  //           setParsedOrder(null)
+  //         }
+  //       }
+  //     } catch (parseError) {
+  //       console.error('❌ 주문 파싱 실패:', parseError)
+  //       // 파싱 실패해도 STT 텍스트는 유지
+  //       setParsedOrder(null)
+  //     }
       
-    } catch (err) {
-      console.error('❌ STT 변환 또는 파싱 실패:', err)
-      const errorMsg = err instanceof Error ? err.message : 'STT 변환 중 오류가 발생했습니다.'
-      setError(errorMsg)
-      onError?.(errorMsg)
-    } finally {
-      setIsProcessing(false)
-    }
-  }
+  //   } catch (err) {
+  //     console.error('❌ STT 변환 또는 파싱 실패:', err)
+  //     const errorMsg = err instanceof Error ? err.message : 'STT 변환 중 오류가 발생했습니다.'
+  //     setError(errorMsg)
+  //     onError?.(errorMsg)
+  //   } finally {
+  //     setIsProcessing(false)
+  //   }
+  // }
 
   const handleRemoveFile = () => {
     setUploadedFile(null)
@@ -230,7 +233,53 @@ const VoiceUploadTab: React.FC<VoiceUploadTabProps> = ({
     const i = Math.floor(Math.log(bytes) / Math.log(k))
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
   }
-
+  const parseVoiceFile = async (file: File) => {
+    setIsProcessing(true)
+    setError('')
+    setParsedOrder(null)
+  
+    try {
+      const fullOrderData = await fetchParsedOrder(file)
+  
+      // ✅ 변환된 텍스트 (있으면 표시)
+      if (fullOrderData.transcribed_text) {
+        setTranscribedText(fullOrderData.transcribed_text)
+        onTranscriptionComplete?.(fullOrderData.transcribed_text)
+      }
+  
+      // ✅ 주문 품목 확인
+      if (fullOrderData.items && fullOrderData.items.length > 0) {
+        const validatedOrderData = validateAndCompleteOrder(fullOrderData)
+        setParsedOrder(validatedOrderData)
+        onOrderParsed?.({ ...validatedOrderData, business: fullOrderData.business })
+  
+        if (fullOrderData.business) {
+          onBusinessChange?.(fullOrderData.business.id)
+        }
+  
+        if (validatedOrderData.delivery_date) {
+          onDeliveryDateChange?.(validatedOrderData.delivery_date)
+        }
+      } else {
+        setParsedOrder(null)
+  
+        // 거래처만 매칭된 경우
+        if (fullOrderData.business) {
+          onBusinessChange?.(fullOrderData.business.id)
+        }
+  
+        setError("주문 품목을 파악할 수 없습니다. 텍스트 또는 파일을 다시 확인해 주세요.")
+      }
+  
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : '파일 분석 중 오류가 발생했습니다.'
+      setError(errorMsg)
+      onError?.(errorMsg)
+    } finally {
+      setIsProcessing(false)
+    }
+  }
+  
   return (
     <div className="space-y-4">
       {!uploadedFile ? (
