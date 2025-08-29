@@ -32,9 +32,8 @@ def api_root(request):
             "payments": "/api/v1/payments/", 
             "inventory": "/api/v1/inventory/",
             "fish_registry": "/api/v1/fish-registry/",
+            "fish_analysis": "/api/v1/fish-analysis/",
             "sales": "/api/v1/sales/",
-            "order": "/api/v1/order/",
-            "prediction": "/api/v1/prediction/",
         }
     })
 
@@ -75,15 +74,16 @@ urlpatterns = [
     path('api/v1/business/', include('business.urls')),
     path('api/v1/accounts/', include('accounts.urls')),
     path('api/v1/dashboard/', include('dashboard.urls')),
-    # path('api/v1/fish/', include('fish_analysis.urls')),  # PyTorch 의존성으로 임시 비활성화
     path('api/v1/orders/', include('order.urls')),  # 복수형으로 수정
     path('api/v1/payments/', include('payment.urls')),  # 결제 API
     path('api/v1/inventory/', include('inventory.urls')),
     path('api/v1/fish-registry/', include('fish_registry.urls')),
+    path('api/v1/fish-analysis/', include('fish_analysis.urls')),
+    path('api/v1/analysis/', include(('fish_analysis.urls', 'fish_analysis'), namespace='analysis')),  # AI 서버 프록시 (별칭)
     path('api/v1/transcription/', include('transcription.urls')),
     path('api/v1/sales/', include('sales.urls')),
-    path('api/v1/order/', include('order.urls')),
-    path('api/v1/prediction/', include('prediction.urls')),
+    
+
     
     # API Documentation
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),

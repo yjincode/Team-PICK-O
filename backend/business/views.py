@@ -828,51 +828,8 @@ class BusinessDetailAPIView(generics.RetrieveAPIView):
     queryset = Business.objects.all()
     serializer_class = BusinessSerializer
 
+
 def unpaid_orders_view(request, business_id):
     orders = get_unpaid_orders(business_id)  # DB 조회
     data = list(orders.values())
     return JsonResponse({"orders": data})
-
-@api_view(['GET'])
-def predict_overdue(request):
-    results = []
-    today = date.today()
-    for b in Business.objects.all():
-        # 미수금(결제 안된) 주문 중 가장 오래된 주문의 날짜를 찾음
-        oldest_unpaid_order = (
-            Order.objects.filter(business_id=b.id, order_status__in=['placed', 'ready', 'delivered'])
-            .exclude(payment__payment_status__in=['paid', 'refunded'])
-            .order_by('order_datetime')
-            .first()
-        )
-        if oldest_unpaid_order:
-            overdue_days = (today - oldest_unpaid_order.order_datetime.date()).days
-        else:
-            overdue_days = 0
-
-        # 위험도 규칙
-        if overdue_days > 20:
-            risk = "높음"
-        elif overdue_days > 10:
-            risk = "보통"
-        else:
-            risk = "낮음"
-
-        results.append({
-            "id": b.id,
-            "business_name": b.business_name,
-            "risk": risk,
-            "overdue_days": overdue_days,
-        })
-    return Response(results)
-
-
-@api_view(['GET'])
-def business_detail(request, pk):
-    try:
-        business = Business.objects.get(id=pk)
-        serializer = BusinessSerializer(business)
-        return Response(serializer.data)
-    except Business.DoesNotExist:
-        return Response({'error': '거래처를 찾을 수 없습니다.'}, status=404)
-

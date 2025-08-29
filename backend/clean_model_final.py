@@ -16,7 +16,10 @@ import pickle
 
 def load_data():
     """데이터 로드"""
-    df = pd.read_csv('integrated_dataset_balanced.csv')
+    # 학습 데이터와 검증 데이터를 합쳐서 로드
+    train_df = pd.read_csv('data/train_even_odd_day_balanced.csv')
+    val_df = pd.read_csv('data/val_even_odd_day_balanced.csv')
+    df = pd.concat([train_df, val_df], ignore_index=True)
     df['auction_date'] = pd.to_datetime(df['auction_date'])
     return df
 

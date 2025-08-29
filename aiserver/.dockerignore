@@ -1,0 +1,56 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# 로그 파일
+*.log
+logs/
+
+# 임시 파일
+*.tmp
+temp/
+tmp/
+
+# 테스트
+.pytest_cache/
+.coverage
+htmlcov/
+
+# 모델 파일 (용량이 크므로 런타임에 마운트)
+models/yolo/*.pt
+models/vgg16/*.h5
+
+# Docker
+Dockerfile
+.dockerignore
+docker-compose*.yml
+
+# CI/CD
+.github/
+
+# 개발 도구
+debug_*.py
+test_*.py

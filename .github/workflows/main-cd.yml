@@ -1,4 +1,4 @@
-name: Demo Deploy (임시 테스트 - 1시간 후 종료)
+name: Production Deploy
 
 on:
   push:
@@ -84,6 +84,18 @@ jobs:
         else
           echo "✅ Frontend ECR 저장소 존재 확인"
         fi
+        
+        # AI Server ECR 저장소 확인/생성
+        if ! aws ecr describe-repositories --repository-names ${{ secrets.ECR_REPOSITORY_AISERVER }} > /dev/null 2>&1; then
+          echo "⚠️ AI Server ECR 저장소가 없습니다. 생성 중..."
+          aws ecr create-repository \
+            --repository-name ${{ secrets.ECR_REPOSITORY_AISERVER }} \
+            --image-scanning-configuration scanOnPush=true \
+            --region ${{ secrets.AWS_REGION }}
+          echo "✅ AI Server ECR 저장소 생성 완료"
+        else
+          echo "✅ AI Server ECR 저장소 존재 확인"
+        fi
     
     - name: Login to Amazon ECR
       id: login-ecr
@@ -100,7 +112,7 @@ jobs:
       env:
         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY_BACKEND }}
-        IMAGE_TAG: demo-${{ github.sha }}
+        IMAGE_TAG: ${{ github.sha }}
         DOCKER_BUILDKIT: 1
       run: |
         echo "🔍 Backend 이미지 존재 여부 확인 중..."
@@ -142,11 +154,57 @@ jobs:
             --region ${{ secrets.AWS_REGION }}
         fi
     
+    - name: Build and push AI server image
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY_AISERVER }}
+        IMAGE_TAG: ${{ github.sha }}
+        DOCKER_BUILDKIT: 1
+      run: |
+        echo "🔍 AI Server 이미지 존재 여부 확인 중..."
+        echo "📍 ECR Registry: $ECR_REGISTRY"
+        echo "📍 Repository: $ECR_REPOSITORY"
+        echo "📍 Tag: $IMAGE_TAG"
+        
+        # 이미지가 이미 존재하는지 확인
+        if aws ecr describe-images \
+          --repository-name $ECR_REPOSITORY \
+          --image-ids imageTag=$IMAGE_TAG \
+          --region ${{ secrets.AWS_REGION }} > /dev/null 2>&1; then
+          echo "✅ AI Server 이미지가 이미 존재합니다. 빌드를 스킵합니다."
+          echo "📦 기존 이미지: $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+        else
+          echo "🔨 AI Server 이미지 빌드 중..."
+          
+          # Docker context 확인
+          cd aiserver
+          ls -la
+          
+          # AI Server 이미지 빌드 및 푸시
+          docker buildx build \
+            --platform linux/amd64 \
+            --tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
+            --tag $ECR_REGISTRY/$ECR_REPOSITORY:latest \
+            --push \
+            --progress=plain \
+            -f Dockerfile \
+            .
+          
+          echo "✅ AI Server 이미지 빌드 및 푸시 완료"
+          echo "📦 이미지: $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+          
+          # 푸시된 이미지 확인
+          aws ecr describe-images \
+            --repository-name $ECR_REPOSITORY \
+            --image-ids imageTag=$IMAGE_TAG \
+            --region ${{ secrets.AWS_REGION }}
+        fi
+    
     - name: Build and push frontend image
       env:
         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY_FRONTEND }}
-        IMAGE_TAG: demo-${{ github.sha }}
+        IMAGE_TAG: ${{ github.sha }}
         DOCKER_BUILDKIT: 1
       run: |
         echo "🔍 Frontend 이미지 존재 여부 확인 중..."
@@ -196,7 +254,7 @@ jobs:
         EC2_USER: ${{ secrets.EC2_USER }}
         EC2_KEY: ${{ secrets.EC2_PRIVATE_KEY }}
         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-        IMAGE_TAG: demo-${{ github.sha }}
+        IMAGE_TAG: ${{ github.sha }}
       run: |
         # 시크릿 값 존재 여부 확인
         echo "🔍 시크릿 값 확인:"
@@ -243,7 +301,6 @@ jobs:
         # Copy deployment files to EC2
         scp -i ec2_key.pem -o StrictHostKeyChecking=no \
           deployment/docker-compose.yml \
-          deployment/auto-shutdown.sh \
           $EC2_USER@$EC2_HOST:~/
         
         # Create .env file for docker-compose
@@ -251,6 +308,7 @@ jobs:
         # Docker Images
         BACKEND_IMAGE=$ECR_REGISTRY/${{ secrets.ECR_REPOSITORY_BACKEND }}:$IMAGE_TAG
         FRONTEND_IMAGE=$ECR_REGISTRY/${{ secrets.ECR_REPOSITORY_FRONTEND }}:$IMAGE_TAG
+        AISERVER_IMAGE=$ECR_REGISTRY/${{ secrets.ECR_REPOSITORY_AISERVER }}:$IMAGE_TAG
         
         # Database Configuration (컨테이너 간 통신)
         POSTGRES_DB="${{ secrets.POSTGRES_DB }}"
@@ -298,6 +356,14 @@ jobs:
         TOSS_SECRET_KEY="${{ secrets.TOSS_SECRET_KEY }}"
         VITE_TOSS_CLIENT_KEY="${{ secrets.VITE_TOSS_CLIENT_KEY }}"
         DISCORD_WEBHOOK_URL="${{ secrets.DISCORD_WEBHOOK_URL }}"
+        
+        # API 키 설정 (새로 추가)
+        WEATHER_API_KEY="${{ secrets.WEATHER_API_KEY }}"
+        DATA_GO_KR_API_KEY="${{ secrets.DATA_GO_KR_API_KEY }}"
+        KOSIS_API_KEY="${{ secrets.KOSIS_API_KEY }}"
+        KHOA_API_KEY="${{ secrets.KHOA_API_KEY }}"
+        AGRICULTURE_API_KEY="${{ secrets.AGRICULTURE_API_KEY }}"
+        NIFS_API_KEY="${{ secrets.NIFS_API_KEY }}"
         EOL
         
         # Copy env file to EC2
@@ -449,10 +515,7 @@ jobs:
             docker exec teamPicko-backend netstat -tlnp || echo "netstat not available"
           fi
           
-          # Setup auto-shutdown after 1 hour
-          chmod +x auto-shutdown.sh
-          ./auto-shutdown.sh 1
-          echo "✅ 데모 배포 완료 - 1시간 후 자동 종료"
+          echo "✅ 프로덕션 배포 완료"
           echo "🌐 Frontend: https://badaejangbu.store"
           echo "🔧 Backend API: https://badaejangbu.store/api"
         EOF
@@ -468,17 +531,17 @@ jobs:
         curl -f http://$EC2_HOST/ || echo "⚠️ Frontend 외부 접근 실패"
         curl -f https://$EC2_HOST/ || echo "⚠️ HTTPS Frontend 외부 접근 실패"
         curl -f http://$EC2_HOST:8000/api/v1/ || echo "⚠️ Backend 외부 접근 실패"
-        echo "✅ 데모 배포 성공"
+        echo "✅ 프로덕션 배포 성공"
     
     - name: Notify deployment status
       if: always()
       run: |
         if [ "${{ job.status }}" == "success" ]; then
-          echo "🚀 데모 배포 성공! EC2 서버가 1시간 후 자동 종료됩니다."
+          echo "🚀 프로덕션 배포 성공!"
           echo "접속 URL: https://badaejangbu.store"
           echo "API URL: https://badaejangbu.store/api"
         else
-          echo "❌ 데모 배포 실패! 로그를 확인해주세요."
+          echo "❌ 프로덕션 배포 실패! 로그를 확인해주세요."
         fi
 
   rollback:
