@@ -418,6 +418,10 @@ jobs:
           # Stop existing containers (using production compose)
           docker compose --env-file ~/.env down || true
           
+          # 마이그레이션 충돌 해결을 위해 데이터베이스 볼륨 초기화
+          echo "🗃️ 데이터베이스 볼륨 초기화 중..."
+          docker volume rm teamPicko-postgres-data 2>/dev/null || true
+          
           # Create Firebase Admin SDK key file from environment variable
           echo "🔧 Firebase Admin SDK 키 파일 생성 중..."
           echo "🔍 환경변수 확인: FIREBASE_ADMIN_CREDENTIALS_JSON 길이: \$${#FIREBASE_ADMIN_CREDENTIALS_JSON}"

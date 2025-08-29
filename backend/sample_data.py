@@ -15,7 +15,8 @@ from decimal import Decimal
 import random
 from django.utils import timezone
 
-from business.models import Business, User
+from django.contrib.auth.models import User
+from business.models import Business
 from fish_registry.models import FishType
 from inventory.models import Inventory, StockTransaction
 from order.models import Order, OrderItem
@@ -27,7 +28,7 @@ def create_sample_data():
     # 사용자 확인
     try:
         user = User.objects.get(id=1)
-        print(f"✅ 사용자: {user.business_name} ({user.owner_name}) - ID: {user.id}")
+        print(f"✅ 사용자: {user.username} - ID: {user.id}")
     except User.DoesNotExist:
         print("❌ 사용자 ID 1번이 존재하지 않습니다.")
         return
@@ -97,7 +98,8 @@ def create_sample_data():
             user=user,
             defaults={
                 'unit': fish_data['unit'],
-                'aliases': fish_data['aliases']
+                'aliases': fish_data['aliases'],
+                'default_price': random.randint(10, 50) * 1000  # 기본 가격 10,000-50,000원
             }
         )
         fish_type_objects.append(fish_type)
@@ -323,7 +325,8 @@ def create_sample_data():
                 order=order,
                 fish_type=fish_type,
                 quantity=quantity,
-                unit_price=unit_price,
+                unit_price=int(unit_price),
+                unit_price_snapshot=int(unit_price),
                 unit=fish_type.unit,
                 item_name_snapshot=fish_type.name
             )
@@ -366,7 +369,7 @@ def create_sample_data():
             try:
                 payment = Payment.objects.create(
                     order=order,
-                    business_id=business.id,
+                    business=business,
                     amount=int(total_price),
                     method=payment_method,
                     payment_status=payment_status,
