@@ -43,6 +43,10 @@ htmlcov/
 models/yolo/*.pt
 models/vgg16/*.h5
 
+# 중요: 설정 파일들은 포함시켜야 함
+!models/vgg16/classes.json
+!**/*.json
+
 # Docker
 Dockerfile
 .dockerignore

@@ -60,6 +60,8 @@ db.sqlite3
 !package.json
 !package-lock.json
 !tsconfig.json
+!tsconfig.node.json
+!classes.json
 !*.config.json
 *_data.json
 user_data.json
