@@ -128,7 +128,8 @@ python manage.py loaddata initial_data.json
 source venv/bin/activate
 
 # 개발 서버 실행
-python manage.py runserver
+
+
 
 # 또는 특정 포트로 실행
 python manage.py runserver 8000

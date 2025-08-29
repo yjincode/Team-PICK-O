@@ -70,7 +70,7 @@ async def health_check():
                 "vgg16": vgg_status
             },
             "server": {
-                "port": os.getenv("AI_SERVER_PORT", "8002"),
+                "port": os.getenv("AI_SERVER_PORT", "8001"),
                 "host": os.getenv("AI_SERVER_HOST", "0.0.0.0")
             }
         }
@@ -81,7 +81,7 @@ if __name__ == "__main__":
     import uvicorn
     
     host = os.getenv("AI_SERVER_HOST", "0.0.0.0")
-    port = int(os.getenv("AI_SERVER_PORT", "8002"))
+    port = int(os.getenv("AI_SERVER_PORT", "8001"))
     
     print(f"🚀 AI Server 시작: http://{host}:{port}")
     print(f"📚 API 문서: http://{host}:{port}/docs")

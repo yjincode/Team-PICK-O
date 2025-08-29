@@ -151,7 +151,7 @@ async def get_analysis_service_status():
             },
             server={
                 "ready": str(status["ready_for_analysis"]),
-                "port": os.getenv("AI_SERVER_PORT", "8002"),
+                "port": os.getenv("AI_SERVER_PORT", "8001"),
                 "host": os.getenv("AI_SERVER_HOST", "0.0.0.0")
             }
         )
