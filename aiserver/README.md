@@ -84,9 +84,9 @@ python main.py
 ```
 
 서버 실행 후:
-- **API 서버**: http://localhost:8002
-- **API 문서**: http://localhost:8002/docs
-- **ReDoc**: http://localhost:8002/redoc
+- **API 서버**: http://localhost:8001
+- **API 문서**: http://localhost:8001/docs
+- **ReDoc**: http://localhost:8001/redoc
 
 ## 📡 API 엔드포인트
 
@@ -96,7 +96,7 @@ POST /api/v1/analysis/predict
 Content-Type: multipart/form-data
 
 # 예시
-curl -X POST "http://localhost:8002/api/v1/analysis/predict" \
+curl -X POST "http://localhost:8001/api/v1/analysis/predict" \
      -H "accept: application/json" \
      -H "Content-Type: multipart/form-data" \
      -F "image=@fish_image.jpg"
@@ -173,7 +173,7 @@ POST /api/v1/analysis/models/reload
 
 ```env
 # 서버 설정
-AI_SERVER_PORT=8002
+AI_SERVER_PORT=8001
 AI_SERVER_HOST=0.0.0.0
 
 # 모델 경로
@@ -199,7 +199,7 @@ RUN pip install -r requirements.txt
 
 COPY . .
 
-EXPOSE 8002
+EXPOSE 8001
 CMD ["python", "main.py"]
 ```
 
@@ -235,7 +235,7 @@ async def call_ai_server(image_file):
     async with httpx.AsyncClient() as client:
         files = {"image": image_file}
         response = await client.post(
-            "http://localhost:8002/api/v1/analysis/predict",
+            "http://localhost:8001/api/v1/analysis/predict",
             files=files
         )
         return response.json()
