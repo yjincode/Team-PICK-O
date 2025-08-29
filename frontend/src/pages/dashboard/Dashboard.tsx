@@ -99,13 +99,11 @@ const Dashboard: React.FC = () => {
           let dayRevenue = 0
           let dayOrderCount = 0
           
-          console.log(`📊 ${dateStr} 주문 응답:`, ordersResponse)
           
           if (ordersResponse.data) {
             ordersResponse.data.forEach(order => {
               // 주문일자가 해당 날짜와 일치하는지 확인
               const orderDate = new Date(order.order_datetime).toISOString().split('T')[0]
-              console.log(`🔍 주문 ${order.id}: 날짜=${orderDate}, 금액=${order.total_price}`)
               if (orderDate === dateStr) {
                 dayRevenue += order.total_price || 0
                 dayOrderCount += 1
@@ -113,7 +111,6 @@ const Dashboard: React.FC = () => {
             })
           }
           
-          console.log(`📈 ${dateStr} 총 금액: ${dayRevenue}, 주문수: ${dayOrderCount}`)
           
           weeklyData.push({
             date: `${currentDate.getMonth() + 1}/${currentDate.getDate()}`,
@@ -122,7 +119,6 @@ const Dashboard: React.FC = () => {
           })
           
         } catch (dayErr) {
-          console.error(`${dateStr} 주문 데이터 로딩 실패:`, dayErr)
           // 에러 시 0값으로 추가
           weeklyData.push({
             date: `${currentDate.getMonth() + 1}/${currentDate.getDate()}`,
@@ -135,7 +131,6 @@ const Dashboard: React.FC = () => {
       setWeeklySalesData(weeklyData)
       
     } catch (err) {
-      console.error('주간 주문 데이터 로딩 실패:', err)
     } finally {
       setSalesLoading(false)
     }
@@ -160,7 +155,6 @@ const Dashboard: React.FC = () => {
         setLowStockItems(stockData)
 
       } catch (err) {
-        console.error('대시보드 데이터 로딩 실패:', err)
         setError('데이터를 불러오는데 실패했습니다.')
       } finally {
         setLoading(false)

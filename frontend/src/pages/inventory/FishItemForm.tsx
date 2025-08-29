@@ -64,7 +64,6 @@ const FishItemForm: React.FC = () => {
       // DRF ViewSet은 배열을 직접 반환하므로 response.data를 직접 사용
       setFishTypes(response.data || [])
     } catch (error) {
-      console.error('어종 목록 불러오기 실패:', error)
       toast.error('어종 목록을 불러오는데 실패했습니다.')
     } finally {
       setLoading(false)
@@ -87,17 +86,14 @@ const FishItemForm: React.FC = () => {
         fishType.name.toLowerCase().includes(term) ||
         (fishType.aliases && fishType.aliases.toLowerCase().includes(term))
       )
-      console.log('🔎 검색 결과:', filtered.length)
     }
     
     // 단위 필터링
     if (unitFilter !== 'all') {
       const beforeFilter = filtered.length
       filtered = filtered.filter(fishType => fishType.unit === unitFilter)
-      console.log('📏 단위 필터 결과:', filtered.length, '(이전:', beforeFilter, ')')
     }
     
-    console.log('✅ 최종 필터 결과:', filtered.length)
     setFilteredFishTypes(filtered)
     setTotalPages(Math.ceil(filtered.length / itemsPerPage))
   }, [fishTypes, searchTerm, unitFilter])
@@ -121,7 +117,6 @@ const FishItemForm: React.FC = () => {
   
   // 디버깅: 사용 가능한 단위 목록 로그
   useEffect(() => {
-    console.log('📊 어종별 단위:', fishTypes.map(fish => ({ name: fish.name, unit: fish.unit })))
   }, [fishTypes, availableUnits])
 
   // 폼 초기화
@@ -149,7 +144,6 @@ const FishItemForm: React.FC = () => {
       resetForm()
       fetchFishTypes()
     } catch (error) {
-      console.error('어종 추가 실패:', error)
       toast.error('어종 추가에 실패했습니다.')
     }
   }
@@ -164,7 +158,6 @@ const FishItemForm: React.FC = () => {
       resetForm()
       fetchFishTypes()
     } catch (error) {
-      console.error('어종 수정 실패:', error)
       toast.error('어종 수정에 실패했습니다.')
     }
   }
@@ -180,7 +173,6 @@ const FishItemForm: React.FC = () => {
       toast.success('어종이 삭제되었습니다.')
       fetchFishTypes()
     } catch (error) {
-      console.error('어종 삭제 실패:', error)
       toast.error('어종 삭제에 실패했습니다.')
     }
   }
@@ -358,7 +350,6 @@ const FishItemForm: React.FC = () => {
                     placeholder="어종명이나 별칭을 입력하세요..."
                     value={searchTerm}
                     onChange={(e) => {
-                      console.log('🔎 검색어 변경:', e.target.value)
                       setSearchTerm(e.target.value)
                     }}
                     className="pl-10"
@@ -372,7 +363,6 @@ const FishItemForm: React.FC = () => {
                   단위별 필터
                 </Label>
                 <Select value={unitFilter} onValueChange={(value) => {
-                  console.log('📏 단위 필터 변경:', value)
                   setUnitFilter(value)
                 }}>
                   <SelectTrigger>

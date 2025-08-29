@@ -63,14 +63,11 @@ const UnpaidList: React.FC = () => {
 			
 				try {
 					const businessRes = await businessApi.getById(businessId)
-					console.log("API Response:", businessRes)
 					setBusiness(businessRes)
 				  } catch (err) {
-					console.error("거래처 정보 가져오기 실패:", err)
 					setBusiness(null)
 				  }
 			} catch (error) {
-				console.error('미수금 주문 목록 가져오기 실패:', error)
 				setOrders([])
 			} finally {
 				setLoading(false)

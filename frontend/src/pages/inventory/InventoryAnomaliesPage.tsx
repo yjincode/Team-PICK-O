@@ -105,7 +105,6 @@ const InventoryAnomaliesPage: React.FC = () => {
     setLoading(true)
     try {
       const data = await inventoryApi.getAnomalies()
-      console.log('⚠️ 이상 탐지 API 응답:', data)
       
       if (data && data.data && Array.isArray(data.data)) {
         setAnomalies(data.data)
@@ -113,7 +112,6 @@ const InventoryAnomaliesPage: React.FC = () => {
         setAnomalies([])
       }
     } catch (error: any) {
-      console.error('이상 탐지 로딩 에러:', error)
       setAnomalies([])
       toast.error('이상 탐지 결과를 불러오는데 실패했습니다')
     } finally {
@@ -128,7 +126,6 @@ const InventoryAnomaliesPage: React.FC = () => {
       toast.success('상태가 업데이트되었습니다')
       loadAnomalies() // 목록 새로고침
     } catch (error: any) {
-      console.error('상태 업데이트 에러:', error)
       toast.error('상태 업데이트에 실패했습니다')
     }
   }

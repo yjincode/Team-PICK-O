@@ -35,7 +35,6 @@ const OrderConfirmationPage: React.FC = () => {
         // 2. 공급자 정보 조회 (로그인한 사용자)
         try {
           const userResponse = await authApi.getCurrentUser()
-          console.log('👤 사용자 정보 조회 결과:', userResponse)
           
           if (userResponse.success && userResponse.data) {
             setSupplierInfo({
@@ -56,7 +55,6 @@ const OrderConfirmationPage: React.FC = () => {
             })
           }
         } catch (error) {
-          console.log('👤 사용자 정보 조회 실패, 기본값 사용')
           setSupplierInfo({
             business_name: '곰표수산',
             owner_name: '김곰표',
@@ -76,7 +74,6 @@ const OrderConfirmationPage: React.FC = () => {
          }
 
       } catch (error) {
-        console.error('데이터 조회 실패:', error)
       } finally {
         setLoading(false)
       }
@@ -116,7 +113,6 @@ const OrderConfirmationPage: React.FC = () => {
 
       pdf.save(`주문확인서_${order?.business_name}_${new Date().toISOString().split('T')[0]}.pdf`)
     } catch (error) {
-      console.error('PDF 생성 실패:', error)
     }
   }
 

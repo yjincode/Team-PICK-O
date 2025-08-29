@@ -111,7 +111,6 @@ const InventoryCheckModal: React.FC<InventoryCheckModalProps> = ({
         // 이상탐지 정보만 콘솔에 로그
         
         if (result.anomaly_detected) {
-          console.log('⚠️ 실사 차이 이상탐지 발생:', result)
         }
         
         onSuccess()
@@ -121,7 +120,6 @@ const InventoryCheckModal: React.FC<InventoryCheckModalProps> = ({
         toast.error(error.error || '실사 조정 중 오류가 발생했습니다.')
       }
     } catch (error) {
-      console.error('실사 조정 오류:', error)
       toast.error('실사 조정 중 오류가 발생했습니다.')
     } finally {
       setLoading(false)

@@ -77,7 +77,6 @@ const VoiceUploadTab: React.FC<VoiceUploadTabProps> = ({
         
         setBusinesses(businessData)
       } catch (error) {
-        console.error('거래처 목록 가져오기 실패:', error)
         setBusinesses([])
       }
     }
@@ -100,7 +99,6 @@ const VoiceUploadTab: React.FC<VoiceUploadTabProps> = ({
         
         setFishTypes(fishData)
       } catch (error) {
-        console.error('어종 목록 가져오기 실패:', error)
         setFishTypes([])
       }
     }
@@ -148,6 +146,14 @@ const VoiceUploadTab: React.FC<VoiceUploadTabProps> = ({
   //     // setTranscribedText(result.transcription)
   //     // onTranscriptionComplete?.(result.transcription)
       
+// <<<<<<< feature/cdtest4
+//       // 음성 텍스트를 주문 데이터로 파싱 시도 (거래처 매칭 포함)
+//       try {
+//         const fullOrderData = await parseVoiceOrderWithBusiness(result.transcription)
+        
+//         if (fullOrderData.items && fullOrderData.items.length > 0) {
+//           const validatedOrderData = validateAndCompleteOrder(fullOrderData)
+// =======
   //     // 음성 텍스트를 주문 데이터로 파싱 시도 (거래처 매칭 포함)
   //     try {
   //       // console.log('📝 주문 데이터 및 거래처 파싱 시작:', result.transcription)
@@ -157,6 +163,7 @@ const VoiceUploadTab: React.FC<VoiceUploadTabProps> = ({
   //         const validatedOrderData = validateAndCompleteOrder(fullOrderData)
   //         console.log('🎯 파싱된 주문 데이터:', validatedOrderData)
   //         console.log('🏢 매칭된 거래처:', fullOrderData.business)
+
           
   //         setParsedOrder(validatedOrderData)
           
@@ -170,6 +177,32 @@ const VoiceUploadTab: React.FC<VoiceUploadTabProps> = ({
   //           onDeliveryDateChange?.(validatedOrderData.delivery_date)
   //         }
           
+// <<<<<<< feature/cdtest4
+//           // 파싱된 데이터를 상위 컴포넌트로 전달
+//           onOrderParsed?.({ ...validatedOrderData, business: fullOrderData.business })
+//         } else {
+//           // 파싱 실패해도 텍스트는 유지하고, 거래처만 있다면 표시
+//           if (fullOrderData.business) {
+//             setParsedOrder({ ...fullOrderData, items: [] })
+//             onBusinessChange?.(fullOrderData.business.id)
+//           } else {
+//             setParsedOrder(null)
+//           }
+//         }
+//       } catch (parseError) {
+//         // 파싱 실패해도 STT 텍스트는 유지
+//         setParsedOrder(null)
+//       }
+      
+//     } catch (err) {
+//       const errorMsg = err instanceof Error ? err.message : 'STT 변환 중 오류가 발생했습니다.'
+//       setError(errorMsg)
+//       onError?.(errorMsg)
+//     } finally {
+//       setIsProcessing(false)
+//     }
+//   }
+// =======
   //         // 파싱된 데이터를 상위 컴포넌트로 전달
   //         onOrderParsed?.({ ...validatedOrderData, business: fullOrderData.business })
   //       } else {
@@ -198,6 +231,7 @@ const VoiceUploadTab: React.FC<VoiceUploadTabProps> = ({
   //     setIsProcessing(false)
   //   }
   // }
+
 
   const handleRemoveFile = () => {
     setUploadedFile(null)
@@ -529,7 +563,6 @@ const VoiceUploadTab: React.FC<VoiceUploadTabProps> = ({
                             value={item.fish_type_id}
                             onChange={(e) => {
                               // TODO: 어종 변경 핸들러 구현
-                              console.log('어종 변경:', e.target.value)
                             }}
                           >
                             {fishTypes.map((fish) => (
@@ -549,7 +582,6 @@ const VoiceUploadTab: React.FC<VoiceUploadTabProps> = ({
                             min="1"
                             onChange={(e) => {
                               // TODO: 수량 변경 핸들러 구현
-                              console.log('수량 변경:', e.target.value)
                             }}
                           />
                         </div>
@@ -563,7 +595,6 @@ const VoiceUploadTab: React.FC<VoiceUploadTabProps> = ({
                             min="0"
                             onChange={(e) => {
                               // TODO: 단가 변경 핸들러 구현
-                              console.log('단가 변경:', e.target.value)
                             }}
                           />
                         </div>
@@ -575,7 +606,6 @@ const VoiceUploadTab: React.FC<VoiceUploadTabProps> = ({
                             value={item.unit}
                             onChange={(e) => {
                               // TODO: 단위 변경 핸들러 구현
-                              console.log('단위 변경:', e.target.value)
                             }}
                           >
                             <option value="박스">박스</option>
@@ -598,7 +628,6 @@ const VoiceUploadTab: React.FC<VoiceUploadTabProps> = ({
                           className="text-red-500 hover:text-red-700 text-sm font-medium"
                           onClick={() => {
                             // TODO: 항목 삭제 핸들러 구현
-                            console.log('항목 삭제:', index)
                           }}
                         >
                           삭제

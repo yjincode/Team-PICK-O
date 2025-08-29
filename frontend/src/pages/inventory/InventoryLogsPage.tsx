@@ -108,7 +108,6 @@ const InventoryLogsPage: React.FC = () => {
     setLoading(true)
     try {
       const data = await inventoryApi.getLogs()
-      console.log('📜 입출고 로그 API 응답:', data)
       
       if (Array.isArray(data)) {
         setLogs(data)
@@ -116,7 +115,6 @@ const InventoryLogsPage: React.FC = () => {
         setLogs([])
       }
     } catch (error: any) {
-      console.error('입출고 로그 로딩 에러:', error)
       setLogs([])
       toast.error('입출고 로그를 불러오는데 실패했습니다')
     } finally {

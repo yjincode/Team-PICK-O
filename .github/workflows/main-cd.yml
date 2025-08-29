@@ -364,6 +364,9 @@ jobs:
         KHOA_API_KEY="${{ secrets.KHOA_API_KEY }}"
         AGRICULTURE_API_KEY="${{ secrets.AGRICULTURE_API_KEY }}"
         NIFS_API_KEY="${{ secrets.NIFS_API_KEY }}"
+        
+        # AI 서버 연결 설정
+        AI_SERVER_URL="http://aiserver:8001"
         EOL
         
         # Copy env file to EC2
@@ -418,14 +421,8 @@ jobs:
           # Stop existing containers (using production compose)
           docker compose --env-file ~/.env down || true
           
-          # 마이그레이션 완전 초기화 - 모든 데이터베이스 상태 제거
-          echo "🗃️ 데이터베이스 완전 초기화 중..."
-          docker volume ls | grep postgres | awk '{print \$2}' | xargs -I {} docker volume rm {} 2>/dev/null || true
-          docker volume rm teamPicko-postgres-data 2>/dev/null || true
-          
-          # PostgreSQL 데이터 디렉토리가 있다면 삭제
-          sudo rm -rf /var/lib/postgresql/data/* 2>/dev/null || true
-          echo "✅ 데이터베이스 완전 초기화 완료"
+          # 기존 컨테이너 중지 (데이터 보존)
+          echo "🔧 기존 서비스 중지 중... (데이터 유지)"
           
           # Create Firebase Admin SDK key file from environment variable
           echo "🔧 Firebase Admin SDK 키 파일 생성 중..."

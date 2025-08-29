@@ -74,7 +74,6 @@ const TextInputTab: React.FC<TextInputTabProps> = ({
         
         setBusinesses(businessData)
       } catch (error) {
-        console.error('거래처 목록 가져오기 실패:', error)
         setBusinesses([])
       }
     }
@@ -97,7 +96,6 @@ const TextInputTab: React.FC<TextInputTabProps> = ({
         
         setFishTypes(fishData)
       } catch (error) {
-        console.error('어종 목록 가져오기 실패:', error)
         setFishTypes([])
       }
     }
@@ -121,11 +119,9 @@ const TextInputTab: React.FC<TextInputTabProps> = ({
         setParsedOrder(validatedOrderData)
         onOrderParsed?.(validatedOrderData)
       } else {
-        console.warn('⚠️ 주문 품목을 찾을 수 없습니다:', textInput)
         setParsedOrder(null)
       }
     } catch (error) {
-      console.error('❌ 텍스트 파싱 실패:', error)
       setParsedOrder(null)
     } finally {
       setIsLocalProcessing(false)
@@ -223,7 +219,6 @@ const TextInputTab: React.FC<TextInputTabProps> = ({
                             value={item.fish_type_id}
                             onChange={(e) => {
                               // TODO: 어종 변경 핸들러 구현
-                              console.log('어종 변경:', e.target.value)
                             }}
                           >
                             {fishTypes.map((fish) => (
@@ -243,7 +238,6 @@ const TextInputTab: React.FC<TextInputTabProps> = ({
                             min="1"
                             onChange={(e) => {
                               // TODO: 수량 변경 핸들러 구현
-                              console.log('수량 변경:', e.target.value)
                             }}
                           />
                         </div>
@@ -257,7 +251,6 @@ const TextInputTab: React.FC<TextInputTabProps> = ({
                             min="0"
                             onChange={(e) => {
                               // TODO: 단가 변경 핸들러 구현
-                              console.log('단가 변경:', e.target.value)
                             }}
                           />
                         </div>
@@ -269,7 +262,6 @@ const TextInputTab: React.FC<TextInputTabProps> = ({
                             value={item.unit}
                             onChange={(e) => {
                               // TODO: 단위 변경 핸들러 구현
-                              console.log('단위 변경:', e.target.value)
                             }}
                           >
                             <option value="박스">박스</option>
@@ -292,7 +284,6 @@ const TextInputTab: React.FC<TextInputTabProps> = ({
                           className="text-red-500 hover:text-red-700 text-sm font-medium"
                           onClick={() => {
                             // TODO: 항목 삭제 핸들러 구현
-                            console.log('항목 삭제:', index)
                           }}
                         >
                           삭제

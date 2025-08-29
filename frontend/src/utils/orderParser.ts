@@ -79,11 +79,9 @@ export async function findFishTypeFromAPI(fishName: string): Promise<FishType | 
       )
     }
     
-    console.log(`어종 매칭: ${fishName} -> ${matchedFish ? matchedFish.name : '매칭 없음'}`)
     return matchedFish || null
     
   } catch (error) {
-    console.error('어종 매칭 중 오류:', error)
     return null
   }
 }
@@ -125,7 +123,6 @@ export async function parseVoiceOrderWithAPI(voiceText: string): Promise<ParsedO
       })
     } else {
       // 매칭되지 않은 어종도 임시로 추가 (나중에 신규 등록 기능으로 처리)
-      console.warn(`매칭되지 않은 어종: ${fish.name}`)
     }
   }
 
@@ -308,11 +305,9 @@ export async function findBusinessFromVoice(voiceText: string): Promise<Business
     extractedNames = [...new Set(extractedNames)]
     
     if (extractedNames.length === 0) {
-      console.warn('음성에서 거래처명을 찾을 수 없습니다.')
       return null
     }
     
-    console.log('추출된 거래처명들:', extractedNames)
     
     // 실제 거래처 목록에서 검색
     const response = await businessApi.getAll({ page: 1, page_size: 100 })
@@ -326,16 +321,13 @@ export async function findBusinessFromVoice(voiceText: string): Promise<Business
       )
       
       if (matchedBusiness) {
-        console.log(`매칭된 거래처: ${extractedName} -> ${matchedBusiness.business_name}`)
         return matchedBusiness
       }
     }
     
-    console.warn('일치하는 거래처를 찾을 수 없습니다:', extractedNames)
     return null
     
   } catch (error) {
-    console.error('거래처 검색 중 오류:', error)
     return null
   }
 }

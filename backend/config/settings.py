@@ -18,7 +18,7 @@ MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 # AI Server settings
-AI_SERVER_URL = os.getenv('AI_SERVER_URL', 'http://localhost:8002')
+AI_SERVER_URL = os.getenv('AI_SERVER_URL', 'http://localhost:8001')
 
 # Tesseract OCR Configuration
 TESSERACT_CMD = os.getenv('TESSERACT_CMD', '/usr/bin/tesseract')
