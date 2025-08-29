@@ -418,9 +418,14 @@ jobs:
           # Stop existing containers (using production compose)
           docker compose --env-file ~/.env down || true
           
-          # 마이그레이션 충돌 해결을 위해 데이터베이스 볼륨 초기화
-          echo "🗃️ 데이터베이스 볼륨 초기화 중..."
+          # 마이그레이션 완전 초기화 - 모든 데이터베이스 상태 제거
+          echo "🗃️ 데이터베이스 완전 초기화 중..."
+          docker volume ls | grep postgres | awk '{print \$2}' | xargs -I {} docker volume rm {} 2>/dev/null || true
           docker volume rm teamPicko-postgres-data 2>/dev/null || true
+          
+          # PostgreSQL 데이터 디렉토리가 있다면 삭제
+          sudo rm -rf /var/lib/postgresql/data/* 2>/dev/null || true
+          echo "✅ 데이터베이스 완전 초기화 완료"
           
           # Create Firebase Admin SDK key file from environment variable
           echo "🔧 Firebase Admin SDK 키 파일 생성 중..."
