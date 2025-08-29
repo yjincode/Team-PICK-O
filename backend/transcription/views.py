@@ -1,3 +1,35 @@
+from django.http import JsonResponse
+from rest_framework.views import APIView
+from rest_framework.parsers import MultiPartParser
+from faster_whisper import WhisperModel
+import tempfile
+
+# Whisper 모델 로드 (한 번만 로딩)
+model = WhisperModel("medium", compute_type="int8")
+
+class SpeechToTextView(APIView):
+    parser_classes = [MultiPartParser]
+
+    def post(self, request, *args, **kwargs):
+        audio_file = request.FILES.get('file')
+
+        if not audio_file:
+            return JsonResponse({'error': '파일이 없습니다.'}, status=400)
+
+        try:
+            with tempfile.NamedTemporaryFile(delete=True, suffix=".mp3") as temp_audio:
+                for chunk in audio_file.chunks():
+                    temp_audio.write(chunk)
+                temp_audio.flush()
+
+                segments, _ = model.transcribe(temp_audio.name, beam_size=5)
+                transcription = ''.join([segment.text for segment in segments])
+
+                return JsonResponse({'text': transcription})
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=500)
+
+
 import logging
 import os
 import tempfile

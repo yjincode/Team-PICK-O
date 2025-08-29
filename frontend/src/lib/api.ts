@@ -105,65 +105,87 @@ const refreshAccessToken = async (): Promise<string | null> => {
   return result
 }
 
-api.interceptors.request.use(
-  async (config) => {
-    // 🔥 토큰이 필요하지 않은 엔드포인트들
-    const publicEndpoints = [
-      '/business/auth/firebase-to-jwt/',
-      '/business/auth/register/',
-      '/business/auth/refresh/',
-      '/business/auth/super-login/',
-      '/business/auth/super-register/'
-    ]
+// api.interceptors.request.use(
+//   async (config) => {
+//     // 🔥 토큰이 필요하지 않은 엔드포인트들
+//     const publicEndpoints = [
+//       '*',
+//       '/business/auth/firebase-to-jwt/',
+//       '/business/auth/register/',
+//       '/business/auth/refresh/',
+//       '/business/auth/super-login/',
+//       '/business/auth/super-register/'
+//     ]
 
-    const isPublicEndpoint = publicEndpoints.some(endpoint => config.url?.includes(endpoint))
+//     const isPublicEndpoint = publicEndpoints.some(endpoint => config.url?.includes(endpoint))
 
-    if (isPublicEndpoint) {
-      return config
+//     if (isPublicEndpoint) {
+//       return config
+//     }
+
+//     // 일반 엔드포인트는 토큰 필요
+//     let accessToken = TokenManager.getAccessToken()
+
+//     // 액세스 토큰이 없거나 만료된 경우 갱신 시도
+//     if (!accessToken || !TokenManager.isAccessTokenValid()) {
+//       console.log('🔄 액세스 토큰 갱신 필요')
+//       accessToken = await refreshAccessToken()
+
+//       // 갱신에 실패한 경우 토큰 제거만 하고 조용히 처리
+//       if (!accessToken) {
+//         console.log('🚫 토큰 갱신 실패 - 인증되지 않은 요청')
+//         return Promise.reject({ 
+//           name: 'AuthenticationError',
+//           message: '인증이 필요합니다',
+//           config: config
+//         })
+//       }
+//     }
+
+//     // Authorization 헤더에 액세스 토큰 추가
+//     if (accessToken) {
+//       config.headers.Authorization = `Bearer ${accessToken}`
+//     }
+
+
+
+//     console.log('🚀 자동 토큰 갱신 API 요청:', {
+//       url: config.url,
+//       fullUrl: `${config.baseURL}${config.url}`,
+//       method: config.method?.toUpperCase(),
+//       hasAccessToken: !!accessToken,
+//       tokenTimeLeft: TokenManager.getAccessTokenTimeUntilExpiry() + '초',
+//       headers: config.headers
+//     });
+
+//     return config
+//   },
+//   (error) => {
+//     console.error('🚫 API 요청 오류:', error);
+//     return Promise.reject(error)
+//   }
+// )
+export const sttApi2 = {
+  transcribe: async (file: File, lang: string = 'ko') => {
+    const formData = new FormData()
+    formData.append("file", file)
+
+    const response = await fetch("http://localhost:8000/api/stt/", {
+      method: "POST",
+      body: formData
+    })
+
+    if (!response.ok) {
+      const err = await response.json()
+      throw new Error(err.error || "STT 실패")
     }
 
-    // 일반 엔드포인트는 토큰 필요
-    let accessToken = TokenManager.getAccessToken()
-
-    // 액세스 토큰이 없거나 만료된 경우 갱신 시도
-    if (!accessToken || !TokenManager.isAccessTokenValid()) {
-      console.log('🔄 액세스 토큰 갱신 필요')
-      accessToken = await refreshAccessToken()
-
-      // 갱신에 실패한 경우 토큰 제거만 하고 조용히 처리
-      if (!accessToken) {
-        console.log('🚫 토큰 갱신 실패 - 인증되지 않은 요청')
-        return Promise.reject({ 
-          name: 'AuthenticationError',
-          message: '인증이 필요합니다',
-          config: config
-        })
-      }
+    const data = await response.json()
+    return {
+      transcription: data.text // Django 응답이 { text: "..." } 형태여야 함
     }
-
-    // Authorization 헤더에 액세스 토큰 추가
-    if (accessToken) {
-      config.headers.Authorization = `Bearer ${accessToken}`
-    }
-
-
-
-    console.log('🚀 자동 토큰 갱신 API 요청:', {
-      url: config.url,
-      fullUrl: `${config.baseURL}${config.url}`,
-      method: config.method?.toUpperCase(),
-      hasAccessToken: !!accessToken,
-      tokenTimeLeft: TokenManager.getAccessTokenTimeUntilExpiry() + '초',
-      headers: config.headers
-    });
-
-    return config
-  },
-  (error) => {
-    console.error('🚫 API 요청 오류:', error);
-    return Promise.reject(error)
   }
-)
+}
 
 // 응답 인터셉터: 401 오류 시 토큰 갱신 재시도
 api.interceptors.response.use(

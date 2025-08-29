@@ -33,6 +33,7 @@ def api_root(request):
             "inventory": "/api/v1/inventory/",
             "fish_registry": "/api/v1/fish-registry/",
             "sales": "/api/v1/sales/",
+            "transcription": "/api/stt",
         }
     })
 

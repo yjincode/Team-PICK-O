@@ -42,25 +42,36 @@ interface AuthProviderProps {
 export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
   const [user, setUser] = useState<UserData | null>(null)
   const [loading, setLoading] = useState<boolean>(true)
-
+  useEffect(() => {
+    // 강제 로그인 처리 (테스트용)
+    const testUser: UserData = {
+      user_id: 1,
+      business_name: '테스트 상호'
+    }
+  
+    TokenManager.setTokens('FAKE_ACCESS_TOKEN', 'FAKE_REFRESH_TOKEN') // 필요 시
+    setUser(testUser)
+    setLoading(false)
+  }, [])
+  
   // 초기화: 저장된 토큰으로 자동 로그인 복원
   useEffect(() => {
     initializeAuth()
   }, [])
 
-  // 토큰 상태 변화 감지 (토큰이 제거되면 사용자 로그아웃)
-  useEffect(() => {
-    const checkTokenStatus = () => {
-      if (user && !TokenManager.isAuthenticated()) {
-        console.log('🔄 토큰 만료/제거 감지 - 자동 로그아웃')
-        setUser(null)
-      }
-    }
+  // // 토큰 상태 변화 감지 (토큰이 제거되면 사용자 로그아웃)
+  // useEffect(() => {
+  //   const checkTokenStatus = () => {
+  //     if (user && !TokenManager.isAuthenticated()) {
+  //       console.log('🔄 토큰 만료/제거 감지 - 자동 로그아웃')
+  //       setUser(null)
+  //     }
+  //   }
 
-    // 1초마다 토큰 상태 체크
-    const interval = setInterval(checkTokenStatus, 1000)
-    return () => clearInterval(interval)
-  }, [user])
+  //   // 1초마다 토큰 상태 체크
+  //   const interval = setInterval(checkTokenStatus, 1000)
+  //   return () => clearInterval(interval)
+  // }, [user])
 
   const initializeAuth = async () => {
     try {
