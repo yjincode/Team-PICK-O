@@ -133,7 +133,16 @@ services:
       
       # 모델 파일 경로 설정
       - VGG16_MODEL_PATH=/app/models/vgg16/best_model.h5
-      - YOLO_MODEL_PATH=/app/models/yolo/yolo11n.pt
+      - YOLO_MODEL_PATH=/app/models/yolo/best.pt
+      
+      # 모델 다운로드 URL (GitHub Release 사용시)
+      - VGG_MODEL_DOWNLOAD_URL=${VGG_MODEL_DOWNLOAD_URL:-}
+      
+      # AWS S3 설정 (모델 다운로드용)
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
+      - AWS_S3_BUCKET_NAME=${AWS_S3_BUCKET_NAME:-}
+      - AWS_REGION=${AWS_REGION:-ap-northeast-2}
       
       # 파일 업로드 설정
       - MAX_FILE_SIZE=${MAX_FILE_SIZE:-10485760}
