@@ -345,3 +345,45 @@ export async function parseVoiceOrderWithBusiness(voiceText: string): Promise<Pa
     business_name: matchedBusiness?.business_name || basicOrderData.business_name
   }
 } 
+
+
+export async function fetchParsedOrder(input: string | File) {
+  const formData = new FormData();
+
+  if (typeof input === "string") {
+    // 텍스트 입력
+    formData.append("text", input);
+  } else if (input instanceof File) {
+    const fileType = input.type;
+
+    if (fileType.startsWith("audio/")) {
+      // 오디오 파일
+      formData.append("file", input);
+    } else if (fileType.startsWith("image/")) {
+      // 이미지 파일 (추후 서버에서 처리 가능하도록 대비)
+      formData.append("image", input);
+    } else {
+      throw new Error("지원하지 않는 파일 형식입니다.");
+    }
+  } else {
+    throw new Error("입력값이 string 또는 File이 아닙니다.");
+  }
+
+  const res = await fetch("/ai/order", {
+    method: "POST",
+    body: formData,
+    headers: {
+      "ngrok-skip-browser-warning": "true"  // 필요 시 유지
+    }
+  });
+
+  if (!res.ok) throw new Error(`서버 에러: ${res.statusText}`);
+
+  const data = await res.json();
+
+  if (!data.success) throw new Error("파싱 실패");
+
+  return data.message;
+}
+
+  
