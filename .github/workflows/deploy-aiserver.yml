@@ -104,6 +104,8 @@ jobs:
             -e CUDA_VISIBLE_DEVICES="" \
             -e AI_SERVER_PORT=8001 \
             -e AI_SERVER_HOST=0.0.0.0 \
+            -e VGG16_MODEL_PATH=/app/models/vgg16/best_model.h5 \
+            -e YOLO_MODEL_PATH=/app/models/yolo/best.pt \
             -e AWS_ACCESS_KEY_ID="${{ secrets.AWS_ACCESS_KEY_ID }}" \
             -e AWS_SECRET_ACCESS_KEY="${{ secrets.AWS_SECRET_ACCESS_KEY }}" \
             -e AWS_S3_BUCKET_NAME="${{ secrets.AWS_S3_BUCKET_NAME }}" \
