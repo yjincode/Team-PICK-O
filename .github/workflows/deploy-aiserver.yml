@@ -8,6 +8,12 @@ on:
       - 'aiserver/**'
   workflow_dispatch:
 
+# GitHub Token 권한 설정
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
 jobs:
   deploy-aiserver:
     runs-on: ubuntu-latest
@@ -116,60 +122,66 @@ jobs:
         
         rm ec2_key.pem
     
-    # 배포 성공 시 자동으로 dev, main PR 생성
+    # 배포 성공 시 GitHub CLI로 PR 생성
     - name: Create Pull Request to dev
       if: success()
-      uses: peter-evans/create-pull-request@v6
-      with:
-        token: ${{ secrets.GITHUB_TOKEN }}
-        branch: ${{ github.ref_name }}
-        base: dev
-        title: "feat(aiserver): ${{ github.ref_name }} 개발 완료"
-        body: |
-          ## AI Server 개발 완료
+      env:
+        GITHUB_TOKEN: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
+        BRANCH_NAME: ${{ github.ref_name }}
+      run: |
+        echo "🔄 GitHub CLI로 dev PR 생성 중..."
+        
+        # 기존 PR 확인
+        EXISTING_PR=$(gh pr list --head "${BRANCH_NAME}" --base "dev" --state open --json number --jq '.[0].number' 2>/dev/null || echo "")
+        
+        if [ -n "$EXISTING_PR" ] && [ "$EXISTING_PR" != "null" ]; then
+          echo "⚠️ 기존 PR #${EXISTING_PR}이 이미 존재합니다"
+        else
+          # 새 PR 생성
+          gh pr create \
+            --title "feat(aiserver): ${BRANCH_NAME} 개발 완료" \
+            --body "## AI Server 개발 완료
           
-          🚀 **브랜치**: `${{ github.ref_name }}`
+          🚀 **브랜치**: \`${BRANCH_NAME}\`
           📦 **배포 테스트**: 완료
-          🔗 **Actions**: [배포 로그](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
-          
-          ### 변경사항
-          - AI Server 기능 구현
-          - 배포 테스트 완료
           
           ### 테스트 완료
           - [x] Docker 빌드 성공
           - [x] EC2 배포 성공
-          - [x] Health check 통과
-          
-          🤖 Generated with [Claude Code](https://claude.ai/code)
-        assignees: ${{ github.actor }}
-        draft: false
+          - [x] Health check 통과" \
+            --base "dev" \
+            --head "${BRANCH_NAME}"
+          echo "✅ dev PR 생성 완료!"
+        fi
     
     - name: Create Pull Request to main
       if: success()
-      uses: peter-evans/create-pull-request@v6
-      with:
-        token: ${{ secrets.GITHUB_TOKEN }}
-        branch: ${{ github.ref_name }}
-        base: main
-        title: "feat(aiserver): ${{ github.ref_name }} 운영 배포 준비"
-        body: |
-          ## AI Server 운영 배포 준비
+      env:
+        GITHUB_TOKEN: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
+        BRANCH_NAME: ${{ github.ref_name }}
+      run: |
+        echo "🔄 GitHub CLI로 main PR 생성 중..."
+        
+        # 기존 PR 확인
+        EXISTING_PR=$(gh pr list --head "${BRANCH_NAME}" --base "main" --state open --json number --jq '.[0].number' 2>/dev/null || echo "")
+        
+        if [ -n "$EXISTING_PR" ] && [ "$EXISTING_PR" != "null" ]; then
+          echo "⚠️ 기존 PR #${EXISTING_PR}이 이미 존재합니다"
+        else
+          # 새 PR 생성 (draft)
+          gh pr create \
+            --title "feat(aiserver): ${BRANCH_NAME} 운영 배포 준비" \
+            --body "## AI Server 운영 배포 준비
           
-          🚀 **브랜치**: `${{ github.ref_name }}`
+          🚀 **브랜치**: \`${BRANCH_NAME}\`
           📦 **개발 테스트**: 완료
-          🔗 **배포 로그**: [Actions Run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
-          
-          ### 변경사항
-          - AI Server 기능 구현 완료
-          - 개발 환경 배포 및 테스트 완료
           
           ### 체크리스트
           - [x] 개발 환경 배포 성공
-          - [x] Health check 통과
           - [ ] 코드 리뷰 완료
-          - [ ] QA 테스트 완료
-          
-          🤖 Generated with [Claude Code](https://claude.ai/code)
-        assignees: ${{ github.actor }}
-        draft: true
+          - [ ] QA 테스트 완료" \
+            --base "main" \
+            --head "${BRANCH_NAME}" \
+            --draft
+          echo "✅ main PR(draft) 생성 완료!"
+        fi
