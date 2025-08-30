@@ -41,7 +41,22 @@ jobs:
     
     steps:
     - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
     
+    # 변경된 서비스 감지
+    - name: Detect changes
+      id: changes
+      run: |
+        if git rev-parse HEAD~1 >/dev/null 2>&1; then
+          echo "backend_changed=$(git diff --name-only HEAD~1 HEAD | grep -q '^backend/' && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
+          echo "frontend_changed=$(git diff --name-only HEAD~1 HEAD | grep -q '^frontend/' && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
+          echo "aiserver_changed=$(git diff --name-only HEAD~1 HEAD | grep -q '^aiserver/' && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
+        else
+          echo "backend_changed=true" >> $GITHUB_OUTPUT
+          echo "frontend_changed=true" >> $GITHUB_OUTPUT
+          echo "aiserver_changed=true" >> $GITHUB_OUTPUT
+        fi
     
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v4
@@ -109,6 +124,7 @@ jobs:
         platforms: linux/amd64
     
     - name: Build and push backend image
+      if: steps.changes.outputs.backend_changed == 'true'
       env:
         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY_BACKEND }}
@@ -155,6 +171,7 @@ jobs:
         fi
     
     - name: Build and push AI server image
+      if: steps.changes.outputs.aiserver_changed == 'true'
       env:
         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY_AISERVER }}
@@ -201,6 +218,7 @@ jobs:
         fi
     
     - name: Build and push frontend image
+      if: steps.changes.outputs.frontend_changed == 'true'
       env:
         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY_FRONTEND }}

@@ -1,6 +1,6 @@
 FROM python:3.11-slim
 
-# 시스템 패키지 설치
+# 시스템 패키지 설치 (OpenCV 전체 의존성 포함)
 RUN apt-get update && apt-get install -y \
     curl \
     wget \
@@ -8,6 +8,14 @@ RUN apt-get update && apt-get install -y \
     unzip \
     libglib2.0-0 \
     libgomp1 \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    libfontconfig1 \
+    libice6 \
+
     && rm -rf /var/lib/apt/lists/*
 
 # 작업 디렉토리 설정
