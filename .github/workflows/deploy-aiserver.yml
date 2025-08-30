@@ -91,8 +91,8 @@ jobs:
           # ECR 로그인
           aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin $ECR_REGISTRY
           
-          # 새 AI 서버 이미지 pull
-          docker pull $ECR_REGISTRY/${{ secrets.ECR_REPOSITORY_AISERVER }}:$IMAGE_TAG
+          # 새 AI 서버 이미지 pull (latest 태그 사용)
+          docker pull $ECR_REGISTRY/${{ secrets.ECR_REPOSITORY_AISERVER }}:latest
           
           # 새 이미지로 AI 서버 컨테이너 시작
           docker run -d \
@@ -111,7 +111,7 @@ jobs:
             -v teamPicko_aiserver-models:/app/models \
             -v teamPicko_aiserver-logs:/app/logs \
             --restart unless-stopped \
-            $ECR_REGISTRY/${{ secrets.ECR_REPOSITORY_AISERVER }}:$IMAGE_TAG
+            $ECR_REGISTRY/${{ secrets.ECR_REPOSITORY_AISERVER }}:latest
           
           # 헬스체크 (AI 서버는 시작 시간이 오래 걸림)
           sleep 60
