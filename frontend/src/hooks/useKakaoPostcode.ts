@@ -47,7 +47,6 @@ export const useKakaoPostcode = ({
     };
     
     script.onerror = () => {
-      console.error('카카오 우편번호 서비스 스크립트 로드 실패');
     };
     
     document.head.appendChild(script);

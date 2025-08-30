@@ -79,11 +79,9 @@ export async function findFishTypeFromAPI(fishName: string): Promise<FishType | 
       )
     }
     
-    console.log(`어종 매칭: ${fishName} -> ${matchedFish ? matchedFish.name : '매칭 없음'}`)
     return matchedFish || null
     
   } catch (error) {
-    console.error('어종 매칭 중 오류:', error)
     return null
   }
 }
@@ -125,7 +123,6 @@ export async function parseVoiceOrderWithAPI(voiceText: string): Promise<ParsedO
       })
     } else {
       // 매칭되지 않은 어종도 임시로 추가 (나중에 신규 등록 기능으로 처리)
-      console.warn(`매칭되지 않은 어종: ${fish.name}`)
     }
   }
 
@@ -308,11 +305,9 @@ export async function findBusinessFromVoice(voiceText: string): Promise<Business
     extractedNames = [...new Set(extractedNames)]
     
     if (extractedNames.length === 0) {
-      console.warn('음성에서 거래처명을 찾을 수 없습니다.')
       return null
     }
     
-    console.log('추출된 거래처명들:', extractedNames)
     
     // 실제 거래처 목록에서 검색
     const response = await businessApi.getAll({ page: 1, page_size: 100 })
@@ -326,16 +321,13 @@ export async function findBusinessFromVoice(voiceText: string): Promise<Business
       )
       
       if (matchedBusiness) {
-        console.log(`매칭된 거래처: ${extractedName} -> ${matchedBusiness.business_name}`)
         return matchedBusiness
       }
     }
     
-    console.warn('일치하는 거래처를 찾을 수 없습니다:', extractedNames)
     return null
     
   } catch (error) {
-    console.error('거래처 검색 중 오류:', error)
     return null
   }
 }
@@ -353,3 +345,45 @@ export async function parseVoiceOrderWithBusiness(voiceText: string): Promise<Pa
     business_name: matchedBusiness?.business_name || basicOrderData.business_name
   }
 } 
+
+
+export async function fetchParsedOrder(input: string | File) {
+  const formData = new FormData();
+
+  if (typeof input === "string") {
+    // 텍스트 입력
+    formData.append("text", input);
+  } else if (input instanceof File) {
+    const fileType = input.type;
+
+    if (fileType.startsWith("audio/")) {
+      // 오디오 파일
+      formData.append("file", input);
+    } else if (fileType.startsWith("image/")) {
+      // 이미지 파일 (추후 서버에서 처리 가능하도록 대비)
+      formData.append("image", input);
+    } else {
+      throw new Error("지원하지 않는 파일 형식입니다.");
+    }
+  } else {
+    throw new Error("입력값이 string 또는 File이 아닙니다.");
+  }
+
+  const res = await fetch("/ai/order", {
+    method: "POST",
+    body: formData,
+    headers: {
+      "ngrok-skip-browser-warning": "true"  // 필요 시 유지
+    }
+  });
+
+  if (!res.ok) throw new Error(`서버 에러: ${res.statusText}`);
+
+  const data = await res.json();
+
+  if (!data.success) throw new Error("파싱 실패");
+
+  return data.message;
+}
+
+  

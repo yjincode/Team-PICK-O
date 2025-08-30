@@ -102,8 +102,6 @@ const AuctionPriceChart: React.FC<AuctionPriceChartProps> = ({
       });
       
       // 디버깅용 로그
-      console.log('Chart data:', formattedData);
-      console.log('Today:', new Date().toDateString());
       
       setChartData(formattedData)
       

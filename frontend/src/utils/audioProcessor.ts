@@ -98,7 +98,7 @@ export async function convertAudioToText(file: File): Promise<string> {
   //   const result = await response.json();
   //   return result.transcribed_text;
   // } catch (error) {
-  //   console.error('음성 인식 API 오류:', error);
+  //   // 음성 인식 API 오류
   //   throw error;
   // }
   

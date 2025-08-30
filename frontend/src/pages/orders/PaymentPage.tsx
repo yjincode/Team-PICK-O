@@ -60,14 +60,10 @@ const PaymentPage: React.FC = () => {
       try {
         setLoading(true)
         const response = await orderApi.getById(parseInt(id))
-        console.log('🔍 orderApi.getById 응답:', response)
-        console.log('🔍 response 타입:', typeof response)
-        console.log('🔍 response 키들:', Object.keys(response || {}))
         
         // response가 이미 Order 객체이므로 직접 사용
         setOrder(response)
       } catch (error) {
-        console.error('주문 정보 로드 실패:', error)
         toast.error('주문 정보를 불러오는데 실패했습니다.')
         navigate('/orders')
       } finally {
@@ -86,13 +82,10 @@ const PaymentPage: React.FC = () => {
         if (window.TossPayments) {
           const clientKey = import.meta.env.VITE_TOSS_CLIENT_KEY
           if (!clientKey) {
-            console.error('토스페이먼츠 클라이언트 키가 설정되지 않았습니다.')
             toast.error('토스페이먼츠 설정이 완료되지 않았습니다.')
             return
           }
 
-          console.log('🚀 토스페이먼츠 SDK 초기화 시작 (API 개별 연동 키)')
-          console.log('🔑 사용 중인 클라이언트 키:', clientKey.substring(0, 10) + '...')
           
           // v2 방식으로 초기화 (API 개별 연동 키)
           const tosspaymentsInstance = window.TossPayments(clientKey)
@@ -104,20 +97,15 @@ const PaymentPage: React.FC = () => {
               customerKey: 'ANONYMOUS' // 비회원 결제
             })
             setWidgets(paymentInstance) // payment 인스턴스 사용
-            console.log('✅ 결제창 초기화 성공 (API 개별 연동 키)')
           } catch (paymentError: any) {
-            console.error('결제창 초기화 실패:', paymentError)
             toast.error('결제창 초기화에 실패했습니다.')
             return
           }
 
-          console.log('✅ 토스페이먼츠 SDK 초기화 완료')
         } else {
-          console.error('토스페이먼츠 SDK를 찾을 수 없습니다.')
           toast.error('토스페이먼츠 SDK 로딩에 실패했습니다.')
         }
       } catch (error: any) {
-        console.error('토스페이먼츠 초기화 오류:', error)
         
         // 구체적인 에러 메시지 처리
         if (error.message) {
@@ -159,14 +147,11 @@ const PaymentPage: React.FC = () => {
       if (!widgets || !order) return
 
       try {
-        console.log('🎨 결제창 인터페이스 준비 시작')
         
         // API 개별 연동 키는 결제창을 직접 호출하므로 별도 렌더링 불필요
         setIsWidgetReady(true)
-        console.log('✅ 결제창 인터페이스 준비 완료')
         
       } catch (error) {
-        console.error('결제창 인터페이스 준비 오류:', error)
         toast.error('결제창을 준비하는데 실패했습니다.')
       }
     }
@@ -184,26 +169,14 @@ const PaymentPage: React.FC = () => {
     try {
       setProcessingPayment(true)
       
-      console.log('💳 카드 결제 시작 (결제창 방식):', {
-        orderId: order.id,
-        amount: order.total_price,
-        clientKey: import.meta.env.VITE_TOSS_CLIENT_KEY
-      })
+      // 카드 결제 시작 (결제창 방식)
+      // orderId: order.id, amount: order.total_price
 
       // 1단계: 백엔드에 pending 상태의 Payment 생성 요청
       const orderIdForToss = `order_${order.id}_${Date.now()}`
-      console.log('🔍 결제 요청 전 Payment 생성:', orderIdForToss)
       
       try {
         // 결제 요청 API 호출 (pending 상태 생성) - 토큰 없이도 호출 가능
-        console.log('📡 백엔드 API 호출 시작:', {
-          url: '/api/v1/payments/toss/request/',
-          data: {
-            orderId: order.id,
-            amount: order.total_price,
-            orderIdForToss: orderIdForToss
-          }
-        })
         
         const createPaymentResponse = await fetch('/api/v1/payments/toss/request/', {
           method: 'POST',
@@ -230,7 +203,6 @@ const PaymentPage: React.FC = () => {
         
         await createPaymentResponse.json()
       } catch (error) {
-        console.error('Payment 생성 오류:', error)
         toast.error(`결제 준비 중 오류가 발생했지만 결제창을 계속 진행합니다: ${error.message}`)
       }
 
@@ -255,12 +227,10 @@ const PaymentPage: React.FC = () => {
           },
         })
       } catch (paymentError) {
-        console.error('토스페이먼츠 결제창 호출 실패:', paymentError)
         throw paymentError
       }
       
     } catch (error: any) {
-      console.error('카드 결제 오류:', error)
       
       // 토스페이먼츠 에러 코드별 처리
       if (error.code) {
@@ -309,12 +279,6 @@ const PaymentPage: React.FC = () => {
             orderId: orderIdParam, // orderIdForToss (merchant_uid)
             amount: Number(amountParam),
           }
-          console.log('🔍 결제 확정 요청 데이터:', confirmData)
-          console.log('🔍 데이터 타입 확인:', {
-            paymentKey: typeof paymentKey,
-            orderId: typeof confirmData.orderId,
-            amount: typeof confirmData.amount
-          })
           
           const response = await paymentApi.confirmToss(confirmData)
           if (response.data) {
@@ -334,7 +298,6 @@ const PaymentPage: React.FC = () => {
             }, 2000)
           }
         } catch (error: any) {
-          console.error('결제 확정 처리 오류:', error)
           toast.error('결제는 완료되었지만 처리 중 오류가 발생했습니다.')
         } finally {
           processedKeyRef.current = paymentKey
@@ -386,7 +349,6 @@ const PaymentPage: React.FC = () => {
       }
       
     } catch (error: any) {
-      console.error('수동 결제 오류:', error)
       const errorMessage = error.response?.data?.error || '결제 처리 중 오류가 발생했습니다.'
       toast.error(errorMessage)
     } finally {
@@ -398,7 +360,7 @@ const PaymentPage: React.FC = () => {
   useEffect(() => {
     return () => {
       if (paymentMethodWidget) {
-        paymentMethodWidget.destroy().catch(console.error)
+        paymentMethodWidget.destroy().catch(() => {})
       }
     }
   }, [paymentMethodWidget])

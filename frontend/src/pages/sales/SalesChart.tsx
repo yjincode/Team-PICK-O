@@ -90,7 +90,6 @@ export default function SalesChart() {
       const data = await salesApi.getBusinessRanking(params)
       setBusinessRankings(data.rankings)
     } catch (err) {
-      console.error('거래처 순위 데이터 로드 실패:', err)
       setBusinessRankings([])
     } finally {
       setLoadingRankings(false)
@@ -110,7 +109,6 @@ export default function SalesChart() {
       const data = await salesApi.getFishTypeSales(params)
       setFishTypeSales(data.fish_sales)
     } catch (err) {
-      console.error('어종별 판매량 데이터 로드 실패:', err)
       setFishTypeSales([])
     } finally {
       setLoadingFishSales(false)
@@ -182,7 +180,6 @@ export default function SalesChart() {
             data.growth_rate = monthlyTotal > 0 ? 100 : 0
           }
         } catch (error) {
-          console.error('전월 데이터 로드 실패:', error)
           data.growth_rate = 0
         }
       }
@@ -220,7 +217,6 @@ export default function SalesChart() {
               data.growth_rate = data.total_revenue > 0 ? 100 : 0
             }
           } catch (error) {
-            console.error('전년 데이터 로드 실패:', error)
             data.growth_rate = 0
           }
         }
@@ -228,7 +224,6 @@ export default function SalesChart() {
       
       setSalesStats(data)
     } catch (err) {
-      console.error('매출 데이터 로드 실패:', err)
       setError('매출 데이터를 불러오는 중 오류가 발생했습니다.')
     } finally {
       setLoading(false)

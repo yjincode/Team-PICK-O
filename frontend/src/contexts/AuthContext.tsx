@@ -52,7 +52,6 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
   useEffect(() => {
     const checkTokenStatus = () => {
       if (user && !TokenManager.isAuthenticated()) {
-        console.log('🔄 토큰 만료/제거 감지 - 자동 로그아웃')
         setUser(null)
       }
     }
@@ -83,7 +82,6 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
         }
       }
     } catch (error) {
-      console.error('❌ 인증 초기화 오류:', error)
       TokenManager.removeTokens()
     } finally {
       setLoading(false)
@@ -196,7 +194,6 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
       TokenManager.removeTokens()
       setUser(null)
     } catch (error) {
-      console.error('❌ 로그아웃 오류:', error)
     }
   }
 
@@ -208,7 +205,6 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
       
       if (response.is_new_user) {
         // 신규 슈퍼계정 - 회원가입 필요
-        console.log('🆕 신규 슈퍼계정 - 회원가입 필요')
         return { isNewUser: true }
       } else {
         // 기존 슈퍼계정 - JWT 토큰 저장 및 로그인 처리
@@ -224,7 +220,6 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
       }
       
     } catch (error: any) {
-      console.error('❌ 슈퍼계정 직접 로그인 실패:', error)
       throw error
     } finally {
       setLoading(false)
@@ -256,7 +251,6 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
       setUser(newUserData)
       
     } catch (error: any) {
-      console.error('❌ 슈퍼계정 직접 회원가입 실패:', error)
       throw error
     } finally {
       setLoading(false)

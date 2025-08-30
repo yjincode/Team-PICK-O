@@ -11,7 +11,7 @@ import { Camera, Upload, Trash2, Eye, AlertCircle } from "lucide-react"
 import { businessApi } from "../../../lib/api"
 import { parseVoiceOrder, validateAndCompleteOrder } from "../../../utils/orderParser"
 import type { Business } from "../../../types"
-
+import { fetchParsedOrder } from "../../../utils/orderParser"
 interface ParsedOrderData {
   business_name?: string;
   phone_number?: string;
@@ -80,7 +80,6 @@ const ImageUploadTab: React.FC<ImageUploadTabProps> = ({
         
         setBusinesses(businessData)
       } catch (error) {
-        console.error('거래처 목록 가져오기 실패:', error)
         setBusinesses([])
       }
     }
@@ -103,7 +102,7 @@ const ImageUploadTab: React.FC<ImageUploadTabProps> = ({
         
   //       setFishTypes(fishData)
   //     } catch (error) {
-  //       console.error('어종 목록 가져오기 실패:', error)
+  //       // 어종 목록 가져오기 실패
   //       setFishTypes([])
   //     }
   //   }
@@ -161,13 +160,13 @@ const ImageUploadTab: React.FC<ImageUploadTabProps> = ({
     setError('')
     
     try {
-      const extractedText = await extractTextFromImage(file)
-      
+      const extractedText = await fetchParsedOrder(file)
+      console.log('추출된 텍스트:', extractedText); 
       // setLocalTranscribedText(extractedText)
       
       // 추출된 텍스트를 주문 데이터로 파싱
       try {
-        const basicOrderData = parseVoiceOrder(extractedText)
+        const basicOrderData = extractedText
         
         if (basicOrderData.items && basicOrderData.items.length > 0) {
           const validatedOrderData = validateAndCompleteOrder(basicOrderData)
@@ -175,16 +174,13 @@ const ImageUploadTab: React.FC<ImageUploadTabProps> = ({
           setParsedOrder(validatedOrderData)
           onOrderParsed?.(validatedOrderData)
         } else {
-          console.warn('⚠️ 주문 품목을 찾을 수 없습니다:', extractedText)
           setParsedOrder(null)
         }
       } catch (parseError) {
-        console.error('❌ 주문 파싱 실패:', parseError)
         setParsedOrder(null)
       }
       
     } catch (err) {
-      console.error('❌ OCR 처리 실패:', err)
       const errorMsg = err instanceof Error ? err.message : '이미지 처리 중 오류가 발생했습니다.'
       setError(errorMsg)
       onError?.(errorMsg)
@@ -192,6 +188,9 @@ const ImageUploadTab: React.FC<ImageUploadTabProps> = ({
       setLocalIsProcessing(false)
     }
   }
+
+
+
 
   const handleRemoveLocalFile = () => {
     setLocalUploadedFile(null)
@@ -424,7 +423,6 @@ const ImageUploadTab: React.FC<ImageUploadTabProps> = ({
                             value={item.unit}
                             onChange={(e) => {
                               // TODO: 단위 변경 핸들러 구현
-                              console.log('단위 변경:', e.target.value)
                             }}
                           >
                             <option value="박스">박스</option>
@@ -447,7 +445,6 @@ const ImageUploadTab: React.FC<ImageUploadTabProps> = ({
                           className="text-red-500 hover:text-red-700 text-sm font-medium"
                           onClick={() => {
                             // TODO: 항목 삭제 핸들러 구현
-                            console.log('항목 삭제:', index)
                           }}
                         >
                           삭제

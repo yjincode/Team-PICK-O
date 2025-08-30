@@ -86,40 +86,65 @@ export const mockAuctionPredictions: SpeciesPrediction[] = [
     species: SUPPORTED_SPECIES[0], // 광어
     currentPrice: 12500,
     predictedPrice: 13200,
-    confidence: 87,
+    change: 700,
+    changePercent: 5.6,
     priceChange: 5.6,
+    trend: 'up' as const,
+    confidence: 87,
+    data: [],
+    factors: ['수온 상승', '어획량 감소', '수요 증가'],
     priceHistory: generatePriceHistory(12500, 0.08, 0.015)
   },
   {
     species: SUPPORTED_SPECIES[1], // 우럭
     currentPrice: 8900,
     predictedPrice: 9200,
-    confidence: 82,
+    change: 300,
+    changePercent: 3.4,
     priceChange: 3.4,
+    trend: 'up' as const,
+    confidence: 82,
+    data: [],
+    factors: ['계절적 수요', '양식장 공급 안정'],
     priceHistory: generatePriceHistory(8900, 0.12, 0.02)
   },
   {
     species: SUPPORTED_SPECIES[2], // 농어
     currentPrice: 15600,
     predictedPrice: 16200,
-    confidence: 91,
+    change: 600,
+    changePercent: 3.8,
     priceChange: 3.8,
+    trend: 'up' as const,
+    confidence: 91,
+    data: [],
+    factors: ['고급어종 선호도 증가', '안정적 공급'],
     priceHistory: generatePriceHistory(15600, 0.06, 0.025)
   },
   {
     species: SUPPORTED_SPECIES[3], // 참돔
     currentPrice: 18900,
     predictedPrice: 19500,
-    confidence: 85,
+    change: 600,
+    changePercent: 3.2,
     priceChange: 3.2,
+    trend: 'up' as const,
+    confidence: 85,
+    data: [],
+    factors: ['명절 수요 증가', '프리미엄 시장 확대'],
     priceHistory: generatePriceHistory(18900, 0.09, 0.018)
   },
   {
     species: SUPPORTED_SPECIES[4], // 숭어
     currentPrice: 7200,
     predictedPrice: 7500,
-    confidence: 78,
+    change: 300,
+    changePercent: 4.2,
     priceChange: 4.2,
+    trend: 'up' as const,
+    confidence: 78,
+    data: [],
+    factors: ['계절적 어획량 변동', '지역 특산품 인기'],
     priceHistory: generatePriceHistory(7200, 0.15, 0.022)
   }
 ];

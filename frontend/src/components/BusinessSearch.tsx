@@ -41,7 +41,6 @@ const BusinessSearch: React.FC<BusinessSearchProps> = ({ onSelect, onClose }) =>
         )
         setFilteredBusinesses(filtered)
       } catch (err) {
-        console.error("거래처 검색 오류:", err)
         setFilteredBusinesses([])
       } finally {
         setLoading(false)

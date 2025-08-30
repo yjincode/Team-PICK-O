@@ -6,7 +6,7 @@ echo "🔍 AI 모델 다운로드 시작..."
 mkdir -p /app/models/yolo
 mkdir -p /app/models/vgg16
 
-# YOLO 모델 S3에서 다운로드
+# YOLO 모델 S3에서 다운로드. 모델 파일이 없으면 공식 YOLO11 모델로 대체.
 echo "📥 YOLO 모델 다운로드 중..."
 if [ ! -f "/app/models/yolo/best.pt" ]; then
     if [ ! -z "$AWS_S3_BUCKET_NAME" ] && [ ! -z "$AWS_ACCESS_KEY_ID" ]; then

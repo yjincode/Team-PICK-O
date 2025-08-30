@@ -41,7 +41,22 @@ jobs:
     
     steps:
     - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
     
+    # 변경된 서비스 감지
+    - name: Detect changes
+      id: changes
+      run: |
+        if git rev-parse HEAD~1 >/dev/null 2>&1; then
+          echo "backend_changed=$(git diff --name-only HEAD~1 HEAD | grep -q '^backend/' && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
+          echo "frontend_changed=$(git diff --name-only HEAD~1 HEAD | grep -q '^frontend/' && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
+          echo "aiserver_changed=$(git diff --name-only HEAD~1 HEAD | grep -q '^aiserver/' && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
+        else
+          echo "backend_changed=true" >> $GITHUB_OUTPUT
+          echo "frontend_changed=true" >> $GITHUB_OUTPUT
+          echo "aiserver_changed=true" >> $GITHUB_OUTPUT
+        fi
     
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v4
@@ -109,6 +124,7 @@ jobs:
         platforms: linux/amd64
     
     - name: Build and push backend image
+      if: steps.changes.outputs.backend_changed == 'true'
       env:
         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY_BACKEND }}
@@ -140,7 +156,7 @@ jobs:
             --tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
             --tag $ECR_REGISTRY/$ECR_REPOSITORY:latest \
             --push \
-            --progress=plain \
+            --quiet \
             -f Dockerfile \
             .
           
@@ -155,6 +171,7 @@ jobs:
         fi
     
     - name: Build and push AI server image
+      if: steps.changes.outputs.aiserver_changed == 'true'
       env:
         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY_AISERVER }}
@@ -186,7 +203,7 @@ jobs:
             --tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
             --tag $ECR_REGISTRY/$ECR_REPOSITORY:latest \
             --push \
-            --progress=plain \
+            --quiet \
             -f Dockerfile \
             .
           
@@ -201,6 +218,7 @@ jobs:
         fi
     
     - name: Build and push frontend image
+      if: steps.changes.outputs.frontend_changed == 'true'
       env:
         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY_FRONTEND }}
@@ -305,10 +323,10 @@ jobs:
         
         # Create .env file for docker-compose
         cat > deployment.env << EOL
-        # Docker Images
-        BACKEND_IMAGE=$ECR_REGISTRY/${{ secrets.ECR_REPOSITORY_BACKEND }}:$IMAGE_TAG
-        FRONTEND_IMAGE=$ECR_REGISTRY/${{ secrets.ECR_REPOSITORY_FRONTEND }}:$IMAGE_TAG
-        AISERVER_IMAGE=$ECR_REGISTRY/${{ secrets.ECR_REPOSITORY_AISERVER }}:$IMAGE_TAG
+        # Docker Images (latest 태그 사용)
+        BACKEND_IMAGE=$ECR_REGISTRY/${{ secrets.ECR_REPOSITORY_BACKEND }}:latest
+        FRONTEND_IMAGE=$ECR_REGISTRY/${{ secrets.ECR_REPOSITORY_FRONTEND }}:latest
+        AISERVER_IMAGE=$ECR_REGISTRY/${{ secrets.ECR_REPOSITORY_AISERVER }}:latest
         
         # Database Configuration (컨테이너 간 통신)
         POSTGRES_DB="${{ secrets.POSTGRES_DB }}"
@@ -364,6 +382,9 @@ jobs:
         KHOA_API_KEY="${{ secrets.KHOA_API_KEY }}"
         AGRICULTURE_API_KEY="${{ secrets.AGRICULTURE_API_KEY }}"
         NIFS_API_KEY="${{ secrets.NIFS_API_KEY }}"
+        
+        # AI 서버 연결 설정
+        AI_SERVER_URL="http://aiserver:8001"
         EOL
         
         # Copy env file to EC2
@@ -417,6 +438,9 @@ jobs:
           
           # Stop existing containers (using production compose)
           docker compose --env-file ~/.env down || true
+          
+          # 기존 컨테이너 중지 (데이터 보존)
+          echo "🔧 기존 서비스 중지 중... (데이터 유지)"
           
           # Create Firebase Admin SDK key file from environment variable
           echo "🔧 Firebase Admin SDK 키 파일 생성 중..."

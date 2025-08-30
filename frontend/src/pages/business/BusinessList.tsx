@@ -69,7 +69,6 @@ const BusinessList: React.FC = () => {
     try {
       setIsLoadingBusinesses(true);
       const res = await businessApi.getAll({ page: pageNum, page_size: pageSize });
-      console.log("📊 응답 데이터 - count:", res.count, "results 개수:", res.results?.length);
       // 다양한 응답 구조에 대응
       let data: any = null;
       // 1. res가 바로 {count, results} 구조일 때
@@ -90,12 +89,10 @@ const BusinessList: React.FC = () => {
         setBusinesses(res);
         setCount(res.length);
       } else {
-        console.error("예상치 못한 응답 구조:", res);
         setBusinesses([]);
         setCount(0);
       }
     } catch (error: any) {
-      console.error("❌ 거래처 목록 불러오기 실패:", error);
       setBusinesses([]);
       setCount(0);
     } finally {
@@ -125,7 +122,6 @@ const BusinessList: React.FC = () => {
 
       // setUnpaidByBusinessId(unpaid);
     } catch (e) {
-      console.warn('미수금 계산 실패 (주문/결제 로드 실패):', e);
       // setUnpaidByBusinessId({});
     }
   };
@@ -263,7 +259,6 @@ const BusinessList: React.FC = () => {
         address: editingBusiness.address,
       });
       
-      console.log("수정 성공:", response.data);
       
       // 성공 토스트
       toast.success(`'${editingBusiness.business_name}' 거래처가 성공적으로 수정되었습니다!`, {
@@ -279,7 +274,6 @@ const BusinessList: React.FC = () => {
       
     } catch (error) {
       const err = error as any;
-      console.error("수정 실패:", err.response?.data || error);
 
       const data = err.response?.data;
 
@@ -323,7 +317,6 @@ const BusinessList: React.FC = () => {
         address: newAddress,
       });
       
-      console.log("등록 성공:", response.data);
       
       // 성공 토스트
       toast.success(`'${newName}' 거래처가 성공적으로 등록되었습니다!`, {
@@ -341,7 +334,6 @@ const BusinessList: React.FC = () => {
       
     } catch (error) {
       const err = error as any;
-      console.error("등록 실패:", err.response?.data || error);
 
       const data = err.response?.data;
 
@@ -743,7 +735,6 @@ const BusinessList: React.FC = () => {
           onClick={() => {
             const testDate = "2025-08-10T00:00:00Z"; // 임의의 주문 날짜
             const days = calculateDaysSinceOrder(testDate);
-            console.log("연체일수 테스트:", days);
             alert(`테스트: ${days}일`);
           }}
           className="px-4 py-2 bg-blue-500 text-white rounded-lg shadow-sm hover:bg-blue-600 transition"

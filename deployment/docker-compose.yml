@@ -79,8 +79,13 @@ services:
       
       # Firebase Admin SDK 설정 (Secrets에서 주입)
       - FIREBASE_ADMIN_CREDENTIALS_JSON=${FIREBASE_ADMIN_CREDENTIALS_JSON:-}
+      
+      # AI 서버 연결 설정
+      - AI_SERVER_URL=${AI_SERVER_URL:-http://aiserver:8001}
     depends_on:
       database:
+        condition: service_healthy
+      aiserver:
         condition: service_healthy
     volumes:
       - backend-logs:/app/logs

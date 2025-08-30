@@ -1,6 +1,7 @@
 """
 AI 서버 - FastAPI 기반 어류 질병 분석 서비스
 YOLO11 + VGG16을 사용한 증상 탐지 및 질병 분류
+AI Server health endpoint updated
 """
 import os
 from fastapi import FastAPI, HTTPException

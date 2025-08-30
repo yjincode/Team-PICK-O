@@ -78,7 +78,6 @@ export default function LoginPage(): JSX.Element {
         try {
           setupRecaptcha('recaptcha-container')
         } catch (error) {
-          console.error('reCAPTCHA 초기화 실패:', error)
           setError('reCAPTCHA 초기화에 실패했습니다.')
         }
       }, 100);
@@ -123,7 +122,6 @@ export default function LoginPage(): JSX.Element {
         navigate('/dashboard')
       }
     } catch (error: any) {
-      console.error('❌ 슈퍼계정 직접 로그인 실패:', error)
       setError(error.message || '슈퍼계정 로그인에 실패했습니다.')
     } finally {
       setLoading(false)
