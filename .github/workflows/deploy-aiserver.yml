@@ -65,15 +65,28 @@ jobs:
           export AWS_SECRET_ACCESS_KEY="${{ secrets.AWS_SECRET_ACCESS_KEY }}"
           export AWS_DEFAULT_REGION="${{ secrets.AWS_REGION }}"
           
+          # 디스크 공간 확보를 위한 Docker 정리
+          echo "🧹 Docker 리소스 정리 중..."
+          
+          # AI 서버 컨테이너 중지 및 제거
+          docker stop teamPicko-aiserver || true
+          docker rm teamPicko-aiserver || true
+          
+          # AI 서버 관련 이미지만 선택적 삭제 (다른 서비스 보호)
+          docker images --format "table {{.Repository}}:{{.Tag}}\t{{.ID}}" | grep aiserver | awk '{print \$2}' | xargs -I {} docker rmi -f {} || true
+          
+          # 사용하지 않는 컨테이너, 네트워크, 이미지 정리
+          docker system prune -f
+          
+          # 디스크 공간 확인
+          echo "🔍 정리 후 디스크 공간:"
+          df -h
+          
           # ECR 로그인
           aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin $ECR_REGISTRY
           
           # 새 AI 서버 이미지 pull
           docker pull $ECR_REGISTRY/${{ secrets.ECR_REPOSITORY_AISERVER }}:$IMAGE_TAG
-          
-          # AI 서버 컨테이너만 재시작
-          docker stop teamPicko-aiserver || true
-          docker rm teamPicko-aiserver || true
           
           # 새 이미지로 AI 서버 컨테이너 시작
           docker run -d \
