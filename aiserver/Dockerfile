@@ -1,49 +1,25 @@
-# Multi-stage build for minimal image
-FROM python:3.11-slim as builder
-
-WORKDIR /tmp
-
-# 의존성 설치용 최소 패키지만
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    && rm -rf /var/lib/apt/lists/*
-
-# Python 의존성 설치
-COPY requirements.txt .
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip wheel --no-cache-dir --no-deps --wheel-dir /tmp/wheels \
-    --index-url https://download.pytorch.org/whl/cpu torch torchvision && \
-    pip wheel --no-cache-dir --no-deps --wheel-dir /tmp/wheels \
-    tensorflow-cpu>=2.12.0 ultralytics>=8.3.185 opencv-python-headless==4.8.1.78 \
-    pillow>=10.0.0 numpy>=1.24.0 python-dotenv==1.0.0 requests>=2.31.0 \
-    loguru==0.7.2 fastapi==0.104.1 uvicorn[standard]==0.24.0 \
-    python-multipart==0.0.6 pydantic==2.5.0 --no-deps
-
-# 런타임 이미지 (최소화)
 FROM python:3.11-slim
 
-# 런타임 필수 패키지만
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libgomp1 \
-    libglib2.0-0 \
+# 시스템 패키지 설치
+RUN apt-get update && apt-get install -y \
     curl \
+    wget \
+    ca-certificates \
     unzip \
-    && rm -rf /var/lib/apt/lists/* \
-    && apt-get clean
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
 
 # 작업 디렉토리 설정
 WORKDIR /app
 
-# 빌드된 wheels 복사 및 설치
-COPY --from=builder /tmp/wheels /tmp/wheels
+# Python 의존성 설치
+COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir --find-links /tmp/wheels \
-    torch torchvision tensorflow-cpu pillow numpy python-dotenv requests \
-    loguru fastapi uvicorn python-multipart pydantic && \
-    pip install --no-cache-dir opencv-python-headless==4.8.1.78 && \
-    pip install --no-cache-dir ultralytics>=8.3.185 && \
-    pip uninstall -y opencv-python opencv-contrib-python && \
-    rm -rf /tmp/wheels
+    pip install --no-cache-dir -r requirements.txt
 
 # AWS CLI 간소화 (경량)
 RUN curl -s "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" \
