@@ -323,10 +323,10 @@ jobs:
         
         # Create .env file for docker-compose
         cat > deployment.env << EOL
-        # Docker Images
-        BACKEND_IMAGE=$ECR_REGISTRY/${{ secrets.ECR_REPOSITORY_BACKEND }}:$IMAGE_TAG
-        FRONTEND_IMAGE=$ECR_REGISTRY/${{ secrets.ECR_REPOSITORY_FRONTEND }}:$IMAGE_TAG
-        AISERVER_IMAGE=$ECR_REGISTRY/${{ secrets.ECR_REPOSITORY_AISERVER }}:$IMAGE_TAG
+        # Docker Images (latest 태그 사용)
+        BACKEND_IMAGE=$ECR_REGISTRY/${{ secrets.ECR_REPOSITORY_BACKEND }}:latest
+        FRONTEND_IMAGE=$ECR_REGISTRY/${{ secrets.ECR_REPOSITORY_FRONTEND }}:latest
+        AISERVER_IMAGE=$ECR_REGISTRY/${{ secrets.ECR_REPOSITORY_AISERVER }}:latest
         
         # Database Configuration (컨테이너 간 통신)
         POSTGRES_DB="${{ secrets.POSTGRES_DB }}"
