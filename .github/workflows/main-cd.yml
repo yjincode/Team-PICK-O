@@ -156,7 +156,7 @@ jobs:
             --tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
             --tag $ECR_REGISTRY/$ECR_REPOSITORY:latest \
             --push \
-            --progress=plain \
+            --quiet \
             -f Dockerfile \
             .
           
@@ -203,7 +203,7 @@ jobs:
             --tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
             --tag $ECR_REGISTRY/$ECR_REPOSITORY:latest \
             --push \
-            --progress=plain \
+            --quiet \
             -f Dockerfile \
             .
           
