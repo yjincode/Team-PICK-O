@@ -11,7 +11,7 @@ import { Camera, Upload, Trash2, Eye, AlertCircle } from "lucide-react"
 import { businessApi } from "../../../lib/api"
 import { parseVoiceOrder, validateAndCompleteOrder } from "../../../utils/orderParser"
 import type { Business } from "../../../types"
-
+import { fetchParsedOrder } from "../../../utils/orderParser"
 interface ParsedOrderData {
   business_name?: string;
   phone_number?: string;
@@ -160,13 +160,13 @@ const ImageUploadTab: React.FC<ImageUploadTabProps> = ({
     setError('')
     
     try {
-      const extractedText = await extractTextFromImage(file)
-      
+      const extractedText = await fetchParsedOrder(file)
+      console.log('추출된 텍스트:', extractedText); 
       // setLocalTranscribedText(extractedText)
       
       // 추출된 텍스트를 주문 데이터로 파싱
       try {
-        const basicOrderData = parseVoiceOrder(extractedText)
+        const basicOrderData = extractedText
         
         if (basicOrderData.items && basicOrderData.items.length > 0) {
           const validatedOrderData = validateAndCompleteOrder(basicOrderData)
@@ -188,6 +188,9 @@ const ImageUploadTab: React.FC<ImageUploadTabProps> = ({
       setLocalIsProcessing(false)
     }
   }
+
+
+
 
   const handleRemoveLocalFile = () => {
     setLocalUploadedFile(null)
