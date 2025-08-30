@@ -1,6 +1,6 @@
-FROM python:3.11-slim
+FROM python:3.11-bullseye
 
-# 시스템 패키지 설치 (OpenCV 전체 의존성 포함)
+# 시스템 패키지 설치 (OpenCV 의존성 및 시스템 도구)
 RUN apt-get update && apt-get install -y \
     curl \
     wget \
@@ -12,9 +12,14 @@ RUN apt-get update && apt-get install -y \
     libglib2.0-0 \
     libsm6 \
     libxext6 \
-    libxrender-dev \
+    libxrender1 \
     libfontconfig1 \
     libice6 \
+    libgtk-3-0 \
+    libgdk-pixbuf2.0-0 \
+    libpango-1.0-0 \
+    libcairo2 \
+    libatk1.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
 # 작업 디렉토리 설정
