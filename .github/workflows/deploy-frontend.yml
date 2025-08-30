@@ -67,15 +67,27 @@ jobs:
           export AWS_SECRET_ACCESS_KEY="${{ secrets.AWS_SECRET_ACCESS_KEY }}"
           export AWS_DEFAULT_REGION="${{ secrets.AWS_REGION }}"
           
+          # 디스크 공간 확보를 위한 Docker 정리
+          echo "🧹 Docker 리소스 정리 중..."
+          
+          # Frontend 컨테이너 중지 및 제거
+          docker stop teamPicko-frontend || true
+          docker rm teamPicko-frontend || true
+          
+          # Frontend 관련 이미지만 선택적 삭제
+          docker images --format "table {{.Repository}}:{{.Tag}}\t{{.ID}}" | grep frontend | awk '{print \$2}' | xargs -I {} docker rmi -f {} || true
+          
+          # 사용하지 않는 리소스 정리
+          docker system prune -f
+          
+          echo "🔍 정리 후 디스크 공간:"
+          df -h
+          
           # ECR 로그인
           aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin $ECR_REGISTRY
           
           # 새 프론트엔드 이미지 pull
           docker pull $ECR_REGISTRY/${{ secrets.ECR_REPOSITORY_FRONTEND }}:$IMAGE_TAG
-          
-          # 프론트엔드 컨테이너만 재시작
-          docker stop teamPicko-frontend || true
-          docker rm teamPicko-frontend || true
           
           # 새 이미지로 프론트엔드 컨테이너 시작
           docker run -d \
