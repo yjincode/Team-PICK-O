@@ -30,7 +30,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu && \
     pip install --no-cache-dir tensorflow-cpu && \
-    pip install --no-cache-dir -r requirements.txt --no-deps
+    pip install --no-cache-dir -r requirements.txt
 
 # AWS CLI 간소화 (경량)
 RUN curl -s "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" \
