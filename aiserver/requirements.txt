@@ -3,6 +3,7 @@ fastapi==0.104.1
 uvicorn[standard]==0.24.0
 python-multipart==0.0.6
 pydantic==2.5.0
+click>=8.0.0
 
 # AI 모델 관련 (CPU-only 최적화)
 ultralytics>=8.3.185
