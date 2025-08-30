@@ -17,7 +17,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
     tensorflow-cpu>=2.12.0 ultralytics>=8.3.185 opencv-python-headless==4.8.1.78 \
     pillow>=10.0.0 numpy>=1.24.0 python-dotenv==1.0.0 requests>=2.31.0 \
     loguru==0.7.2 fastapi==0.104.1 uvicorn[standard]==0.24.0 \
-    python-multipart==0.0.6 pydantic==2.5.0
+    python-multipart==0.0.6 pydantic==2.5.0 --no-deps
 
 # 런타임 이미지 (최소화)
 FROM python:3.11-slim
@@ -38,8 +38,11 @@ WORKDIR /app
 COPY --from=builder /tmp/wheels /tmp/wheels
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir --find-links /tmp/wheels \
-    torch torchvision tensorflow-cpu ultralytics opencv-python-headless \
-    pillow numpy python-dotenv requests loguru fastapi uvicorn python-multipart pydantic && \
+    torch torchvision tensorflow-cpu pillow numpy python-dotenv requests \
+    loguru fastapi uvicorn python-multipart pydantic && \
+    pip install --no-cache-dir opencv-python-headless==4.8.1.78 && \
+    pip install --no-cache-dir ultralytics>=8.3.185 && \
+    pip uninstall -y opencv-python opencv-contrib-python && \
     rm -rf /tmp/wheels
 
 # AWS CLI 간소화 (경량)

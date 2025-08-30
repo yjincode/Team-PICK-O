@@ -3,7 +3,7 @@ name: Deploy AI Server Only
 on:
   push:
     branches:
-      - main
+      - 'aiserver/**'  # aiserver/로 시작하는 모든 브랜치
     paths:
       - 'aiserver/**'
   workflow_dispatch:
@@ -102,3 +102,61 @@ jobs:
         EOF
         
         rm ec2_key.pem
+    
+    # 배포 성공 시 자동으로 dev, main PR 생성
+    - name: Create Pull Request to dev
+      if: success()
+      uses: peter-evans/create-pull-request@v6
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        branch: ${{ github.ref_name }}
+        base: dev
+        title: "feat(aiserver): ${{ github.ref_name }} 개발 완료"
+        body: |
+          ## AI Server 개발 완료
+          
+          🚀 **브랜치**: `${{ github.ref_name }}`
+          📦 **배포 테스트**: 완료
+          🔗 **Actions**: [배포 로그](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+          
+          ### 변경사항
+          - AI Server 기능 구현
+          - 배포 테스트 완료
+          
+          ### 테스트 완료
+          - [x] Docker 빌드 성공
+          - [x] EC2 배포 성공
+          - [x] Health check 통과
+          
+          🤖 Generated with [Claude Code](https://claude.ai/code)
+        assignees: ${{ github.actor }}
+        draft: false
+    
+    - name: Create Pull Request to main
+      if: success()
+      uses: peter-evans/create-pull-request@v6
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        branch: ${{ github.ref_name }}
+        base: main
+        title: "feat(aiserver): ${{ github.ref_name }} 운영 배포 준비"
+        body: |
+          ## AI Server 운영 배포 준비
+          
+          🚀 **브랜치**: `${{ github.ref_name }}`
+          📦 **개발 테스트**: 완료
+          🔗 **배포 로그**: [Actions Run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+          
+          ### 변경사항
+          - AI Server 기능 구현 완료
+          - 개발 환경 배포 및 테스트 완료
+          
+          ### 체크리스트
+          - [x] 개발 환경 배포 성공
+          - [x] Health check 통과
+          - [ ] 코드 리뷰 완료
+          - [ ] QA 테스트 완료
+          
+          🤖 Generated with [Claude Code](https://claude.ai/code)
+        assignees: ${{ github.actor }}
+        draft: true
