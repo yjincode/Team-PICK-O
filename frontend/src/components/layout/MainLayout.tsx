@@ -6,6 +6,7 @@
 import React, { useState } from 'react';
 import Sidebar from './Sidebar';
 import MobileBottomNav from './MobileBottomNav';
+import Header from './Header';
 import { Toaster } from 'react-hot-toast';
 
 interface MainLayoutProps {
@@ -35,6 +36,9 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
       
       {/* 메인 콘텐츠 영역 */}
       <main className="flex-1 overflow-y-auto">
+        {/* 전역 헤더 */}
+        <Header />
+        
         <div className="p-4 sm:p-6 lg:p-8 container-responsive pb-20 lg:pb-8">
           {children}
         </div>

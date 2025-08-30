@@ -6,11 +6,10 @@ import React, { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card"
 import { Button } from "../../components/ui/button"
 import { Input } from "../../components/ui/input"
-import { Search, ShoppingCart, AlertTriangle, DollarSign } from "lucide-react"
+import { ShoppingCart, AlertTriangle, DollarSign } from "lucide-react"
 import { WeatherWidget } from "../../components/common/WeatherWidget"
 import { StatsCard } from "../../components/common/StatsCard"
 import { OrderStatusBadge } from "../../components/common/OrderStatusBadge"
-import Header from "../../components/layout/Header"
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts"
 import { dashboardApi, salesApi, orderApi } from "../../lib/api"
 import AuctionPriceChart from "../../components/charts/AuctionPriceChart"
@@ -167,31 +166,6 @@ const Dashboard: React.FC = () => {
   
   return (
     <div className="space-y-4 sm:space-y-6">
-      {/* 헤더: 검색, 날씨 위젯, 프로필/알림 */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div className="flex items-center space-x-3 flex-1 max-w-md">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-            <Input
-              placeholder="거래처명, 어종명으로 검색..."
-              className="pl-10 bg-white border-gray-200 text-base h-12"
-            />
-          </div>
-          <Button className="bg-accent-blue hover:bg-accent-blue/90 h-12 px-6 touch-target flex-shrink-0">검색</Button>
-        </div>
-        
-        {/* 우측 영역: 날씨 위젯 + 프로필/알림 */}
-        <div className="flex items-center space-x-4">
-          {/* 날씨 위젯 */}
-          <div className="w-full sm:w-52">
-            <WeatherWidget />
-          </div>
-          
-          {/* 프로필 및 알림 위젯 */}
-          <Header />
-        </div>
-      </div>
-
       {/* 로딩 및 에러 상태 */}
       {loading && (
         <div className="flex justify-center items-center py-8">
