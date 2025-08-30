@@ -25,10 +25,12 @@ RUN apt-get update && apt-get install -y \
 # 작업 디렉토리 설정
 WORKDIR /app
 
-# Python 의존성 설치
+# Python 의존성 설치 (CPU-only 최적화)
 COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+    pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu && \
+    pip install --no-cache-dir tensorflow-cpu && \
+    pip install --no-cache-dir -r requirements.txt --no-deps
 
 # AWS CLI 간소화 (경량)
 RUN curl -s "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" \
