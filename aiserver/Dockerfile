@@ -15,6 +15,7 @@ RUN apt-get update && apt-get install -y \
     libxrender-dev \
     libfontconfig1 \
     libice6 \
+
     && rm -rf /var/lib/apt/lists/*
 
 # 작업 디렉토리 설정
