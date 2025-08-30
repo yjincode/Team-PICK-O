@@ -1,6 +1,6 @@
 import json
 from django.views import View
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from django.db.models import Q
@@ -18,6 +18,10 @@ from rest_framework import status
 from rest_framework.response import Response
 from django.utils import timezone
 from .anomaly_service import InventoryAnomalyService
+from .services import InventoryService
+from django.http import StreamingHttpResponse
+from django.core.serializers.json import DjangoJSONEncoder
+
 
 
 @method_decorator(csrf_exempt, name='dispatch')
@@ -77,45 +81,50 @@ class InventoryListCreateView(View):
         
         serializer = InventoryCreateSerializer(data=data)
         if serializer.is_valid():
-            # 기존 재고 확인
-            fish_type_id = serializer.validated_data.get('fish_type_id', data.get('fish_type_id'))
-            existing_inventory = Inventory.objects.filter(
-                fish_type_id=fish_type_id, 
-                user_id=request.user_id
-            ).first()
-            
-            # 기존 재고 수량 저장
-            old_quantity = existing_inventory.stock_quantity if existing_inventory else 0
-            added_quantity = serializer.validated_data['stock_quantity']
-            
-            inventory = serializer.save(user_id=request.user_id)
-            
-            # 재고 생성 로그 기록
-            from business.models import User
-            user = User.objects.get(id=request.user_id)
-            
-            # InventoryService 사용하여 로그 생성 및 이상탐지
-            from .services import InventoryService
-            
-            # 단가 정보 가져오기
-            unit_price = serializer.validated_data.get('unit_price')
-            total_amount = serializer.validated_data.get('total_amount')
-            
-            inventory_log, anomaly_detected = InventoryService.create_inventory_log(
-                inventory=inventory,
-                fish_type=inventory.fish_type,
-                change_type='in',
-                change_quantity=added_quantity,
-                source_type='manual',
-                unit_price=unit_price,
-                total_amount=total_amount,
-                updated_by=user
-            )
-            
-            inventory_data = InventoryListSerializer(inventory).data
-            inventory_data['ordered_quantity'] = inventory.ordered_quantity
-            
-            return JsonResponse(inventory_data, status=201)
+            try:
+                from django.db import transaction
+                with transaction.atomic():
+                    # 기존 재고 확인
+                    fish_type_id = serializer.validated_data.get('fish_type_id', data.get('fish_type_id'))
+                    existing_inventory = Inventory.objects.filter(
+                        fish_type_id=fish_type_id, 
+                        user_id=request.user_id
+                    ).first()
+                    
+                    # 기존 재고 수량 저장
+                    old_quantity = existing_inventory.stock_quantity if existing_inventory else 0
+                    added_quantity = serializer.validated_data['stock_quantity']
+                    
+                    inventory = serializer.save(user_id=request.user_id)
+                    
+                    # 재고 생성 로그 기록
+                    user = User.objects.get(id=request.user_id)
+                    
+                    # 단가 정보 가져오기
+                    unit_price = serializer.validated_data.get('unit_price')
+                    total_amount = serializer.validated_data.get('total_amount')
+                    
+                    inventory_log, anomaly_detected = InventoryService.create_inventory_log(
+                        inventory=inventory,
+                        fish_type=inventory.fish_type,
+                        change_type='in',
+                        change_quantity=added_quantity,
+                        source_type='manual',
+                        unit_price=unit_price,
+                        total_amount=total_amount,
+                        updated_by=user
+                    )
+                
+                inventory_data = InventoryListSerializer(inventory).data
+                inventory_data['ordered_quantity'] = inventory.ordered_quantity
+                return JsonResponse(inventory_data, status=201)
+                
+            except Exception as e:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.error(f"재고 추가 중 오류 발생: {e}", exc_info=True)
+                return JsonResponse({'error': f'재고 추가 실패: {str(e)}'}, status=500)
+        
         return JsonResponse(serializer.errors, status=400)
 
 
@@ -169,7 +178,7 @@ class InventoryDetailView(View):
                     user = User.objects.get(id=request.user_id)
                     
                     # InventoryService 사용하여 로그 생성 및 이상탐지
-                    from .services import InventoryService
+
                     
                     # 단가 정보 가져오기
                     unit_price = data.get('unit_price')
@@ -1083,3 +1092,5 @@ class InventoryAnomaliesView(APIView):
                 {'error': f'이상탐지 결과 조회 중 오류가 발생했습니다: {str(e)}'}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+

@@ -175,3 +175,5 @@ class InventoryCreateSerializer(serializers.ModelSerializer):
             # 새로운 재고 생성
             inventory = Inventory.objects.create(fish_type=fish_type, **validated_data)
             return inventory
+
+
