@@ -1,24 +1,13 @@
 FROM python:3.11-slim
 
-# 시스템 패키지 설치 (OpenCV GUI 라이브러리 포함)
+# 시스템 패키지 설치
 RUN apt-get update && apt-get install -y \
     curl \
     wget \
     ca-certificates \
     unzip \
     libglib2.0-0 \
-    libsm6 \
-    libxext6 \
-    libxrender-dev \
     libgomp1 \
-    libgl1-mesa-glx \
-    libglib2.0-0 \
-    libgtk-3-0 \
-    libavcodec58 \
-    libavformat58 \
-    libavutil56 \
-    libswscale5 \
-    libavresample4 \
     && rm -rf /var/lib/apt/lists/*
 
 # 작업 디렉토리 설정
