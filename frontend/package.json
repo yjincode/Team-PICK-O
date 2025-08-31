@@ -35,7 +35,8 @@
     "react-router-dom": "^6.8.1",
     "recharts": "^2.8.0",
     "tailwind-merge": "^1.14.0",
-    "tailwindcss-animate": "^1.0.7"
+    "tailwindcss-animate": "^1.0.7",
+    "zustand": "^5.0.8"
   },
   "devDependencies": {
     "@types/node": "^24.1.0",

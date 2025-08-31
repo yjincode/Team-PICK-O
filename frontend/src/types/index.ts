@@ -357,5 +357,7 @@ export interface SalesSummary {
   }>;
 }
 
+
+
 // ==================== 날씨 관련 타입 ====================
 export * from './weather';
