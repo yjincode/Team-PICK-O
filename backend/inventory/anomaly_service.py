@@ -4,6 +4,7 @@ import logging
 from datetime import datetime, timedelta
 
 from .models import Inventory, InventoryLog, InventoryAnomaly
+from .anomaly_detection.hybrid_scorer import HybridAnomalyScorer
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +41,7 @@ class InventoryAnomalyService:
     @classmethod
     def detect_anomaly(cls, inventory_log, inventory, fish_type):
         """
-        재고 이상탐지 메인 함수 (우선순위 기반)
+        재고 이상탐지 메인 함수 (하이브리드: 룰 기반 + PyOD)
         
         Args:
             inventory_log: InventoryLog 객체
@@ -51,6 +52,30 @@ class InventoryAnomalyService:
             dict: 스마트 그룹화된 이상탐지 결과 또는 None
         """
         try:
+            # 하이브리드 스코어러 사용
+            hybrid_scorer = HybridAnomalyScorer(alpha=0.7)  # 70% 룰 기반, 30% PyOD
+            
+            try:
+                # 하이브리드 이상탐지 실행
+                hybrid_result = hybrid_scorer.calculate_hybrid_score(inventory_log, inventory, fish_type)
+                
+                if hybrid_result and hybrid_result.get('anomalies'):
+                    # 하이브리드 결과가 있으면 저장
+                    anomalies = hybrid_result['anomalies']
+                    cls._save_hybrid_anomalies(anomalies, inventory_log, inventory, fish_type, hybrid_result.get('model_version', 'hybrid-v1.0'))
+                    
+                    # 스마트 그룹화
+                    grouped_anomalies = cls._smart_group_anomalies(anomalies)
+                    
+                    # Alert 생성
+                    cls._create_anomaly_alerts(anomalies, inventory_log, inventory, fish_type)
+                    
+                    return grouped_anomalies
+                    
+            except Exception as hybrid_error:
+                logger.warning(f"하이브리드 이상탐지 실패: {hybrid_error}, 룰 기반으로 fallback")
+            
+            # 하이브리드 실패 시 기존 룰 기반 시스템 사용
             all_anomalies = []
             
             # 1. 마이너스 재고 탐지 (최우선)
@@ -316,6 +341,34 @@ class InventoryAnomalyService:
                 
         except Exception as e:
             logger.error(f"이상탐지 저장 실패: {e}")
+    
+    @classmethod
+    def _save_hybrid_anomalies(cls, anomalies, inventory_log, inventory, fish_type, model_version):
+        """하이브리드 이상탐지 결과 저장"""
+        try:
+            for anomaly_data in anomalies:
+                # InventoryLog 업데이트
+                inventory_log.is_anomaly = True
+                inventory_log.anomaly_type = anomaly_data['type']
+                inventory_log.anomaly_score = anomaly_data.get('anomaly_score', 0.5)
+                inventory_log.save()
+                
+                # InventoryAnomaly 생성
+                InventoryAnomaly.objects.create(
+                    log=inventory_log,
+                    inventory=inventory,
+                    anomaly_type=anomaly_data['type'],
+                    severity=anomaly_data['severity'],
+                    confidence_score=anomaly_data.get('anomaly_score', 0.5),
+                    description=anomaly_data['description'],
+                    recommended_action=anomaly_data['recommended_action'],
+                    ai_model_version=model_version  # 하이브리드 모델 버전
+                )
+                
+                logger.warning(f"하이브리드 이상탐지 저장됨: {anomaly_data['type']} - {anomaly_data['severity']} ({model_version})")
+                
+        except Exception as e:
+            logger.error(f"하이브리드 이상탐지 저장 실패: {e}")
     
     @classmethod
     def detect_inventory_check_anomaly(cls, inventory, actual_quantity, fish_type):
