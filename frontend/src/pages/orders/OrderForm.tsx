@@ -97,7 +97,6 @@ const pollTranscriptionStatus = async (transcriptionId: string, _businessId: num
     
     try {
       attempts++
-      console.log(`폴링 시도 ${attempts}/${maxAttempts}: transcriptionId=${transcriptionId}`)
       
       const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/orders/transcription/${transcriptionId}/status/`, {
         headers: {
@@ -110,7 +109,6 @@ const pollTranscriptionStatus = async (transcriptionId: string, _businessId: num
       }
       
       const data = await response.json()
-      console.log(`STT 상태: ${data.status}`)
       
       if (data.status === 'completed') {
         isPolling = false // 폴링 중단
@@ -137,7 +135,6 @@ const pollTranscriptionStatus = async (transcriptionId: string, _businessId: num
               toast.error(orderResult.error || '주문 생성에 실패했습니다.')
             }
           } catch (orderError) {
-            console.error('주문 생성 오류:', orderError)
             toast.error('주문 생성 중 오류가 발생했습니다.')
           }
         } else {
@@ -155,7 +152,6 @@ const pollTranscriptionStatus = async (transcriptionId: string, _businessId: num
         toast.error('음성 인식 처리 시간이 초과되었습니다. 다시 시도해주세요.')
       }
     } catch (error) {
-      console.error(`폴링 오류 (시도 ${attempts}):`, error)
       
       if (attempts < maxAttempts && isPolling) {
         // 오류 시 더 긴 간격으로 재시도
@@ -218,11 +214,9 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
       try {
         // setIsLoadingFishTypes(true)
         const response = await fishTypeApi.getAll()
-        console.log('어종 목록 응답:', response.data)
         
         setFishTypes(response.data || [])
       } catch (error) {
-        console.error('어종 목록 가져오기 실패:', error)
         setFishTypes([])
       } finally {
         // setIsLoadingFishTypes(false)
@@ -241,7 +235,6 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
     }
 
     try {
-      console.log('🔍 실시간 재고 체크 시작...')
       const stockCheckItems = formData.items.map((item: OrderItem) => ({
         fish_type_id: item.fish_type_id,
         quantity: item.quantity,
@@ -249,7 +242,6 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
       }))
       
       const stockResult = await inventoryApi.checkStock({ order_items: stockCheckItems })
-      console.log('📦 재고 체크 결과:', stockResult)
       
       // 실시간으로 재고 상태에 따라 경고/에러 업데이트
       const currentWarnings = stockResult.warnings || []
@@ -260,16 +252,13 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
         setStockWarnings([])
         setStockErrors([])
         setDetailedStockInfo([])
-        console.log('✅ 모든 어종 재고 충분')
       } else {
         setStockWarnings(currentWarnings)
         setStockErrors(currentErrors)
         setDetailedStockInfo(stockResult.items || []) // 상세 재고 정보 저장
-        console.log('⚠️ 재고 부족 어종 있음:', { warnings: currentWarnings, errors: currentErrors, items: stockResult.items })
       }
       
     } catch (error) {
-      console.error('재고 체크 실패:', error)
       setStockWarnings([])
       setStockErrors([])
     }
@@ -285,7 +274,6 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
   // 전역 이벤트를 통한 재고 체크 갱신 (재고 추가 시 호출)
   useEffect(() => {
     const handleStockUpdate = () => {
-      console.log('📦 재고 업데이트 이벤트 수신, 재고 체크 재실행')
       checkStockForAllItems()
     }
 
@@ -297,39 +285,23 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
   useEffect(() => {
     const fetchBusinesses = async () => {
       try {
-        console.log('🔍 거래처 목록 요청 시작...')
         // setIsLoadingBusinesses(true)
         const response = await businessApi.getAll()
-        console.log('✅ 거래처 목록 응답:', response)
-        console.log('📊 응답 타입:', typeof response)
-        console.log('📋 응답 구조:', Object.keys(response || {}))
         
         // API 응답 구조에 따라 데이터 추출
         let businessData: Business[] = []
         
         if (response && Array.isArray(response)) {
-          console.log('📁 응답이 배열 형태')
           businessData = response
         } else if (response && Array.isArray((response as any).results)) {
-          console.log('📁 페이지네이션 응답 형태 (results)')
           businessData = (response as any).results
         } else if (response && Array.isArray(response.results)) {
-          console.log('📁 페이지네이션 응답 형태 (results)')
           businessData = response.results
         } else {
-          console.log('❓ 알 수 없는 응답 형태:', response)
         }
         
-        console.log('💼 추출된 거래처 데이터:', businessData)
-        console.log('🔢 거래처 개수:', businessData.length)
         setBusinesses(businessData)
       } catch (error: any) {
-        console.error('❌ 거래처 목록 가져오기 실패:', error)
-        console.error('📄 오류 상세:', {
-          message: error.message,
-          status: error.response?.status,
-          data: error.response?.data
-        })
         setBusinesses([])
       } finally {
         // setIsLoadingBusinesses(false)
@@ -587,7 +559,6 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
       //   toast.error('재고 확인 중 오류가 발생했습니다.')
       // }
     } catch (error) {
-      console.error('재고 체크 오류:', error)
       setStockWarnings([])
       setStockErrors([])
     } finally {
@@ -616,7 +587,6 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
         errors: result.errors || []
       })
     } catch (error) {
-      console.error('임시 재고 체크 오류:', error)
       setTempStockInfo({warnings: [], errors: []})
     }
   }
@@ -656,7 +626,6 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
         const koreanDate = fromKoreanDate(formData.delivery_datetime)
         delivery_datetime = koreanDate.toISOString()
       } catch (error) {
-        console.error('날짜 변환 오류:', error)
       }
     }
     
@@ -677,11 +646,9 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
       
       // 재고 부족 메시지 표시 (주문은 계속 진행)
       if (stockResult.warnings.length > 0) {
-        console.log('재고 부족 경고:', stockResult.warnings)
       }
       
     } catch (stockError) {
-      console.error('재고 체크 실패:', stockError)
     } finally {
       setIsCheckingStock(false)
     }
@@ -706,7 +673,6 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
     }
     
     try {
-      console.log('전송할 주문 데이터:', orderData)
       
       // 음성 파일이 있는 경우 FormData로 전송
       if (false && formData.source_type === 'voice') { // audioFile이 주석처리됨
@@ -793,7 +759,6 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
         }
       }
     } catch (error: any) {
-      console.error('주문 저장 오류:', error)
       
       // 에러 메시지를 상세하게 처리
       let errorMessage = '주문 저장 중 오류가 발생했습니다.'
@@ -820,12 +785,6 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
           errorMessage = `서버 오류 (${status}): ${data?.error || error.message}`
         }
         
-        console.error('API 오류 상세:', {
-          status,
-          data,
-          url: error.config?.url,
-          method: error.config?.method
-        })
       } else if (error.message) {
         errorMessage = error.message
       }
@@ -1390,7 +1349,6 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
               items={formData.items}
               onEditItem={(index: number) => {
                 // 편집 기능은 나중에 구현
-                console.log('편집할 항목:', index)
               }}
               onRemoveItem={removeItem}
               totalPrice={formData.items.reduce((sum: number, item: OrderItem) => sum + (item.quantity * item.unit_price), 0)}

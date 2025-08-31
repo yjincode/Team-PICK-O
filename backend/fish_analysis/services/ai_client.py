@@ -14,7 +14,7 @@ class AIServerClient:
     """AI 서버 호출 클라이언트"""
     
     def __init__(self):
-        self.ai_server_url = getattr(settings, 'AI_SERVER_URL', 'http://localhost:8002')
+        self.ai_server_url = getattr(settings, 'AI_SERVER_URL', 'http://localhost:8001')
         self.timeout = 120  # 120초 타임아웃 (AI 분석은 시간이 오래 걸릴 수 있음)
         
     async def analyze_image(self, image_path: str) -> Dict[str, Any]:

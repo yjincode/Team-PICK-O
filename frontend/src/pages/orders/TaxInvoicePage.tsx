@@ -62,13 +62,11 @@ const TaxInvoicePage: React.FC = () => {
         
         // 1. 주문 정보 조회
         const orderResponse = await orderApi.getById(parseInt(id))
-        console.log('📦 주문 정보 조회 결과:', orderResponse)
         setOrder(orderResponse)
         
         // 2. 사용자 정보 조회 (공급자 정보)
                  try {
            const userResponse: any = await authApi.getCurrentUser()
-           console.log('👤 사용자 정보 조회 결과:', userResponse)
            if (userResponse.success && userResponse.data) {
              const userData = userResponse.data
              const supplierData = {
@@ -79,11 +77,9 @@ const TaxInvoicePage: React.FC = () => {
                business_type: '수산물 도매', // 기본값
                business_category: '수산물' // 기본값
              }
-             console.log('🏢 공급자 정보 설정:', supplierData)
              setSupplierInfo(supplierData)
            } else {
              // success: false인 경우 기본 공급자 정보 설정
-             console.log('🔄 success: false - 기본 공급자 정보 설정 시작')
              const defaultSupplier = {
                business_name: '곰표수산',
                business_number: '123-45-67890',
@@ -92,13 +88,9 @@ const TaxInvoicePage: React.FC = () => {
                business_type: '수산물 도매',
                business_category: '수산물'
              }
-             console.log('🏢 기본 공급자 정보 설정:', defaultSupplier)
              setSupplierInfo(defaultSupplier)
-             console.log('✅ setSupplierInfo 호출 완료')
            }
          } catch (error) {
-           console.error('사용자 정보 조회 실패:', error)
-           console.log('🔄 catch 블록 실행됨 - 기본 공급자 정보 설정 시작')
            // 기본 공급자 정보 설정 (곰표수산)
            const defaultSupplier = {
              business_name: '곰표수산',
@@ -108,9 +100,7 @@ const TaxInvoicePage: React.FC = () => {
              business_type: '수산물 도매',
              business_category: '수산물'
            }
-           console.log('🏢 기본 공급자 정보 설정:', defaultSupplier)
            setSupplierInfo(defaultSupplier)
-           console.log('✅ setSupplierInfo 호출 완료')
          }
         
         // 3. 공급받는자 정보 설정 (주문 정보에서)
@@ -123,18 +113,15 @@ const TaxInvoicePage: React.FC = () => {
             business_type: '수산물 도매', // 주문에 업태 정보가 없음
             business_category: '수산물' // 주문에 종목 정보가 없음
           }
-          console.log('🛒 공급받는자 정보 설정:', buyerData)
           setBuyerInfo(buyerData)
         }
         
         // 4. 실제 문서 요청 정보 조회
         try {
           const docRequests = await getDocumentRequests(parseInt(id))
-          console.log('📋 문서 요청 조회 결과:', docRequests)
           
                      if (docRequests.tax_invoice) {
              // 실제 세금계산서 요청 데이터가 있는 경우
-             console.log('✅ 세금계산서 요청 데이터 발견:', docRequests.tax_invoice)
              const docRequestData = {
                id: docRequests.tax_invoice.id,
                status: docRequests.tax_invoice.status,
@@ -142,12 +129,9 @@ const TaxInvoicePage: React.FC = () => {
                identifier: (docRequests.tax_invoice as any).identifier || '사업자등록번호 없음', // ✅ DB에서 실제 값 가져오기
                special_request: (docRequests.tax_invoice as any).special_request || '' // ✅ DB에서 실제 값 가져오기
              }
-             console.log('📄 documentRequest 데이터 설정:', docRequestData)
              setDocumentRequest(docRequestData)
-             console.log('✅ setDocumentRequest 호출 완료')
            } else {
             // 세금계산서 요청이 없는 경우 기본 정보
-            console.log('⚠️ 세금계산서 요청 데이터 없음, 기본 정보 설정')
             setDocumentRequest({
               id: parseInt(id),
               status: 'completed',
@@ -157,7 +141,6 @@ const TaxInvoicePage: React.FC = () => {
             })
           }
         } catch (error) {
-          console.error('문서 요청 정보 조회 실패:', error)
           // 기본 정보로 설정
           setDocumentRequest({
             id: parseInt(id),
@@ -168,15 +151,9 @@ const TaxInvoicePage: React.FC = () => {
           })
         }
       } catch (error) {
-        console.error('데이터 조회 실패:', error)
       } finally {
         setLoading(false)
         // 상태 설정 완료 후 디버깅
-        console.log('🔍 상태 설정 완료 후 확인:')
-        console.log('  - order:', order)
-        console.log('  - documentRequest:', documentRequest)
-        console.log('  - supplierInfo:', supplierInfo)
-        console.log('  - buyerInfo:', buyerInfo)
       }
     }
 
@@ -214,7 +191,6 @@ const TaxInvoicePage: React.FC = () => {
 
       pdf.save(`세금계산서_${order?.business_name}_${new Date().toISOString().split('T')[0]}.pdf`)
     } catch (error) {
-      console.error('PDF 생성 실패:', error)
     }
   }
 

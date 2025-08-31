@@ -78,7 +78,6 @@ const OrderDetail: React.FC = () => {
         // 기존 문서 요청 정보 조회
         await fetchDocumentRequests(parseInt(id))
       } catch (error) {
-        console.error('주문 정보 조회 실패:', error)
         toast.error('주문 정보를 불러올 수 없습니다.')
         navigate('/orders')
       } finally {
@@ -95,7 +94,6 @@ const OrderDetail: React.FC = () => {
       const response = await getDocumentRequests(orderId)
       setDocumentRequests(response)
     } catch (error) {
-      console.error('문서 요청 정보 조회 실패:', error)
       // 오류 발생 시 빈 객체로 설정
       setDocumentRequests({})
     }
@@ -115,7 +113,6 @@ const OrderDetail: React.FC = () => {
       setOrder(updatedOrder)
       
     } catch (error: any) {
-      console.error('출고 처리 오류:', error)
       
       // 재고 부족 에러인 경우 모달 표시
       if (error.response?.data?.error_type === 'insufficient_stock') {
@@ -135,7 +132,6 @@ const OrderDetail: React.FC = () => {
     
     try {
       setLoading(true)
-      console.log('준비 완료로 변경 시작:', order.id)
       
       await orderApi.updateStatus(order.id, 'ready')
       toast.success('주문이 준비 완료 상태로 변경되었습니다.')
@@ -143,10 +139,8 @@ const OrderDetail: React.FC = () => {
       // 주문 정보 다시 조회하여 업데이트
       const updatedOrder = await orderApi.getById(parseInt(id!))
       setOrder(updatedOrder)
-      console.log('준비 완료 상태 변경 완료')
       
     } catch (error: any) {
-      console.error('준비 완료 상태 변경 오류:', error)
       
       // 재고 부족 에러인 경우 모달 표시
       if (error.response?.data?.error_type === 'insufficient_stock') {
@@ -175,7 +169,6 @@ const OrderDetail: React.FC = () => {
       setOrder(updatedOrder)
       
     } catch (error: any) {
-      console.error('등록 상태로 되돌리기 오류:', error)
       toast.error(error.response?.data?.error || '상태 변경 중 오류가 발생했습니다.')
     } finally {
       setLoading(false)
@@ -206,7 +199,6 @@ const OrderDetail: React.FC = () => {
       setShowDocumentModal(false)
 
       // 문서 발급 요청 정보 저장
-      console.log('📝 문서 요청 상태 업데이트 전:', documentRequests)
       setDocumentRequests(prev => {
         const newState = {
           ...prev,
@@ -215,12 +207,10 @@ const OrderDetail: React.FC = () => {
             status: response.status
           }
         }
-        console.log('📝 문서 요청 상태 업데이트 후:', newState)
         return newState
       })
       
     } catch (error: any) {
-      console.error('❌ 문서 발급 요청 오류:', error)
       toast.error(error.response?.data?.error || '문서 발급 요청 중 오류가 발생했습니다.')
     } finally {
       setProcessingDocument(false)
@@ -279,7 +269,6 @@ const OrderDetail: React.FC = () => {
         toast.error(errorData.error || '주문 취소에 실패했습니다.')
       }
     } catch (error) {
-      console.error('주문 취소 오류:', error)
       toast.error('주문 취소 중 오류가 발생했습니다.')
     } finally {
       setProcessingCancel(false)
@@ -296,7 +285,6 @@ const OrderDetail: React.FC = () => {
         // YYYY-MM-DD 형식으로 변환
         return date.toISOString().split('T')[0]
       } catch (error) {
-        console.warn('날짜 포맷 실패:', dateString, error)
         return ''
       }
     }
@@ -356,7 +344,6 @@ const OrderDetail: React.FC = () => {
               if (!isNaN(koreanDate.getTime())) {
                 processedData.delivery_datetime = koreanDate.toISOString()
               } else {
-                console.warn('⚠️ 잘못된 납기일 형식:', dateStr)
                 delete processedData.delivery_datetime
               }
             } else {
@@ -365,7 +352,6 @@ const OrderDetail: React.FC = () => {
               if (!isNaN(testDate.getTime())) {
                 processedData.delivery_datetime = testDate.toISOString()
               } else {
-                console.warn('⚠️ 잘못된 납기일 형식:', dateStr)
                 delete processedData.delivery_datetime
               }
             }
@@ -373,7 +359,6 @@ const OrderDetail: React.FC = () => {
             delete processedData.delivery_datetime
           }
         } catch (error) {
-          console.warn('⚠️ 납기일 변환 실패:', processedData.delivery_datetime, error)
           delete processedData.delivery_datetime
         }
       }
@@ -386,27 +371,20 @@ const OrderDetail: React.FC = () => {
             if (!isNaN(testDate.getTime())) {
               processedData.ship_out_datetime = testDate.toISOString()
             } else {
-              console.warn('⚠️ 잘못된 출고일 형식:', dateStr)
               delete processedData.ship_out_datetime
             }
           } else {
             delete processedData.ship_out_datetime
           }
         } catch (error) {
-          console.warn('⚠️ 출고일 변환 실패:', processedData.ship_out_datetime, error)
           delete processedData.ship_out_datetime
         }
       }
       
       // 디버깅을 위한 로그 추가
-      console.log('📤 원본 데이터:', editingData)
-      console.log('📤 처리된 데이터:', processedData)
-      console.log('📤 주문 ID:', order.id)
-      console.log('📤 API 엔드포인트: PUT /orders/' + order.id + '/update/')
       
       // orderApi.update 사용 (새로운 엔드포인트: /orders/{id}/update/)
       const updateResponse = await orderApi.update(order.id, processedData)
-      console.log('📤 업데이트 응답:', updateResponse)
       
       toast.success('주문이 성공적으로 수정되었습니다.')
       const updatedOrder = await orderApi.getById(parseInt(id!))
@@ -415,8 +393,6 @@ const OrderDetail: React.FC = () => {
       setEditingData(null)
       
     } catch (error: any) {
-      console.error('주문 수정 오류:', error)
-      console.error('에러 응답 데이터:', error.response?.data)
       if (error.response?.status === 401) {
         toast.error('인증이 만료되었습니다. 다시 로그인해주세요.')
         navigate('/login')
@@ -1033,12 +1009,6 @@ const OrderDetail: React.FC = () => {
               
                  {/* 세금계산서 요청/확인 - 결제 완료 후에만 */}
               {order.payment_method === 'bank_transfer' && order.payment_status === 'paid' && (
-                   console.log('🔍 세금계산서 버튼 조건 확인:', {
-                     payment_method: order.payment_method,
-                     payment_status: order.payment_status,
-                     has_tax_invoice: !!documentRequests.tax_invoice,
-                     tax_invoice_data: documentRequests.tax_invoice
-                   }),
                    documentRequests.tax_invoice ? (
                      <Button
                        variant="outline"

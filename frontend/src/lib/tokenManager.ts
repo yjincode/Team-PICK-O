@@ -19,7 +19,6 @@ export class TokenManager {
     // 리프레시 토큰은 쿠키에 (7일 긴 수명, 더 안전)
     CookieManager.setRefreshToken(refreshToken)
     
-    console.log('💾 토큰 페어 저장 완료: 액세스(localStorage) + 리프레시(Cookie)')
   }
   
   /**
@@ -27,7 +26,6 @@ export class TokenManager {
    */
   static setAccessToken(accessToken: string): void {
     localStorage.setItem(this.ACCESS_TOKEN_KEY, accessToken)
-    console.log('🔄 액세스 토큰 갱신 완료')
   }
   
   /**
@@ -50,7 +48,6 @@ export class TokenManager {
   static removeTokens(): void {
     localStorage.removeItem(this.ACCESS_TOKEN_KEY)
     CookieManager.deleteRefreshToken()
-    console.log('🗑️ 모든 토큰 제거 완료')
   }
   
   /**
@@ -74,19 +71,16 @@ export class TokenManager {
       
       // 토큰 타입 확인
       if (payload.token_type !== 'access') {
-        console.log('❌ 액세스 토큰이 아님')
         return false
       }
       
       // 만료 시간 체크
       if (payload.exp && payload.exp < currentTime) {
-        console.log('⏰ 액세스 토큰 만료됨')
         return false
       }
       
       return true
     } catch (error) {
-      console.error('❌ 액세스 토큰 파싱 오류:', error)
       return false
     }
   }
@@ -111,19 +105,16 @@ export class TokenManager {
       
       // 토큰 타입 확인
       if (payload.token_type !== 'refresh') {
-        console.log('❌ 리프레시 토큰이 아님')
         return false
       }
       
       // 만료 시간 체크
       if (payload.exp && payload.exp < currentTime) {
-        console.log('⏰ 리프레시 토큰 만료됨')
         return false
       }
       
       return true
     } catch (error) {
-      console.error('❌ 리프레시 토큰 파싱 오류:', error)
       return false
     }
   }
@@ -157,7 +148,6 @@ export class TokenManager {
         firebase_uid: payload.firebase_uid
       }
     } catch (error) {
-      console.error('❌ 사용자 정보 추출 오류:', error)
       return null
     }
   }

@@ -111,32 +111,22 @@ const FishStockList: React.FC = () => {
   
   // 카드 클릭 핸들러
   const handleCardClick = (stock: FishStock) => {
-    console.log('🎯 카드 클릭됨:', stock)
-    console.log('🎯 stock 전체 데이터:', JSON.stringify(stock, null, 2))
     
     // ✅ fish_type_id가 없으면 fish_type_name으로 어종 찾기
     let fishTypeId = stock.fish_type_id;
     
     if (!fishTypeId || fishTypeId <= 0) {
-      console.warn('⚠️ fish_type_id가 없어서 fish_type_name으로 찾기 시도');
       
       // 어종 목록에서 이름으로 ID 찾기
       const fishType = fishTypes.find(ft => ft.name === stock.fish_type_name);
       if (fishType) {
         fishTypeId = fishType.id;
-        console.log('✅ fish_type_name으로 찾은 ID:', fishTypeId);
       } else {
-        console.error('❌ fish_type_name으로도 찾을 수 없음:', stock.fish_type_name);
         toast.error('어종 정보를 찾을 수 없습니다');
         return;
       }
     }
     
-    console.log('🎯 어종 정보:', {
-      id: fishTypeId,
-      name: stock.fish_type_name,
-      unit: stock.unit
-    })
     
     // 선택된 어종 정보 설정
     const fishTypeData = {
@@ -144,11 +134,9 @@ const FishStockList: React.FC = () => {
       name: stock.fish_type_name,
       unit: stock.unit
     }
-    console.log('🎯 selectedFishType 설정:', fishTypeData)
     setSelectedFishType(fishTypeData)
     
     // 재고 수정 모달 열기 (수정 모드)
-    console.log('🚪 수정 모달 열기')
     setIsAddModalOpen(true)
   }
 
@@ -181,32 +169,22 @@ const FishStockList: React.FC = () => {
       }
       
       const data = await inventoryApi.getAll(params)
-      console.log('📦 재고 API 응답:', data)
-      console.log('📦 API 응답 타입:', typeof data)
-      console.log('📦 API 응답 구조:', data ? Object.keys(data) : 'null/undefined')
       
       // 단순한 응답 처리
       let inventoryData: FishStock[] = []
       
       if (Array.isArray(data)) {
         inventoryData = data
-        console.log('📦 배열 형태로 처리됨')
       } else if (data && typeof data === 'object' && 'results' in data && Array.isArray(data.results)) {
         inventoryData = data.results
-        console.log('📦 results 객체로 처리됨')
       } else {
-        console.warn('⚠️ 예상치 못한 API 응답 형태:', data)
       }
       
-      console.log('📊 로드된 재고 개수:', inventoryData.length)
       if (inventoryData.length > 0) {
-        console.log('📊 첫 번째 재고 데이터:', inventoryData[0])
-        console.log('📊 첫 번째 재고 fish_type_id:', inventoryData[0].fish_type_id)
       }
       setInventories(inventoryData)
       
     } catch (error: any) {
-      console.error('재고 목록 로딩 에러:', error)
       setInventories([])
       toast.error('재고 목록을 불러오는데 실패했습니다')
     } finally {

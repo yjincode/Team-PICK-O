@@ -104,3 +104,4 @@ export interface SpeciesPrediction {
   }[];
   factors: string[];
 }
+

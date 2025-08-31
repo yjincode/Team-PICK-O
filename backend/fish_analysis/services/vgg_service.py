@@ -20,7 +20,7 @@ class VGG16Service:
         self.model_path = os.path.join(settings.BASE_DIR, 'models', 'vgg16', 'best_model.h5')
         self.classes_path = os.path.join(settings.BASE_DIR, 'models', 'vgg16', 'classes.json')
         self.disease_classes = {}
-        self.input_size = (224, 224)  # VGG16 입력 크기
+        self.input_size = (112, 112)  # 학습된 모델의 실제 입력 크기
         
     def load_model(self):
         """VGG16 모델 및 클래스 정보 로드"""
@@ -30,8 +30,6 @@ class VGG16Service:
                 try:
                     import tensorflow as tf
                     from tensorflow.keras.models import load_model
-                    from tensorflow.keras.applications.vgg16 import preprocess_input
-                    self.preprocess_input = preprocess_input
                 except ImportError:
                     logger.error("tensorflow 패키지가 설치되지 않았습니다. pip install tensorflow 실행 필요")
                     return False
@@ -232,13 +230,13 @@ class VGG16Service:
             return []
     
     def _preprocess_image(self, pil_image: Image.Image) -> np.ndarray:
-        """이미지 전처리 (VGG16 입력 형태로 변환)"""
+        """이미지 전처리 (학습된 VGG16 모델 입력 형태로 변환)"""
         try:
             # PIL Image를 numpy 배열로 변환
             if pil_image.mode != 'RGB':
                 pil_image = pil_image.convert('RGB')
             
-            # 224x224로 리사이즈 (이미 되어있지만 확실히)
+            # 112x112로 리사이즈 (학습된 모델의 입력 크기에 맞춤)
             pil_image = pil_image.resize(self.input_size)
             
             # numpy 배열로 변환
@@ -247,8 +245,8 @@ class VGG16Service:
             # 배치 차원 추가
             img_array = np.expand_dims(img_array, axis=0)
             
-            # VGG16 전처리 적용
-            processed_image = self.preprocess_input(img_array.copy())
+            # 단순 0-1 정규화 (학습된 모델이 이 방식으로 학습됨)
+            processed_image = img_array.astype(np.float32) / 255.0
             
             return processed_image
             

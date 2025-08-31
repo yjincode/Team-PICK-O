@@ -188,13 +188,11 @@ const FishDiseaseAnalysisPage: React.FC = () => {
   // VGG 질병 분류 함수 - 전체 이미지를 전송
   const classifyDiseases = useCallback(async () => {
     if (!selectedFile || !analysisResult) {
-      console.log('VGG 분류 조건 미충족: 파일 또는 YOLO 결과 없음');
       return;
     }
     
     // VGG 시도 상태를 true로 설정 (재시도 방지)
     setVggAttempted(true);
-    console.log('VGG 질병 분류 시작: 전체 이미지 분석');
     
     try {
       // FormData 생성 - 전체 원본 이미지 전송
@@ -202,7 +200,6 @@ const FishDiseaseAnalysisPage: React.FC = () => {
       formData.append('image', selectedFile);
         
       // VGG 분류 API 호출 (전체 이미지 분석) - 백엔드 통해서 호출
-      console.log('전체 이미지 VGG API 호출 시작');
         const classifyResponse = await fetch('/api/v1/fish-analysis/classify/', {
           method: 'POST',
           headers: {
@@ -211,20 +208,13 @@ const FishDiseaseAnalysisPage: React.FC = () => {
           body: formData
         });
 
-      console.log('전체 이미지 VGG API 응답:', classifyResponse.status);
         
         if (!classifyResponse.ok) {
           const errorText = await classifyResponse.text();
-        console.error('VGG API 오류:', {
-            status: classifyResponse.status,
-            statusText: classifyResponse.statusText,
-            errorText: errorText
-          });
         return;
         }
         
         const data = await classifyResponse.json();
-      console.log('VGG 응답 데이터:', data);
         
         if (data.success && data.disease_result) {
         // 전체 이미지 VGG 분류 결과 처리
@@ -244,13 +234,9 @@ const FishDiseaseAnalysisPage: React.FC = () => {
           };
         
         setDiseaseResults([result]);
-        console.log('VGG 분류 완료:', result.disease.name_ko, '신뢰도:', result.disease.confidence);
         } else {
-        console.error('VGG 분류 실패:', data);
-        console.log('응답 구조:', data);
       }
     } catch (error) {
-      console.error('VGG 질병 분류 중 오류:', error);
     } finally {
       setIsClassifying(false);
     }
@@ -301,20 +287,9 @@ const FishDiseaseAnalysisPage: React.FC = () => {
 
       if (data.success) {
         // YOLO 분석 결과 처리
-        console.log('YOLO 분석 결과:', data);
-        console.log('탐지된 객체 수:', data.detections?.length || 0);
-        console.log('첫 번째 detection 구조:', JSON.stringify(data.detections?.[0], null, 2));
         
         // 각 detection의 bbox 구조 확인
         data.detections?.forEach((det, i) => {
-          console.log(`Detection ${i}:`, {
-            bbox_x: det.bbox_x,
-            bbox_y: det.bbox_y, 
-            bbox_width: det.bbox_width,
-            bbox_height: det.bbox_height,
-            confidence: det.confidence,
-            class_name: det.class_name
-          });
         });
         
         setAnalysisResult({
@@ -341,7 +316,6 @@ const FishDiseaseAnalysisPage: React.FC = () => {
       }
 
     } catch (err: any) {
-      console.error('Analysis error:', err);
       
       if (err.response?.status === 401) {
         setError('로그인이 필요합니다. 다시 로그인해주세요.');

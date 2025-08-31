@@ -24,13 +24,22 @@ from payment.models import Payment, CashReceipt, TaxInvoice
 def create_sample_data():
     print("🚀 수산물 샘플 데이터 생성 시작...")
     
-    # 사용자 확인
+    # 사용자 확인/생성
     try:
         user = User.objects.get(id=1)
-        print(f"✅ 사용자: {user.business_name} ({user.owner_name}) - ID: {user.id}")
+        print(f"✅ 기존 사용자: {user.username} (업체: {user.business_name}) - ID: {user.id}")
     except User.DoesNotExist:
-        print("❌ 사용자 ID 1번이 존재하지 않습니다.")
-        return
+        print("❌ 사용자 ID 1번이 존재하지 않습니다. 새로 생성합니다.")
+        user = User.objects.create_user(
+            username='admin',
+            email='admin@example.com',
+            password='admin123',
+            business_name='테스트 수산물 업체',
+            owner_name='관리자',
+            phone_number='010-1234-5678',
+            status='approved'
+        )
+        print(f"✅ 새 사용자 생성: {user.username} (업체: {user.business_name}) - ID: {user.id}")
     
     # 1. 거래처 생성 (12개로 축소, 상호명으로 변경)
     print("🏢 거래처 생성 중...")
@@ -54,7 +63,7 @@ def create_sample_data():
         business, created = Business.objects.get_or_create(
             business_name=biz_data['name'],
             defaults={
-                'phone_number': biz_data['phone'],
+                'phone_number': biz_data['phone'].replace('-', '')[:12],  # 하이픈 제거하고 12자리 제한
                 'address': biz_data['addr'],
                 'user': user
             }
@@ -97,7 +106,8 @@ def create_sample_data():
             user=user,
             defaults={
                 'unit': fish_data['unit'],
-                'aliases': fish_data['aliases']
+                'aliases': fish_data['aliases'],
+                'default_price': random.randint(10, 50) * 1000  # 기본 가격 10,000-50,000원
             }
         )
         fish_type_objects.append(fish_type)
@@ -323,7 +333,8 @@ def create_sample_data():
                 order=order,
                 fish_type=fish_type,
                 quantity=quantity,
-                unit_price=unit_price,
+                unit_price=int(unit_price),
+                unit_price_snapshot=int(unit_price),
                 unit=fish_type.unit,
                 item_name_snapshot=fish_type.name
             )
@@ -366,7 +377,7 @@ def create_sample_data():
             try:
                 payment = Payment.objects.create(
                     order=order,
-                    business_id=business.id,
+                    business=business,
                     amount=int(total_price),
                     method=payment_method,
                     payment_status=payment_status,

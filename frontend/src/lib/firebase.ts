@@ -70,7 +70,6 @@ let analytics: Analytics;
 try {
   analytics = getAnalytics(app);
 } catch (error) {
-  console.warn('Analytics 초기화 실패 (개발 환경에서는 정상):', error);
 }
 
 // reCAPTCHA verifier 설정
@@ -80,7 +79,6 @@ export const setupRecaptcha = (containerId: string): RecaptchaVerifier => {
     try {
       window.recaptchaVerifier.clear();
     } catch (error) {
-      console.warn('기존 reCAPTCHA verifier 정리 중 오류:', error);
     }
     window.recaptchaVerifier = undefined;
   }
@@ -95,10 +93,8 @@ export const setupRecaptcha = (containerId: string): RecaptchaVerifier => {
   const recaptchaVerifier = new RecaptchaVerifier(auth, containerId, {
     'size': 'invisible',  // invisible로 변경하여 테스트 번호에서 덜 방해받도록
     'callback': (response: string) => {
-      console.log('✅ reCAPTCHA 검증 완료:', response ? '성공' : '자동 처리됨');
     },
     'expired-callback': () => {
-      console.log('❌ reCAPTCHA 만료 - 재설정 시도');
       // 테스트 환경에서는 자동으로 재시도
       setTimeout(() => {
         if (window.recaptchaVerifier) {
@@ -106,13 +102,11 @@ export const setupRecaptcha = (containerId: string): RecaptchaVerifier => {
             window.recaptchaVerifier.clear();
             window.recaptchaVerifier = undefined;
           } catch (e) {
-            console.warn('reCAPTCHA 정리 실패:', e);
           }
         }
       }, 100);
     },
     'error-callback': (error: any) => {
-      console.warn('⚠️ reCAPTCHA 오류 (테스트 환경에서는 무시될 수 있음):', error);
     }
   });
   
@@ -167,7 +161,6 @@ export const sendPhoneVerification = async (phoneNumber: string): Promise<AuthRe
     };
     
   } catch (error: any) {
-    console.error('❌ 전화번호 인증 오류:', error);
     
     const errorMessage = getErrorMessage(error.code);
     
@@ -205,7 +198,6 @@ const normalizePhoneNumber = (phoneNumber: string): string | null => {
 export const verifyPhoneCode = async (confirmationResult: ConfirmationResult, code: string): Promise<AuthResult> => {
   try {    
     if (!confirmationResult) {
-      console.error('❌ confirmationResult가 없습니다. 인증 세션이 만료되었습니다.');
       return {
         success: false,
         error: '인증 세션이 만료되었습니다. 다시 시도해주세요.'
@@ -214,20 +206,10 @@ export const verifyPhoneCode = async (confirmationResult: ConfirmationResult, co
     // 인증 코드 확인
     const result: UserCredential = await confirmationResult.confirm(code);
     
-    console.log('✅ Firebase 인증 성공:', {
-      user: !!result.user,
-      uid: result.user?.uid,
-      phoneNumber: result.user?.phoneNumber
-    });
     
     if (result.user) {      
       // ID 토큰 가져오기
       const idToken = await result.user.getIdToken();
-      
-      console.log('✅ ID 토큰 획득 완료:', {
-        tokenLength: idToken?.length || 0,
-        tokenPreview: idToken ? `${idToken.substring(0, 20)}...` : '없음'
-      });
       
       return {
         success: true,
@@ -238,7 +220,6 @@ export const verifyPhoneCode = async (confirmationResult: ConfirmationResult, co
         phoneNumber: result.user.phoneNumber || ''
       };
     } else {
-      console.error('❌ Firebase 인증은 성공했지만 user 객체가 없습니다.');
       return {
         success: false,
         error: '인증에 실패했습니다.'
@@ -246,9 +227,6 @@ export const verifyPhoneCode = async (confirmationResult: ConfirmationResult, co
     }
     
   } catch (error: any) {
-    console.error('❌ 인증 코드 확인 오류:', error);
-    console.error('❌ 에러 코드:', error.code);
-    console.error('❌ 에러 메시지:', error.message);
     
     const errorMessage = getErrorMessage(error.code);
     
@@ -279,7 +257,6 @@ export const signOut = async (): Promise<SignOutResult> => {
       try {
         window.recaptchaVerifier.clear();
       } catch (error) {
-        console.warn('reCAPTCHA verifier 정리 중 오류:', error);
       }
       window.recaptchaVerifier = undefined;
     }
@@ -290,7 +267,6 @@ export const signOut = async (): Promise<SignOutResult> => {
     };
     
   } catch (error: any) {
-    console.error('❌ 로그아웃 오류:', error);
     
     return {
       success: false,

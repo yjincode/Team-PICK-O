@@ -39,7 +39,6 @@ export class CookieManager {
     }
     
     document.cookie = cookieString
-    console.log(`🍪 쿠키 설정: ${name} (만료: ${days}일)`)
   }
 
   /**
@@ -65,7 +64,6 @@ export class CookieManager {
    */
   static deleteCookie(name: string): void {
     document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:01 GMT; path=/`
-    console.log(`🗑️ 쿠키 삭제: ${name}`)
   }
 
   /**
@@ -99,7 +97,6 @@ export class CookieManager {
   static clearAuthCookies(): void {
     this.deleteRefreshToken()
     // 필요시 다른 인증 관련 쿠키도 추가
-    console.log('🧹 모든 인증 쿠키 삭제 완료')
   }
 
   /**
