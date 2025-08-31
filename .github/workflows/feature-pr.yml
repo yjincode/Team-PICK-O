@@ -1,0 +1,51 @@
+name: Feature Branch Auto PR
+
+on:
+  push:
+    branches:
+      - 'feature/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  create-pr:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Create Pull Request to dev
+      env:
+        GITHUB_TOKEN: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
+        BRANCH_NAME: ${{ github.ref_name }}
+      run: |
+        echo "🔄 feature 브랜치에서 dev로 PR 생성 중..."
+        
+        # 기존 PR 확인
+        EXISTING_PR=$(gh pr list --head "${BRANCH_NAME}" --base "dev" --state open --json number --jq '.[0].number' 2>/dev/null || echo "")
+        
+        if [ -n "$EXISTING_PR" ] && [ "$EXISTING_PR" != "null" ]; then
+          echo "⚠️ 기존 PR #${EXISTING_PR}이 이미 존재합니다"
+        else
+          # 새 PR 생성
+          gh pr create \
+            --title "feat: ${BRANCH_NAME} 개발 완료" \
+            --body "## Feature 개발 완료
+          
+          🚀 **브랜치**: \`${BRANCH_NAME}\`
+          
+          ### 변경 사항
+          - 기능 개발 완료
+          - 테스트 및 검증 필요
+          
+          ### 체크리스트
+          - [ ] 코드 리뷰 완료
+          - [ ] 테스트 통과 확인
+          - [ ] 기능 동작 검증" \
+            --base "dev" \
+            --head "${BRANCH_NAME}"
+          echo "✅ dev PR 생성 완료!"
+        fi
