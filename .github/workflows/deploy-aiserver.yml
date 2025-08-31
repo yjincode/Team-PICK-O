@@ -94,26 +94,8 @@ jobs:
           # 새 AI 서버 이미지 pull (latest 태그 사용)
           docker pull $ECR_REGISTRY/${{ secrets.ECR_REPOSITORY_AISERVER }}:latest
           
-          # 새 이미지로 AI 서버 컨테이너 시작
-          docker run -d \
-            --name teamPicko-aiserver \
-            --network teamPicko_default \
-            -e PYTHONPATH=/app \
-            -e PYTHONUNBUFFERED=1 \
-            -e TF_CPP_MIN_LOG_LEVEL=2 \
-            -e CUDA_VISIBLE_DEVICES="" \
-            -e AI_SERVER_PORT=8001 \
-            -e AI_SERVER_HOST=0.0.0.0 \
-            -e VGG16_MODEL_PATH=/app/models/vgg16/best_model.h5 \
-            -e YOLO_MODEL_PATH=/app/models/yolo/best.pt \
-            -e AWS_ACCESS_KEY_ID="${{ secrets.AWS_ACCESS_KEY_ID }}" \
-            -e AWS_SECRET_ACCESS_KEY="${{ secrets.AWS_SECRET_ACCESS_KEY }}" \
-            -e AWS_S3_BUCKET_NAME="${{ secrets.AWS_S3_BUCKET_NAME }}" \
-            -e AWS_REGION="${{ secrets.AWS_REGION }}" \
-            -v teamPicko_aiserver-models:/app/models \
-            -v teamPicko_aiserver-logs:/app/logs \
-            --restart unless-stopped \
-            $ECR_REGISTRY/${{ secrets.ECR_REPOSITORY_AISERVER }}:latest
+          # docker-compose로 aiserver만 재시작 (네트워크 유지)
+          docker compose --env-file ~/.env up -d aiserver
           
           # 헬스체크 (AI 서버는 시작 시간이 오래 걸림)
           sleep 60
@@ -156,34 +138,3 @@ jobs:
           echo "✅ dev PR 생성 완료!"
         fi
     
-    - name: Create Pull Request to main
-      if: success()
-      env:
-        GITHUB_TOKEN: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
-        BRANCH_NAME: ${{ github.ref_name }}
-      run: |
-        echo "🔄 GitHub CLI로 main PR 생성 중..."
-        
-        # 기존 PR 확인
-        EXISTING_PR=$(gh pr list --head "${BRANCH_NAME}" --base "main" --state open --json number --jq '.[0].number' 2>/dev/null || echo "")
-        
-        if [ -n "$EXISTING_PR" ] && [ "$EXISTING_PR" != "null" ]; then
-          echo "⚠️ 기존 PR #${EXISTING_PR}이 이미 존재합니다"
-        else
-          # 새 PR 생성 (draft)
-          gh pr create \
-            --title "feat(aiserver): ${BRANCH_NAME} 운영 배포 준비" \
-            --body "## AI Server 운영 배포 준비
-          
-          🚀 **브랜치**: \`${BRANCH_NAME}\`
-          📦 **개발 테스트**: 완료
-          
-          ### 체크리스트
-          - [x] 개발 환경 배포 성공
-          - [ ] 코드 리뷰 완료
-          - [ ] QA 테스트 완료" \
-            --base "main" \
-            --head "${BRANCH_NAME}" \
-            --draft
-          echo "✅ main PR(draft) 생성 완료!"
-        fi
