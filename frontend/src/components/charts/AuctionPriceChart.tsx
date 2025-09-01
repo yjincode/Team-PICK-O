@@ -16,6 +16,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { SpeciesPrediction } from "../../types/auction"
 import { mockAuctionPredictions } from "../../data/mockAuctionData"
 
+
 // 컴포넌트 props 타입 정의
 interface AuctionPriceChartProps {
   data?: SpeciesPrediction[]; // 선택적 - 없으면 목업 데이터 사용
@@ -33,7 +34,7 @@ const AuctionPriceChart: React.FC<AuctionPriceChartProps> = ({
   const [isAutoSlide, setIsAutoSlide] = useState(false) // 자동 슬라이드 상태 (기본 비활성화)
   const [autoSlideInterval, setAutoSlideInterval] = useState<NodeJS.Timeout | null>(null)
 
-  // 현재 선택된 어종 정보
+
   const currentSpecies = data[currentSpeciesIndex]
 
   // 자동 슬라이드 시작
@@ -81,11 +82,10 @@ const AuctionPriceChart: React.FC<AuctionPriceChartProps> = ({
     }
   }, [isAutoSlide, data.length])
 
-  // 차트 데이터 포맷팅 (예측 데이터 제외, 실제 데이터만)
+  // 차트 데이터 포맷팅
   useEffect(() => {
     if (currentSpecies) {
-      const actualData = currentSpecies.priceHistory.filter(item => !item.isPrediction);
-      const formattedData = actualData.map((item, index) => {
+      const formattedData = currentSpecies.priceHistory.map((item, index) => {
         const itemDate = new Date(item.date);
         const today = new Date();
         const isToday = itemDate.getDate() === today.getDate() && 
@@ -100,8 +100,6 @@ const AuctionPriceChart: React.FC<AuctionPriceChartProps> = ({
           isToday
         };
       });
-      
-      // 디버깅용 로그
       
       setChartData(formattedData)
       
