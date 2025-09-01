@@ -66,7 +66,7 @@ interface OrderFormProps {
       raw_input_path?: string;
     };
     order_items: Array<{
-      fish_type_id: number;
+      fish_type: number;
       quantity: number;
       unit_price: number;
       unit: string;
@@ -97,6 +97,7 @@ const pollTranscriptionStatus = async (transcriptionId: string, _businessId: num
     
     try {
       attempts++
+      console.log(`폴링 시도 ${attempts}/${maxAttempts}: transcriptionId=${transcriptionId}`)
       
       const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/orders/transcription/${transcriptionId}/status/`, {
         headers: {
@@ -109,6 +110,7 @@ const pollTranscriptionStatus = async (transcriptionId: string, _businessId: num
       }
       
       const data = await response.json()
+      console.log(`STT 상태: ${data.status}`)
       
       if (data.status === 'completed') {
         isPolling = false // 폴링 중단
@@ -135,6 +137,7 @@ const pollTranscriptionStatus = async (transcriptionId: string, _businessId: num
               toast.error(orderResult.error || '주문 생성에 실패했습니다.')
             }
           } catch (orderError) {
+            console.error('주문 생성 오류:', orderError)
             toast.error('주문 생성 중 오류가 발생했습니다.')
           }
         } else {
@@ -152,6 +155,7 @@ const pollTranscriptionStatus = async (transcriptionId: string, _businessId: num
         toast.error('음성 인식 처리 시간이 초과되었습니다. 다시 시도해주세요.')
       }
     } catch (error) {
+      console.error(`폴링 오류 (시도 ${attempts}):`, error)
       
       if (attempts < maxAttempts && isPolling) {
         // 오류 시 더 긴 간격으로 재시도
@@ -167,7 +171,7 @@ const pollTranscriptionStatus = async (transcriptionId: string, _businessId: num
   setTimeout(poll, 2000)
 }
 
-const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderData: _parsedOrderData }) => {
+  const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderData: _parsedOrderData }) => {
   const [showBusinessSearch, setShowBusinessSearch] = useState<boolean>(false)
   // const [audioFile, setAudioFile] = useState<AudioFileInfo | null>(null)
   const [imageFile, setImageFile] = useState<File | null>(null)
@@ -180,8 +184,6 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
   const [stockErrors, setStockErrors] = useState<any[]>([])
   const [isCheckingStock, setIsCheckingStock] = useState<boolean>(false)
   const [tempStockInfo, setTempStockInfo] = useState<{warnings: string[], errors: any[]}>({warnings: [], errors: []})
-  const [showStockDetails, setShowStockDetails] = useState<boolean>(false)
-  const [detailedStockInfo, setDetailedStockInfo] = useState<any[]>([])
   
   // 주문 완료 후 재고 이슈 상태
   const [completedOrderStockIssue, setCompletedOrderStockIssue] = useState<boolean>(false)
@@ -214,9 +216,11 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
       try {
         // setIsLoadingFishTypes(true)
         const response = await fishTypeApi.getAll()
+        console.log('어종 목록 응답:', response.data)
         
         setFishTypes(response.data || [])
       } catch (error) {
+        console.error('어종 목록 가져오기 실패:', error)
         setFishTypes([])
       } finally {
         // setIsLoadingFishTypes(false)
@@ -235,30 +239,21 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
     }
 
     try {
+      console.log('🔍 실시간 재고 체크 시작...')
       const stockCheckItems = formData.items.map((item: OrderItem) => ({
-        fish_type_id: item.fish_type_id,
+        fish_type_id: item.fish_type,
         quantity: item.quantity,
         unit: item.unit || '박스'
       }))
       
       const stockResult = await inventoryApi.checkStock({ order_items: stockCheckItems })
+      console.log('📦 재고 체크 결과:', stockResult)
       
-      // 실시간으로 재고 상태에 따라 경고/에러 업데이트
-      const currentWarnings = stockResult.warnings || []
-      const currentErrors = stockResult.errors || []
-      
-      // 재고가 충분하면 경고 메시지 제거
-      if (stockResult.status === 'ok') {
-        setStockWarnings([])
-        setStockErrors([])
-        setDetailedStockInfo([])
-      } else {
-        setStockWarnings(currentWarnings)
-        setStockErrors(currentErrors)
-        setDetailedStockInfo(stockResult.items || []) // 상세 재고 정보 저장
-      }
+      setStockWarnings(stockResult.warnings || [])
+      setStockErrors(stockResult.errors || [])
       
     } catch (error) {
+      console.error('재고 체크 실패:', error)
       setStockWarnings([])
       setStockErrors([])
     }
@@ -274,6 +269,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
   // 전역 이벤트를 통한 재고 체크 갱신 (재고 추가 시 호출)
   useEffect(() => {
     const handleStockUpdate = () => {
+      console.log('📦 재고 업데이트 이벤트 수신, 재고 체크 재실행')
       checkStockForAllItems()
     }
 
@@ -285,23 +281,42 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
   useEffect(() => {
     const fetchBusinesses = async () => {
       try {
+        console.log('🔍 거래처 목록 요청 시작...')
         // setIsLoadingBusinesses(true)
         const response = await businessApi.getAll()
+        console.log('✅ 거래처 목록 응답:', response)
+        console.log('📊 응답 타입:', typeof response)
+        console.log('📋 응답 구조:', Object.keys(response || {}))
         
         // API 응답 구조에 따라 데이터 추출
         let businessData: Business[] = []
         
         if (response && Array.isArray(response)) {
+          console.log('📁 응답이 배열 형태')
           businessData = response
         } else if (response && Array.isArray((response as any).results)) {
+          console.log('📁 페이지네이션 응답 형태 (results)')
           businessData = (response as any).results
-        } else if (response && Array.isArray(response.results)) {
+        } else if (response && response && Array.isArray(response.results)) {
+          console.log('📁 페이지네이션 응답 형태 (data.results)')
           businessData = response.results
+        } else if (response && response && Array.isArray(response)) {
+          console.log('📁 데이터 래핑 응답 형태 (data)')
+          businessData = response
         } else {
+          console.log('❓ 알 수 없는 응답 형태:', response)
         }
         
+        console.log('💼 추출된 거래처 데이터:', businessData)
+        console.log('🔢 거래처 개수:', businessData.length)
         setBusinesses(businessData)
       } catch (error: any) {
+        console.error('❌ 거래처 목록 가져오기 실패:', error)
+        console.error('📄 오류 상세:', {
+          message: error.message,
+          status: error.response?.status,
+          data: error.response?.data
+        })
         setBusinesses([])
       } finally {
         // setIsLoadingBusinesses(false)
@@ -317,7 +332,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
   // }
 
   const [newItem, setNewItem] = useState<Partial<OrderItem>>({
-    fish_type_id: 1,
+    fish_type: 1,
     quantity: 1,
     unit_price: 0,
     unit: "박스",
@@ -461,8 +476,8 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
           memo: validatedData.memo || prev.memo,
           items: validatedData.items.map((item: any) => ({
             id: Date.now(),
-            fish_type_id: item.fish_type_id,
-            item_name_snapshot: fishTypes.find((f) => f.id === item.fish_type_id)?.name || '',
+                    fish_type: item.fish_type,
+        item_name_snapshot: fishTypes.find((f) => f.id === item.fish_type)?.name || '',
             quantity: item.quantity,
             unit_price: item.unit_price || 0,
             unit: item.unit,
@@ -482,10 +497,10 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
   // 주문 항목 추가
   const addItem = () => {
     if (newItem.quantity && newItem.quantity > 0 && newItem.unit_price && newItem.unit_price > 0) {
-      const fishType = fishTypes.find((f: FishType) => f.id === newItem.fish_type_id)
+      const fishType = fishTypes.find((f: FishType) => f.id === newItem.fish_type)
       const item: OrderItem = {
         id: Date.now(),
-        fish_type_id: newItem.fish_type_id || 1,
+        fish_type: newItem.fish_type || 1,
         item_name_snapshot: fishType?.name || '',
         quantity: newItem.quantity || 0,
         unit_price: newItem.unit_price || 0,
@@ -499,7 +514,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
       }))
       
       setNewItem({
-        fish_type_id: 1,
+        fish_type: 1,
         quantity: 1,
         unit_price: 0,
         unit: "박스",
@@ -540,7 +555,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
     setIsCheckingStock(true)
     try {
       const orderItems = formData.items.map(item => ({
-        fish_type_id: item.fish_type_id,
+        fish_type: item.fish_type,
         quantity: item.quantity,
         unit: item.unit
       }))
@@ -559,6 +574,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
       //   toast.error('재고 확인 중 오류가 발생했습니다.')
       // }
     } catch (error) {
+      console.error('재고 체크 오류:', error)
       setStockWarnings([])
       setStockErrors([])
     } finally {
@@ -568,14 +584,14 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
 
   // 임시 아이템에 대한 재고 체크 (수동 입력 중)
   const checkTempStock = async (tempItem: Partial<OrderItem>) => {
-    if (!tempItem.fish_type_id || !tempItem.quantity || tempItem.quantity <= 0) {
+    if (!tempItem.fish_type || !tempItem.quantity || tempItem.quantity <= 0) {
       setTempStockInfo({warnings: [], errors: []})
       return
     }
 
     try {
       const orderItems = [{
-        fish_type_id: tempItem.fish_type_id,
+        fish_type_id: tempItem.fish_type,
         quantity: tempItem.quantity,
         unit: tempItem.unit || '박스'
       }]
@@ -587,6 +603,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
         errors: result.errors || []
       })
     } catch (error) {
+      console.error('임시 재고 체크 오류:', error)
       setTempStockInfo({warnings: [], errors: []})
     }
   }
@@ -626,6 +643,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
         const koreanDate = fromKoreanDate(formData.delivery_datetime)
         delivery_datetime = koreanDate.toISOString()
       } catch (error) {
+        console.error('날짜 변환 오류:', error)
       }
     }
     
@@ -633,7 +651,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
     try {
       setIsCheckingStock(true)
       const stockCheckItems = formData.items.map((item: OrderItem) => ({
-        fish_type_id: item.fish_type_id,
+        fish_type_id: item.fish_type,
         quantity: item.quantity,
         unit: item.unit || '박스'
       }))
@@ -646,9 +664,11 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
       
       // 재고 부족 메시지 표시 (주문은 계속 진행)
       if (stockResult.warnings.length > 0) {
+        console.log('재고 부족 경고:', stockResult.warnings)
       }
       
     } catch (stockError) {
+      console.error('재고 체크 실패:', stockError)
     } finally {
       setIsCheckingStock(false)
     }
@@ -664,7 +684,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
       delivery_datetime: delivery_datetime,
       order_status: "placed",
       order_items: formData.items.map((item: OrderItem) => ({
-        fish_type_id: item.fish_type_id,
+        fish_type_id: item.fish_type,
         quantity: item.quantity,
         unit_price: parseFloat(item.unit_price.toString()),
         unit: item.unit || '',
@@ -673,6 +693,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
     }
     
     try {
+      console.log('전송할 주문 데이터:', orderData)
       
       // 음성 파일이 있는 경우 FormData로 전송
       if (false && formData.source_type === 'voice') { // audioFile이 주석처리됨
@@ -750,7 +771,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
               }
             })
           } else {
-            toast.success('주문이 성공적으로 저장되었습니다!')
+            // toast.success('주문이 성공적으로 저장되었습니다!') // 중복 알림 제거
           }
           
           onSubmit(result.data)
@@ -759,6 +780,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
         }
       }
     } catch (error: any) {
+      console.error('주문 저장 오류:', error)
       
       // 에러 메시지를 상세하게 처리
       let errorMessage = '주문 저장 중 오류가 발생했습니다.'
@@ -785,6 +807,12 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
           errorMessage = `서버 오류 (${status}): ${data?.error || error.message}`
         }
         
+        console.error('API 오류 상세:', {
+          status,
+          data,
+          url: error.config?.url,
+          method: error.config?.method
+        })
       } else if (error.message) {
         errorMessage = error.message
       }
@@ -1025,8 +1053,8 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
                         memo: orderData.memo || prev.memo,
                         items: orderData.items?.map((item: any, index: number) => ({
                           id: Date.now() + index,
-                          fish_type_id: item.fish_type_id,
-                          item_name_snapshot: fishTypes.find((f) => f.id === item.fish_type_id)?.name || '',
+                                  fish_type: item.fish_type,
+        item_name_snapshot: fishTypes.find((f) => f.id === item.fish_type)?.name || '',
                           quantity: item.quantity,
                           unit_price: item.unit_price || 0,
                           unit: item.unit,
@@ -1071,8 +1099,8 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
                         memo: orderData.memo || prev.memo,
                         items: orderData.items?.map((item: any, index: number) => ({
                           id: Date.now() + index,
-                          fish_type_id: item.fish_type_id,
-                          item_name_snapshot: fishTypes.find((f) => f.id === item.fish_type_id)?.name || '',
+                                  fish_type: item.fish_type,
+        item_name_snapshot: fishTypes.find((f) => f.id === item.fish_type)?.name || '',
                           quantity: item.quantity,
                           unit_price: item.unit_price || 0,
                           unit: item.unit,
@@ -1119,8 +1147,8 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
                         memo: orderData.memo || prev.memo,
                         items: orderData.items?.map((item: any, index: number) => ({
                           id: Date.now() + index,
-                          fish_type_id: item.fish_type_id,
-                          item_name_snapshot: fishTypes.find((f) => f.id === item.fish_type_id)?.name || '',
+                                  fish_type: item.fish_type,
+        item_name_snapshot: fishTypes.find((f) => f.id === item.fish_type)?.name || '',
                           quantity: item.quantity,
                           unit_price: item.unit_price || 0,
                           unit: item.unit,
@@ -1148,183 +1176,46 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
               />
             </div>
 
-            {/* 재고 상태 메시지 */}
-            {formData.items.length > 0 && (
-              <div className="space-y-2">
-                {/* 재고 충분 (모든 어종 문제없음) */}
-                {stockWarnings.length === 0 && stockErrors.length === 0 && (
-                  <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-                    <div className="flex items-center">
-                      <svg className="h-5 w-5 text-green-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                      </svg>
-                      <h4 className="text-green-800 font-medium">✅ 재고 충분</h4>
-                      <span className="ml-auto text-green-600 text-xs">모든 어종 재고가 충분합니다</span>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-            
-            {/* 재고 부족/경고 메시지 */}
+            {/* 재고 경고 메시지 */}
             {(stockWarnings.length > 0 || stockErrors.length > 0) && (
               <div className="space-y-2">
-                {/* 심각한 재고 부족 (품절/부족) */}
+                {/* 재고 부족 정보 */}
                 {stockErrors.length > 0 && (
-                  <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-                    <div className="flex items-center mb-3">
-                      <svg className="h-5 w-5 text-red-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                  <div className="p-4 bg-orange-50 border border-orange-200 rounded-lg">
+                    <div className="flex items-center mb-2">
+                      <svg className="h-5 w-5 text-orange-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                       </svg>
-                      <h4 className="text-red-800 font-semibold">🚨 재고 부족 경고</h4>
+                      <h4 className="text-orange-800 font-medium">재고 부족 알림</h4>
                     </div>
-                    <div className="space-y-2">
+                    <div className="space-y-1">
                       {stockErrors.map((error, index) => (
-                        <div key={index} className="bg-white p-3 rounded border-l-4 border-red-400">
-                          <div className="flex justify-between items-start">
-                            <div className="flex-1">
-                              <p className="text-red-800 font-medium text-sm">
-                                🐟 {error.fish_name || '알 수 없는 어종'}
-                              </p>
-                              <p className="text-red-700 text-sm mt-1">
-                                {error.message}
-                              </p>
-                            </div>
-                            {error.shortage && (
-                              <div className="ml-3">
-                                <span className="inline-block bg-red-100 text-red-800 text-xs px-2 py-1 rounded font-medium">
-                                  부족: {error.shortage}
-                                </span>
-                              </div>
-                            )}
-                          </div>
+                        <div key={index} className="text-orange-700 text-sm">
+                          • {error.message}
                         </div>
                       ))}
                     </div>
-                    <div className="mt-3 p-2 bg-red-100 rounded text-xs text-red-700">
-                      💡 재고가 부족하지만 주문 등록은 가능합니다. 출고 전 재고 보충이 필요합니다.
-                    </div>
-                    
-                    {/* 상세 재고 정보 보기 버튼 */}
-                    <div className="mt-3">
-                      <Button 
-                        type="button" 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => setShowStockDetails(!showStockDetails)}
-                        className="w-full text-red-700 border-red-300 hover:bg-red-50"
-                      >
-                        {showStockDetails ? '재고 상세 정보 숨기기' : '재고 상세 정보 보기'} 
-                        <svg className={`ml-2 h-4 w-4 transition-transform ${showStockDetails ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                        </svg>
-                      </Button>
+                    <div className="mt-2 text-orange-600 text-xs">
+                      💡 재고가 부족하지만 주문은 진행할 수 있습니다.
                     </div>
                   </div>
                 )}
                 
-                {/* 상세 재고 정보 (확장 가능) */}
-                {showStockDetails && detailedStockInfo.length > 0 && (
-                  <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
-                    <h5 className="text-gray-800 font-semibold mb-3 text-sm">📊 전체 어종별 재고 현황</h5>
-                    <div className="space-y-3">
-                      {detailedStockInfo.map((item, index) => (
-                        <div key={index} className="bg-white p-3 rounded border">
-                          <div className="flex justify-between items-start mb-2">
-                            <div className="flex-1">
-                              <h6 className="font-medium text-gray-900 text-sm">
-                                🐟 {item.fish_name}
-                              </h6>
-                              <div className="flex gap-4 mt-1">
-                                <span className="text-xs text-gray-600">
-                                  주문 요청: <span className="font-medium text-blue-600">{item.requested_quantity} {item.unit}</span>
-                                </span>
-                                <span className="text-xs text-gray-600">
-                                  가용 재고: <span className={`font-medium ${item.available_stock >= item.requested_quantity ? 'text-green-600' : 'text-red-600'}`}>
-                                    {item.available_stock} {item.unit}
-                                  </span>
-                                </span>
-                                {item.ordered_quantity > 0 && (
-                                  <span className="text-xs text-gray-600">
-                                    기존 주문: <span className="font-medium text-orange-600">{item.ordered_quantity} {item.unit}</span>
-                                  </span>
-                                )}
-                                {item.registered_stock && (
-                                  <span className="text-xs text-gray-600">
-                                    등록 재고: <span className="font-medium text-gray-600">{item.registered_stock} {item.unit}</span>
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <span className={`inline-block px-2 py-1 rounded text-xs font-medium ${
-                                item.status === 'ok' 
-                                  ? 'bg-green-100 text-green-800' 
-                                  : item.status === 'warning'
-                                  ? 'bg-yellow-100 text-yellow-800'
-                                  : item.status === 'insufficient' || item.status === 'out_of_stock'
-                                  ? 'bg-red-100 text-red-800'
-                                  : 'bg-gray-100 text-gray-800'
-                              }`}>
-                                {item.status === 'ok' && '충분'}
-                                {item.status === 'warning' && '주의'}
-                                {item.status === 'insufficient' && '부족'}
-                                {item.status === 'out_of_stock' && '품절'}
-                              </span>
-                            </div>
-                          </div>
-                          
-                          {/* 재고 진행률 바 */}
-                          <div className="mt-2">
-                            <div className="flex justify-between text-xs text-gray-500 mb-1">
-                              <span>재고 사용률</span>
-                              <span>
-                                {item.available_stock > 0 
-                                  ? Math.round((item.requested_quantity / item.available_stock) * 100) 
-                                  : 100}%
-                              </span>
-                            </div>
-                            <div className="w-full bg-gray-200 rounded-full h-2">
-                              <div 
-                                className={`h-2 rounded-full transition-all ${
-                                  item.status === 'ok' 
-                                    ? 'bg-green-500' 
-                                    : item.status === 'warning'
-                                    ? 'bg-yellow-500'
-                                    : 'bg-red-500'
-                                }`}
-                                style={{ 
-                                  width: `${item.available_stock > 0 
-                                    ? Math.min((item.requested_quantity / item.available_stock) * 100, 100) 
-                                    : 100}%` 
-                                }}
-                              ></div>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                
-                {/* 재고 주의 경고 (충분하지만 주의 필요) */}
+                {/* 재고 경고 */}
                 {stockWarnings.length > 0 && stockErrors.length === 0 && (
                   <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
                     <div className="flex items-center mb-2">
                       <svg className="h-5 w-5 text-yellow-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                       </svg>
-                      <h4 className="text-yellow-800 font-medium">⚠️ 재고 주의</h4>
+                      <h4 className="text-yellow-800 font-medium">재고 주의</h4>
                     </div>
                     <div className="space-y-1">
                       {stockWarnings.map((warning, index) => (
-                        <div key={index} className="bg-white p-2 rounded border-l-3 border-yellow-400 text-yellow-700 text-sm">
+                        <div key={index} className="text-yellow-700 text-sm">
                           • {warning}
                         </div>
                       ))}
-                    </div>
-                    <div className="mt-2 text-yellow-600 text-xs">
-                      💡 재고가 부족할 수 있으니 주의해주세요.
                     </div>
                   </div>
                 )}
@@ -1349,6 +1240,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
               items={formData.items}
               onEditItem={(index: number) => {
                 // 편집 기능은 나중에 구현
+                console.log('편집할 항목:', index)
               }}
               onRemoveItem={removeItem}
               totalPrice={formData.items.reduce((sum: number, item: OrderItem) => sum + (item.quantity * item.unit_price), 0)}
