@@ -6,57 +6,8 @@
 
 import { useState } from "react"
 import { Link, useLocation } from "react-router-dom"
-import { Home, Users, ShoppingCart, Package, TrendingUp, ChevronUp } from "lucide-react"
-
-// 메뉴 아이템 타입 정의
-interface MenuItem {
-  title: string;
-  url?: string;
-  icon: React.ComponentType<{ className?: string }>;
-  items?: Array<{
-    title: string;
-    url: string;
-  }>;
-}
-
-// 네비게이션 메뉴 구성 (사이드바와 동일)
-const menuItems: MenuItem[] = [
-  {
-    title: "메인 화면",
-    url: "/dashboard",
-    icon: Home,
-  },
-  {
-    title: "고객 관리",
-    icon: Users,
-    url: "/business"
-  },
-  {
-    title: "주문 관리",
-    icon: ShoppingCart,
-    items: [
-      { title: "주문 내역", url: "/orders" },
-      { title: "AI 분석 로그", url: "/orders/ai-logs" },
-    ],
-  },
-  {
-    title: "재고 관리",
-    icon: Package,
-    items: [
-      { title: "어종 재고", url: "/inventory" },
-      { title: "어종 정보 관리", url: "/inventory/fish-form" },
-    ],
-  },
-  {
-    title: "매출 관리",
-    icon: TrendingUp,
-    items: [
-      { title: "판매 내역", url: "/sales" },
-      { title: "매출 통계", url: "/sales/chart" },
-      { title: "경매 시세 예측", url: "/sales/prediction" },
-    ],
-  },
-]
+import { ChevronUp } from "lucide-react"
+import { menuItems, MenuItem } from "../../types/navigation"
 
 const MobileBottomNav: React.FC = () => {
   const location = useLocation()

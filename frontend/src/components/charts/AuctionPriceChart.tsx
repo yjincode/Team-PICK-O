@@ -30,7 +30,7 @@ const AuctionPriceChart: React.FC<AuctionPriceChartProps> = ({
 }) => {
   const [currentSpeciesIndex, setCurrentSpeciesIndex] = useState(0)
   const [chartData, setChartData] = useState<any[]>([])
-  const [isAutoSlide, setIsAutoSlide] = useState(true) // 자동 슬라이드 상태
+  const [isAutoSlide, setIsAutoSlide] = useState(false) // 자동 슬라이드 상태 (기본 비활성화)
   const [autoSlideInterval, setAutoSlideInterval] = useState<NodeJS.Timeout | null>(null)
 
   // 현재 선택된 어종 정보
@@ -199,185 +199,184 @@ const AuctionPriceChart: React.FC<AuctionPriceChartProps> = ({
   const changeDisplay = getChangeDisplay(currentSpecies.priceChange)
   const ChangeIcon = changeDisplay.icon
 
-  return (
-    <Card className="w-full">
-      <CardHeader className="pb-3">
-        <CardTitle className="text-lg font-semibold text-gray-800 flex items-center justify-between">
-          <span className="text-xl font-bold text-gray-900">
-            {currentSpecies.species.koreanName} ({currentSpecies.species.unit})
-          </span>
-          <div className="flex items-center space-x-3">
-            {/* 오늘 날짜 표시 */}
-            <span className="text-sm font-medium text-gray-600">
-              {new Date().toLocaleDateString('ko-KR', { 
-                year: 'numeric', 
-                month: 'long', 
-                day: 'numeric',
-                weekday: 'long'
-              })}
-            </span>
-            
-            {/* 자동 슬라이드 토글 버튼 */}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={toggleAutoSlide}
-              className="h-8 px-3"
-              title={isAutoSlide ? "자동 슬라이드 정지" : "자동 슬라이드 시작"}
-            >
-              {isAutoSlide ? (
-                <Pause className="h-4 w-4" />
-              ) : (
-                <Play className="h-4 w-4" />
-              )}
-            </Button>
-            
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={goToPreviousSpecies}
-              className="h-8 w-8 p-0"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <span className="text-sm font-medium text-gray-600 px-2">
-              {currentSpeciesIndex + 1} / {data.length}
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={goToNextSpecies}
-              className="h-8 w-8 p-0"
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="px-4 pb-4">
-        <div className="space-y-4">
-          {/* 주요 정보 섹션 - 상단에 가로로 배치 */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* 좌측: 예측가격 */}
-            <div className="text-center">
-              <h3 className="text-sm font-medium text-gray-600 mb-2">
-                내일 예측가 <span className="text-gray-500 font-normal">(정확도: {currentSpecies.confidence}%)</span>
-              </h3>
-              <div className="flex items-center justify-center space-x-3 mb-2">
-                <div className="text-3xl font-bold text-blue-600">
-                  {formatCurrency(currentSpecies.predictedPrice)}
-                </div>
-                {/* 상승률 뱃지를 예측가 가격 오른쪽 옆으로 이동 */}
-                <div className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${changeDisplay.bgColor} ${changeDisplay.color}`}>
-                  <ChangeIcon className="h-3 w-3 mr-1" />
-                  {changeDisplay.sign}{currentSpecies.priceChange}%
-                </div>
-              </div>
-            </div>
-
-            {/* 우측: 현재가격 */}
-            <div className="text-center">
-              <h3 className="text-sm font-medium text-gray-600 mb-2">
-                현재 경매가 <span className="text-gray-500 font-normal">(실시간 기준)</span>
-              </h3>
-              <div className="text-3xl font-bold text-gray-800 mb-2">
-                {formatCurrency(currentSpecies.currentPrice)}
-              </div>
-            </div>
-          </div>
-
-          {/* 차트 섹션 - 하단에 가로로 길게 */}
-          <div className="border-t border-gray-200 pt-4">
-            <h3 className="text-base font-semibold text-gray-800 mb-3 text-center">
-              경매가 동향 <span className="text-sm font-normal text-gray-600">(실제 경매가 7일)</span>
-            </h3>
-            <div className="h-40">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={chartData} margin={{ top: 5, right: 40, left: 40, bottom: 30 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                  <XAxis 
-                    dataKey="formattedDate" 
-                    tick={(props) => {
-                      const isToday = chartData[props.payload.index]?.isToday;
-                      return (
-                        <text
-                          x={props.x}
-                          y={props.y + 10}
-                          textAnchor="middle"
-                          fill={isToday ? "#1f2937" : "#666"}
-                          fontSize={isToday ? 13 : 11}
-                          fontWeight={isToday ? "bold" : "normal"}
-                        >
-                          {props.payload.value}
-                        </text>
-                      );
-                    }}
-                    stroke="#666"
-                    interval={0}
-                  />
-                  <YAxis 
-                    domain={[6000, 20000]}
-                    ticks={[6000, 8000, 10000, 12000, 14000, 16000, 18000, 20000]}
-                    tickFormatter={(value) => {
-                      if (value >= 10000) {
-                        return `${(value / 10000).toFixed(0)}만`
-                      } else if (value >= 1000) {
-                        return `${(value / 1000).toFixed(0)}천`
-                      }
-                      return value.toString()
-                    }}
-                    tick={{ fontSize: 12 }}
-                    stroke="#666"
-                  />
-                  <Tooltip
-                    formatter={(value: number, name: string) => [
-                      formatCurrency(value), 
-                      name === 'price' ? '경매가' : '가격'
-                    ]}
-                    labelFormatter={(label) => `${label}일`}
-                    contentStyle={{
-                      backgroundColor: 'white',
-                      border: '1px solid #e2e8f0',
-                      borderRadius: '8px',
-                      fontSize: '12px'
-                    }}
-                  />
-                  
-                  {/* 실제 경매가 라인 (파란색 실선) */}
-                  <Line
-                    type="monotone"
-                    dataKey="price"
-                    stroke="#3b82f6"
-                    strokeWidth={3}
-                    dot={{ fill: '#3b82f6', strokeWidth: 2, r: 4 }}
-                    activeDot={{ r: 6, fill: '#1d4ed8' }}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          {/* 어종 선택 네비게이션 */}
-          <div className="flex justify-center space-x-3 pt-4">
-            {data.map((_, index) => (
-              <button
-                key={index}
-                onClick={() => goToSpecies(index)}
-                className={`w-3 h-3 rounded-full transition-colors ${
-                  index === currentSpeciesIndex 
-                    ? 'bg-blue-600' 
-                    : 'bg-gray-300 hover:bg-gray-400'
-                }`}
-                aria-label={`${data[index].species.koreanName} 선택`}
-              />
-            ))}
-          </div>
-
-
-        </div>
-      </CardContent>
-    </Card>
-  )
+     return (
+     <Card className="w-full">
+               <CardContent className="p-6 pb-0">
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+                                                                                               {/* 왼쪽 패널 - 어종 정보 및 가격 */}
+                                                                                                                       <div className="lg:col-span-1 flex flex-col justify-start">
+                                    {/* 어종명 */}
+                                       <div className="text-center lg:text-left lg:ml-4 mt-4">
+                    <h2 className="text-3xl font-bold text-gray-900 mb-2">
+                      {currentSpecies.species.koreanName}
+                    </h2>
+                    <p className="text-lg text-gray-600">
+                      {new Date().toLocaleDateString('ko-KR', { 
+                        year: 'numeric', 
+                        month: 'long', 
+                        day: 'numeric',
+                        weekday: 'long'
+                      })}
+                    </p>
+                  </div>
+                
+                                 {/* 가격 정보 */}
+                                  <div className="mt-8">
+                 {/* 현재가 */}
+                 <div className="text-center lg:text-left lg:ml-4 mb-4">
+                   <div className="text-sm font-medium text-gray-600 mb-1">현재가</div>
+                   <div className="text-4xl font-bold text-gray-800">
+                     {formatCurrency(currentSpecies.currentPrice)}
+                   </div>
+                 </div>
+                 
+                 {/* 예측가 */}
+                 <div className="text-center lg:text-left lg:ml-4">
+                   <div className="text-sm font-medium text-gray-600 mb-1">예측가</div>
+                   <div className="flex items-center justify-center lg:justify-start space-x-3">
+                     <div className="text-4xl font-bold text-blue-600">
+                       {formatCurrency(currentSpecies.predictedPrice)}
+                     </div>
+                     <div className={`inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium ${changeDisplay.bgColor} ${changeDisplay.color}`}>
+                       <ChangeIcon className="h-4 w-4 mr-1" />
+                       {changeDisplay.sign}{currentSpecies.priceChange}%
+                     </div>
+                   </div>
+                 </div>
+               </div>
+             </div>
+           
+                                               {/* 오른쪽 패널 - 차트 */}
+             <div className="lg:col-span-4">
+                                                         <div className="flex items-center justify-between">
+                               <h3 className="text-lg font-semibold text-gray-800 text-left ml-20">
+                                 경매가 동향 <span className="text-sm font-normal text-gray-600">(실제 경매가 7일)</span>
+                               </h3>
+                               
+                                                               {/* 차트 상단 네비게이션 컨트롤 */}
+                                <div className="flex items-center space-x-3 bg-white/90 backdrop-blur-sm px-4 py-3 rounded-lg mr-5">
+                                 {/* 왼쪽 화살표 버튼 */}
+                                 <Button
+                                   variant="outline"
+                                   size="sm"
+                                   onClick={goToPreviousSpecies}
+                                   className="h-9 w-9 p-0 bg-white hover:bg-gray-50 border border-gray-300 hover:border-gray-400 rounded-full shadow-sm"
+                                   title="이전 어종"
+                                 >
+                                   <ChevronLeft className="h-4 w-4 text-gray-700" />
+                                 </Button>
+                                 
+                                 {/* 어종 선택 인디케이터 */}
+                                 <div className="flex space-x-1.5">
+                                   {data.map((_, index) => (
+                                     <button
+                                       key={index}
+                                       onClick={() => goToSpecies(index)}
+                                       className={`transition-all duration-200 ${
+                                         index === currentSpeciesIndex 
+                                           ? 'w-6 h-2 bg-gray-700 rounded-full' 
+                                           : 'w-2 h-2 bg-gray-300 hover:bg-gray-400 rounded-full'
+                                       }`}
+                                       aria-label={`${data[index].species.koreanName} 선택`}
+                                     />
+                                   ))}
+                                 </div>
+                                 
+                                 {/* 자동 슬라이드 토글 버튼 */}
+                                 <Button
+                                   variant="outline"
+                                   size="sm"
+                                   onClick={toggleAutoSlide}
+                                   className="h-9 w-9 p-0 bg-white hover:bg-gray-50 border border-gray-300 hover:border-gray-400 rounded-full shadow-sm"
+                                   title={isAutoSlide ? "자동 슬라이드 정지" : "자동 슬라이드 시작"}
+                                 >
+                                   {isAutoSlide ? (
+                                     <Pause className="h-4 w-4 text-gray-700" />
+                                   ) : (
+                                     <Play className="h-4 w-4 text-gray-700" />
+                                   )}
+                                 </Button>
+                                 
+                                 {/* 오른쪽 화살표 버튼 */}
+                                 <Button
+                                   variant="outline"
+                                   size="sm"
+                                   onClick={goToNextSpecies}
+                                   className="h-9 w-9 p-0 bg-white hover:bg-gray-50 border border-gray-300 hover:border-gray-400 rounded-full shadow-sm"
+                                   title="다음 어종"
+                                 >
+                                   <ChevronRight className="h-4 w-4 text-gray-700" />
+                                 </Button>
+                               </div>
+                            </div>
+              
+                            <div className="relative">
+                 <div className="h-64">
+                   <ResponsiveContainer width="100%" height="100%">
+                     <LineChart data={chartData} margin={{ top: 5, right: 40, left: 40, bottom: 30 }}>
+                       <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                       <XAxis 
+                         dataKey="formattedDate" 
+                         tick={(props) => {
+                           const isToday = chartData[props.payload.index]?.isToday;
+                           return (
+                             <text
+                               x={props.x}
+                               y={props.y + 10}
+                               textAnchor="middle"
+                               fill={isToday ? "#1f2937" : "#666"}
+                               fontSize={isToday ? 13 : 11}
+                               fontWeight={isToday ? "bold" : "normal"}
+                             >
+                               {props.payload.value}
+                             </text>
+                           );
+                         }}
+                         stroke="#666"
+                         interval={1}
+                       />
+                                              <YAxis 
+                          domain={['dataMin - 1000', 'dataMax + 1000']}
+                          tickFormatter={(value) => {
+                            return Math.floor(value / 1000) + ',000'
+                          }}
+                          tick={{ fontSize: 14 }}
+                          stroke="#666"
+                        />
+                       <Tooltip
+                         formatter={(value: number, name: string) => [
+                           formatCurrency(value), 
+                           name === 'price' ? '경매가' : '가격'
+                         ]}
+                         labelFormatter={(label) => `${label}일`}
+                         contentStyle={{
+                           backgroundColor: 'white',
+                           border: '1px solid #e2e8f0',
+                           borderRadius: '8px',
+                           fontSize: '12px'
+                         }}
+                       />
+                       
+                       {/* 실제 경매가 라인 (파란색 실선) */}
+                       <Line
+                         type="monotone"
+                         dataKey="price"
+                         stroke="#3b82f6"
+                         strokeWidth={3}
+                         dot={{ fill: '#3b82f6', strokeWidth: 2, r: 4 }}
+                         activeDot={{ r: 6, fill: '#1d4ed8' }}
+                       />
+                     </LineChart>
+                   </ResponsiveContainer>
+                 </div>
+               </div>
+           </div>
+         </div>
+         
+         
+       </CardContent>
+     </Card>
+   )
 }
 
 export default AuctionPriceChart 

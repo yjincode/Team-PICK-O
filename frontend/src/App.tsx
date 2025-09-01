@@ -17,7 +17,6 @@ import PaymentPage from './pages/orders/PaymentPage';
 import TaxInvoicePage from './pages/orders/TaxInvoicePage';
 import CashReceiptPage from './pages/orders/CashReceiptPage';
 import OrderConfirmationPage from './pages/orders/OrderConfirmationPage';
-
 import AiLogList from './pages/orders/AiLogList';
 import FishStockList from './pages/inventory/FishStockList';
 import FishItemForm from './pages/inventory/FishItemForm';
@@ -237,8 +236,6 @@ const App: React.FC = () => {
             </PrivateRoute>
           } 
         />
-
-        
         {/* 404 페이지 - 대시보드로 리다이렉트 */}
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>

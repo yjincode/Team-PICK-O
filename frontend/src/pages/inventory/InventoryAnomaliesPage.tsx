@@ -25,6 +25,7 @@ interface InventoryAnomaly {
   detected_at: string;
   resolved_at?: string;
   resolved: boolean;
+  ai_model_version?: string;
 }
 
 // 이상 유형 매핑 (완전 한글화)
@@ -384,6 +385,11 @@ const InventoryAnomaliesPage: React.FC = () => {
                         <Badge variant="outline" className="text-xs bg-white">
                           {Math.round(anomaly.confidence_score * 100)}% 확신
                         </Badge>
+                        {anomaly.ai_model_version && (
+                          <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700">
+                            {anomaly.ai_model_version}
+                          </Badge>
+                        )}
                       </div>
                                              <div className="mb-3">
                          <p className="text-base text-gray-800 font-medium leading-relaxed">

@@ -8,8 +8,6 @@ import logging
 from datetime import datetime
 
 from .pyod_engine import PyODAnomalyDetector
-from ..anomaly_service import InventoryAnomalyService
-from ..anomaly_detection_services.rule_adapter import SimpleRuleAdapter
 
 logger = logging.getLogger(__name__)
 
@@ -26,16 +24,13 @@ class HybridAnomalyScorer:
         self.alpha = alpha
         self.pyod_detector = PyODAnomalyDetector()
         self.use_simple_rules = use_simple_rules
-        
-        if use_simple_rules:
-            self.rule_service = SimpleRuleAdapter()
-        else:
-            self.rule_service = InventoryAnomalyService()
+        self.rule_service = None  # 순환 임포트 방지를 위해 필요시 동적 임포트
         
         # 자동 임계값 계산을 위한 설정
         self.threshold_method = 'percentile'  # 'percentile' 또는 'mad'
-        self.warning_threshold = 0.95  # P95
-        self.notice_threshold = 0.85   # P85
+        self.critical_threshold = 0.95  # P95 - CRITICAL
+        self.warning_threshold = 0.85   # P85 - WARNING  
+        self.notice_threshold = 0.70    # P70 - NOTICE
     
     def calculate_hybrid_score(
         self, 
@@ -70,18 +65,28 @@ class HybridAnomalyScorer:
             # 5. 이유 설명 생성
             reason_text = self._generate_reason_text(rule_result, ai_result, hybrid_score)
             
-            return {
-                'method': 'hybrid',
-                'score_raw': hybrid_score,
-                'score_norm': hybrid_score,
-                'threshold': self._get_threshold(),
-                'severity': severity,
-                'model_version': f"hybrid-{datetime.now().strftime('%Y%m%d')}",
-                'reason_text': reason_text,
-                'rule_score': rule_result.get('score', 0.0),
-                'ai_score': ai_result.get('score_norm', 0.0),
-                'is_anomaly': hybrid_score >= self.notice_threshold
-            }
+            # 하이브리드 결과를 anomaly_service가 기대하는 형식으로 변환
+            if hybrid_score >= self.notice_threshold:
+                primary_anomaly = {
+                    'type': rule_result.get('type', '하이브리드 이상'),
+                    'severity': severity,
+                    'description': reason_text,
+                    'recommended_action': '하이브리드 분석 결과를 확인하고 적절한 조치를 취해주세요.',
+                    'anomaly_score': hybrid_score
+                }
+                
+                return {
+                    'method': 'hybrid',
+                    'model_version': f"pyod-ecod-{datetime.now().strftime('%Y%m%d')}",
+                    'anomalies': [primary_anomaly],  # anomaly_service가 기대하는 형식
+                    'score_raw': hybrid_score,
+                    'score_norm': hybrid_score,
+                    'rule_score': rule_result.get('score', 0.0),
+                    'ai_score': ai_result.get('score_norm', 0.0),
+                    'is_anomaly': True
+                }
+            else:
+                return None  # 이상 없음
             
         except Exception as e:
             logger.error(f"하이브리드 점수 계산 실패: {e}")
@@ -95,10 +100,41 @@ class HybridAnomalyScorer:
     ) -> Dict[str, Any]:
         """룰 기반 점수 계산"""
         try:
-            # Django 모델 객체를 직접 전달 (__dict__ 대신)
-            anomaly_result = self.rule_service.detect_anomaly(
-                inventory_log, inventory, fish_type
-            )
+            # rule_service가 None이므로 직접 룰 기반 로직 구현
+            anomalies = []
+            max_score = 0.0
+            max_severity = 'NORMAL'
+            
+            # 1. 마이너스 재고 탐지
+            if hasattr(inventory, 'stock_quantity') and inventory.stock_quantity < 0:
+                anomalies.append({
+                    'type': '마이너스 재고',
+                    'severity': 'CRITICAL',
+                    'score': 1.0,
+                    'description': f"재고가 0보다 적습니다. ({inventory.stock_quantity})"
+                })
+                max_score = max(max_score, 1.0)
+                max_severity = 'CRITICAL'
+            
+            # 2. 급격한 재고 변동 탐지  
+            if hasattr(inventory_log, 'before_quantity') and hasattr(inventory_log, 'change'):
+                before_qty = getattr(inventory_log, 'before_quantity', 0)
+                change = abs(getattr(inventory_log, 'change', 0))
+                
+                if before_qty > 0:
+                    change_rate = change / before_qty
+                    if change_rate >= 0.5:  # 50% 이상 변동
+                        anomalies.append({
+                            'type': '급격한 재고 변동',
+                            'severity': 'HIGH',
+                            'score': 0.8,
+                            'description': f"재고가 크게 변했습니다. ({change_rate:.1%} 변동)"
+                        })
+                        max_score = max(max_score, 0.8)
+                        if max_severity != 'CRITICAL':
+                            max_severity = 'HIGH'
+            
+            anomaly_result = {'primary': {'severity': max_severity}} if anomalies else None
             
             if anomaly_result:
                 # 기존 룰 기반 결과를 점수로 변환
@@ -177,12 +213,14 @@ class HybridAnomalyScorer:
     
     def _determine_severity(self, score: float) -> str:
         """점수에 따른 심각도 결정"""
-        if score >= self.warning_threshold:
-            return 'warning'
+        if score >= self.critical_threshold:
+            return 'CRITICAL'
+        elif score >= self.warning_threshold:
+            return 'HIGH'
         elif score >= self.notice_threshold:
-            return 'notice'
+            return 'MEDIUM'
         else:
-            return 'normal'
+            return 'LOW'
     
     def _generate_reason_text(
         self, 
