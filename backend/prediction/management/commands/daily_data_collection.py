@@ -95,13 +95,13 @@ class Command(BaseCommand):
         self.stdout.write("-" * 40)
         
         try:
-            # 노량진 데이터 수집 (기존 스크립트 활용)
-            start_date = target_date.strftime('%Y%m%d')
-            end_date = target_date.strftime('%Y%m%d')
+            # 노량진 데이터 수집 (수정된 스크립트 활용)
+            start_date = target_date.strftime('%Y-%m-%d')
+            end_date = target_date.strftime('%Y-%m-%d')
             
             self.stdout.write(f"🔍 {start_date} 경매 데이터 수집 중...")
             
-            # collect_noryangjin_daily_quantity.py의 함수 호출
+            # collect_noryangjin_daily_quantity.py의 함수 호출 (규격 매핑 포함)
             result = collect_noryangjin_daily_quantity(start_date, end_date)
             
             if result:

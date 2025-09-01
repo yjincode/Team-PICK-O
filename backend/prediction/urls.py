@@ -16,6 +16,8 @@ urlpatterns = [
     # 지원하는 어종 목록
     path('species/', views.get_supported_species, name='supported_species'),
     
+
+    
     # 헬스 체크
     path('health/', views.health_check, name='health_check'),
     

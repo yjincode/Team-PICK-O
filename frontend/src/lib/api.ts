@@ -172,6 +172,8 @@ api.interceptors.response.use(
   }
 )
 
+
+
 // 거래처 관리 API
 export const businessApi = {
   // 모든 거래처 조회 (페이지네이션 지원) - 실제 Django 응답 구조

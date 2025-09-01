@@ -16,6 +16,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { SpeciesPrediction } from "../../types/auction"
 import { mockAuctionPredictions } from "../../data/mockAuctionData"
 
+
 // 컴포넌트 props 타입 정의
 interface AuctionPriceChartProps {
   data?: SpeciesPrediction[]; // 선택적 - 없으면 목업 데이터 사용
@@ -33,7 +34,7 @@ const AuctionPriceChart: React.FC<AuctionPriceChartProps> = ({
   const [isAutoSlide, setIsAutoSlide] = useState(true) // 자동 슬라이드 상태
   const [autoSlideInterval, setAutoSlideInterval] = useState<NodeJS.Timeout | null>(null)
 
-  // 현재 선택된 어종 정보
+
   const currentSpecies = data[currentSpeciesIndex]
 
   // 자동 슬라이드 시작
@@ -81,11 +82,10 @@ const AuctionPriceChart: React.FC<AuctionPriceChartProps> = ({
     }
   }, [isAutoSlide, data.length])
 
-  // 차트 데이터 포맷팅 (예측 데이터 제외, 실제 데이터만)
+  // 차트 데이터 포맷팅
   useEffect(() => {
     if (currentSpecies) {
-      const actualData = currentSpecies.priceHistory.filter(item => !item.isPrediction);
-      const formattedData = actualData.map((item, index) => {
+      const formattedData = currentSpecies.priceHistory.map((item, index) => {
         const itemDate = new Date(item.date);
         const today = new Date();
         const isToday = itemDate.getDate() === today.getDate() && 
@@ -100,8 +100,6 @@ const AuctionPriceChart: React.FC<AuctionPriceChartProps> = ({
           isToday
         };
       });
-      
-      // 디버깅용 로그
       
       setChartData(formattedData)
       
@@ -288,9 +286,11 @@ const AuctionPriceChart: React.FC<AuctionPriceChartProps> = ({
 
           {/* 차트 섹션 - 하단에 가로로 길게 */}
           <div className="border-t border-gray-200 pt-4">
-            <h3 className="text-base font-semibold text-gray-800 mb-3 text-center">
-              경매가 동향 <span className="text-sm font-normal text-gray-600">(실제 경매가 7일)</span>
-            </h3>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-base font-semibold text-gray-800">
+                경매가 동향 <span className="text-sm font-normal text-gray-600">(최근 7일)</span>
+              </h3>
+            </div>
             <div className="h-40">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={chartData} margin={{ top: 5, right: 40, left: 40, bottom: 30 }}>
@@ -329,6 +329,15 @@ const AuctionPriceChart: React.FC<AuctionPriceChartProps> = ({
                     tick={{ fontSize: 12 }}
                     stroke="#666"
                   />
+                  
+                  <Line
+                    type="monotone"
+                    dataKey="price"
+                    stroke="#3b82f6"
+                    strokeWidth={3}
+                    dot={{ fill: '#3b82f6', strokeWidth: 2, r: 4 }}
+                    activeDot={{ r: 6, fill: '#1d4ed8' }}
+                  />
                   <Tooltip
                     formatter={(value: number, name: string) => [
                       formatCurrency(value), 
@@ -341,16 +350,6 @@ const AuctionPriceChart: React.FC<AuctionPriceChartProps> = ({
                       borderRadius: '8px',
                       fontSize: '12px'
                     }}
-                  />
-                  
-                  {/* 실제 경매가 라인 (파란색 실선) */}
-                  <Line
-                    type="monotone"
-                    dataKey="price"
-                    stroke="#3b82f6"
-                    strokeWidth={3}
-                    dot={{ fill: '#3b82f6', strokeWidth: 2, r: 4 }}
-                    activeDot={{ r: 6, fill: '#1d4ed8' }}
                   />
                 </LineChart>
               </ResponsiveContainer>
