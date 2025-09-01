@@ -367,7 +367,7 @@ def main():
         lgb_result = train_lightgbm_regularized(species_data, species, regularization_level=2)
         
         # LightGBM 모델 저장
-        lgb_filename = f'regularized_models_4years/lightgbm_reg2_{species_key}.txt'
+        lgb_filename = f'regularized_models_4years/lightgbm_reg2_{species_key}.model'
         lgb_result['model'].save_model(lgb_filename)
         print(f"   ✅ LightGBM 모델 저장: {lgb_filename}")
         
@@ -458,7 +458,7 @@ def main():
     print(f"\n📁 저장된 모델 파일들:")
     for species in species_list:
         species_key = species_mapping[species]
-        print(f"  - regularized_models_4years/lightgbm_reg2_{species_key}.txt")
+        print(f"  - regularized_models_4years/lightgbm_reg2_{species_key}.model")
         print(f"  - regularized_models_4years/xgboost_reg2_{species_key}.json")
 
 if __name__ == "__main__":
