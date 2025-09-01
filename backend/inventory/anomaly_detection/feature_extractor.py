@@ -123,6 +123,10 @@ class InventoryFeatureExtractor:
         """특징 이름 리스트 반환"""
         return self.feature_names.copy()
     
+    def django_extract_single_features(self, log) -> List[float]:
+        """구버전 호환성을 위한 메서드 (기존 저장된 모델에서 호출)"""
+        return self._extract_single_features(log)
+    
     def normalize_features(self, features: np.ndarray) -> np.ndarray:
         """
         특징 정규화 (Z-score normalization)
