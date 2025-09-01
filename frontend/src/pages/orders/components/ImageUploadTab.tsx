@@ -7,11 +7,9 @@ import { Button } from "../../../components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../../components/ui/select"
 import { Input } from "../../../components/ui/input"
 import { Label } from "../../../components/ui/label"
-import { Camera, Upload, Trash2, Eye, AlertCircle } from "lucide-react"
-import { businessApi } from "../../../lib/api"
-import { parseVoiceOrder, validateAndCompleteOrder } from "../../../utils/orderParser"
+import { Camera, Upload, Trash2, Eye, AlertCircle, X } from "lucide-react"
+import { businessApi, exebaseApi } from "../../../lib/api"
 import type { Business } from "../../../types"
-import { fetchParsedOrder } from "../../../utils/orderParser"
 interface ParsedOrderData {
   business_name?: string;
   phone_number?: string;
@@ -45,47 +43,45 @@ const ImageUploadTab: React.FC<ImageUploadTabProps> = ({
   isProcessing,
   transcribed_text: _transcribed_text,
   uploadedFile,
-  onRemoveFile,
+  onRemoveFile = () => {},
   selectedBusinessId,
-  onBusinessChange,
-  deliveryDate,
-  onDeliveryDateChange,
-  onOrderParsed,
-  onError
-}) => {
-  const imageInputRef = useRef<HTMLInputElement>(null)
-  const [showFullImage, setShowFullImage] = useState(false)
-  const [businesses, setBusinesses] = useState<Business[]>([])
-  // const [fishTypes, setFishTypes] = useState<FishType[]>([])
-  const [localUploadedFile, setLocalUploadedFile] = useState<File | null>(null)
-  // const [localTranscribedText, setLocalTranscribedText] = useState<string>('')
-  const [parsedOrder, setParsedOrder] = useState<ParsedOrderData | null>(null)
-  const [localIsProcessing, setLocalIsProcessing] = useState<boolean>(false)
-  const [error, setError] = useState<string>('')
+  onBusinessChange = (businessId: number | null) => {},
+  deliveryDate = '',
+  onDeliveryDateChange = (date: string) => {},
+  onOrderParsed = (orderData: ParsedOrderData) => {},
+  onError = (error: string) => {}
+}: ImageUploadTabProps) => {
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const [showFullImage, setShowFullImage] = useState(false);
+  const [businesses, setBusinesses] = useState<Business[]>([]);
+  // const [fishTypes, setFishTypes] = useState<FishType[]>([]);
+  const [localUploadedFile, setLocalUploadedFile] = useState<File | null>(null);
+  // const [localTranscribedText, setLocalTranscribedText] = useState<string>('');
+  const [parsedOrder, setParsedOrder] = useState<ParsedOrderData | null>(null);
+  const [localIsProcessing, setLocalIsProcessing] = useState<boolean>(false);
+  const [error, setError] = useState<string>('');
 
   // 거래처 목록 로드
   useEffect(() => {
     const fetchBusinesses = async () => {
       try {
-        const response = await businessApi.getAll()
-        let businessData: Business[] = []
+        const response = await businessApi.getAll();
+        let businessData: Business[] = [];
         
         if (response && Array.isArray(response)) {
-          businessData = response
+          businessData = response;
         } else if (response && Array.isArray(response.results)) {
-          businessData = response.results
-        } else if (response && Array.isArray(response.results)) {
-          businessData = response.results
+          businessData = response.results;
         }
         
-        setBusinesses(businessData)
+        setBusinesses(businessData);
       } catch (error) {
-        setBusinesses([])
+        setBusinesses([]);
       }
-    }
+    };
 
-    fetchBusinesses()
-  }, [])
+    fetchBusinesses();
+  }, []);
 
   // 어종 목록 로드
   // useEffect(() => {
@@ -110,37 +106,23 @@ const ImageUploadTab: React.FC<ImageUploadTabProps> = ({
   //   fetchFishTypes()
   // }, [])
 
-  const formatFileSize = (bytes: number) => {
-    if (bytes === 0) return '0 Bytes'
-    const k = 1024
-    const sizes = ['Bytes', 'KB', 'MB', 'GB']
-    const i = Math.floor(Math.log(bytes) / Math.log(k))
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
-  }
 
-  // OCR 처리 함수
-  const extractTextFromImage = async (_file: File): Promise<string> => {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        resolve("바다수산에 도미 10kg, 방어 5마리 주문합니다. 납품은 1월 25일 오전 중으로 부탁드립니다.")
-      }, 2000)
-    })
-  }
-
-  // 로컬 파일 업로드 및 OCR 처리
-  const handleLocalFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  // 이미지 파일 처리 핸들러
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (!file) return
 
-    if (!file.type.startsWith('image/')) {
-      const errorMsg = '이미지 파일만 업로드 가능합니다. JPG, PNG, GIF 파일을 사용해주세요.'
+    // 파일 크기 검증 (5MB 이하)
+    if (file.size > 5 * 1024 * 1024) {
+      const errorMsg = '이미지 파일 크기는 5MB를 초과할 수 없습니다.'
       setError(errorMsg)
       onError?.(errorMsg)
       return
     }
 
-    if (file.size > 10 * 1024 * 1024) {
-      const errorMsg = '파일 크기가 너무 큽니다. 10MB 이하의 파일만 업로드 가능합니다.'
+    // 파일 타입 검증 (이미지 파일만 허용)
+    if (!file.type.startsWith('image/')) {
+      const errorMsg = '이미지 파일만 업로드 가능합니다.'
       setError(errorMsg)
       onError?.(errorMsg)
       return
@@ -148,83 +130,111 @@ const ImageUploadTab: React.FC<ImageUploadTabProps> = ({
 
     setLocalUploadedFile(file)
     setError('')
-    // setLocalTranscribedText('')
-    setParsedOrder(null)
-    
-    // OCR 처리 시작
-    await processImageOCR(file)
-  }
-
-  const processImageOCR = async (file: File) => {
     setLocalIsProcessing(true)
-    setError('')
-    
+
     try {
-      const extractedText = await fetchParsedOrder(file)
-      console.log('추출된 텍스트:', extractedText); 
-      // setLocalTranscribedText(extractedText)
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('type', 'image')
       
-      // 추출된 텍스트를 주문 데이터로 파싱
-      try {
-        const basicOrderData = extractedText
-        
-        if (basicOrderData.items && basicOrderData.items.length > 0) {
-          const validatedOrderData = validateAndCompleteOrder(basicOrderData)
-          
-          setParsedOrder(validatedOrderData)
-          onOrderParsed?.(validatedOrderData)
-        } else {
-          setParsedOrder(null)
-        }
-      } catch (parseError) {
-        setParsedOrder(null)
+      if (selectedBusinessId) {
+        formData.append('business_id', selectedBusinessId.toString())
       }
       
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : '이미지 처리 중 오류가 발생했습니다.'
-      setError(errorMsg)
-      onError?.(errorMsg)
+      if (deliveryDate) {
+        formData.append('delivery_date', deliveryDate)
+      }
+      
+      // exebaseApi를 사용하여 주문 처리
+      const result = await exebaseApi.processOrder(formData)
+      
+      if (result.success && result.order) {
+        // 파싱된 주문 데이터 상태 업데이트
+        setParsedOrder(result.order)
+        
+        // 거래처가 파싱된 경우 부모 컴포넌트에 알림
+        if (result.order.business_id && onBusinessChange) {
+          onBusinessChange(result.order.business_id)
+        }
+        
+        // 배송일이 파싱된 경우 부모 컴포넌트에 알림
+        if (result.order.delivery_date && onDeliveryDateChange) {
+          onDeliveryDateChange(result.order.delivery_date)
+        }
+        
+        // 파싱 완료 이벤트 발생
+        onOrderParsed?.({
+          ...result.order,
+          business: result.order.business_id ? {
+            id: result.order.business_id,
+            business_name: result.order.business_name || '',
+            phone_number: result.order.phone_number || ''
+          } : undefined
+        })
+      } else {
+        throw new Error(result.error || '이미지 처리 중 오류가 발생했습니다.')
+      }
+      
+    } catch (error) {
+      console.error('이미지 처리 오류:', error)
+      const errorMessage = error instanceof Error ? error.message : '이미지 처리 중 오류가 발생했습니다.'
+      setError(errorMessage)
+      onError?.(errorMessage)
     } finally {
       setLocalIsProcessing(false)
     }
   }
 
-
-
-
   const handleRemoveLocalFile = () => {
-    setLocalUploadedFile(null)
-    // setLocalTranscribedText('')
-    setParsedOrder(null)
-    setError('')
-    onRemoveFile?.()
-  }
+    // Reset local file state
+    setLocalUploadedFile(null);
+    // Reset other states
+    setParsedOrder(null);
+    setError('');
+    // Clear the file input
+    if (imageInputRef.current) {
+      imageInputRef.current.value = '';
+    }
+    // Call the parent's remove file handler if provided
+    onRemoveFile?.();
+  };
 
-  const currentFile = uploadedFile || localUploadedFile
-  // const currentTranscribedText = transcribed_text || localTranscribedText
-  const currentIsProcessing = isProcessing || localIsProcessing
+  const currentFile = localUploadedFile || uploadedFile;
 
+  const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  // 컴포넌트 반환
   return (
     <div className="space-y-4">
-      {!currentFile ? (
-        <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-gray-400 transition-colors">
-          <Camera className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">
-            이미지 파일을 업로드하세요
-          </h3>
-          <p className="text-gray-600 mb-4">
-            수조 사진을 업로드하면 OCR로 텍스트를 추출하고 주문 파싱을 수행합니다
-          </p>
+      <div className="space-y-2">
+        <Label htmlFor="image-upload">이미지 업로드</Label>
+        <div className="flex items-center gap-2">
+          <Input
+            id="image-upload"
+            type="file"
+            accept="image/*"
+            className="hidden"
+            ref={imageInputRef}
+            onChange={ handleFileUpload}
+            disabled={isProcessing || localIsProcessing}
+          />
           <Button
-            onClick={() => imageInputRef.current?.click()}
+            type="button"
             variant="outline"
-            className="mx-auto"
-            disabled={currentIsProcessing}
+            onClick={() => imageInputRef.current?.click()}
+            disabled={isProcessing || localIsProcessing}
+            className="flex-1"
           >
-            {currentIsProcessing ? (
+            {localIsProcessing ? (
               <>
                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
-                OCR 처리 중...
+                처리 중...
               </>
             ) : (
               <>
@@ -233,46 +243,46 @@ const ImageUploadTab: React.FC<ImageUploadTabProps> = ({
               </>
             )}
           </Button>
-          <input
-            ref={imageInputRef}
-            type="file"
-            accept="image/*"
-            onChange={onFileUpload || handleLocalFileUpload}
-            className="hidden"
-          />
-        </div>
-      ) : (
-        <div className="border border-gray-200 rounded-lg p-6 bg-gray-50">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center space-x-3">
-              <Camera className="h-8 w-8 text-green-500" />
-              <div>
-                <h4 className="font-medium text-gray-900">{currentFile.name}</h4>
-                <p className="text-sm text-gray-500">{formatFileSize(currentFile.size)}</p>
-              </div>
-            </div>
-            <div className="flex items-center space-x-2">
+          {currentFile && (
+            <>
               <Button
-                variant="ghost"
-                size="sm"
+                type="button"
+                variant="outline"
+                size="icon"
                 onClick={() => setShowFullImage(true)}
-                className="text-blue-500 hover:text-blue-700"
+                disabled={isProcessing || localIsProcessing}
               >
                 <Eye className="h-4 w-4" />
               </Button>
               <Button
-                variant="ghost"
-                size="sm"
+                type="button"
+                variant="outline"
+                size="icon"
                 onClick={handleRemoveLocalFile}
-                className="text-red-500 hover:text-red-700"
-                disabled={currentIsProcessing}
+                disabled={isProcessing || localIsProcessing}
               >
                 <Trash2 className="h-4 w-4" />
               </Button>
-            </div>
-          </div>
-          
-          <div className="relative flex justify-center bg-white rounded-lg p-4 border">
+            </>
+          )}
+        </div>
+        {currentFile && (
+          <p className="text-sm text-muted-foreground">
+            {currentFile.name} ({formatFileSize(currentFile.size)})
+          </p>
+        )}
+        {error && (
+          <p className="text-sm text-red-500 flex items-center">
+            <AlertCircle className="mr-1 h-4 w-4" />
+            {error}
+          </p>
+        )}
+      </div>
+
+      {/* 이미지 미리보기 */}
+      {currentFile && (
+        <div className="border border-gray-200 rounded-lg p-6 bg-gray-50">
+          <div className="relative flex justify-center bg-white rounded-lg p-4">
             <img
               src={URL.createObjectURL(currentFile)}
               alt="업로드된 이미지"
@@ -285,33 +295,20 @@ const ImageUploadTab: React.FC<ImageUploadTabProps> = ({
           </div>
         </div>
       )}
-      
+
       {/* 로딩바 */}
-      {currentIsProcessing && (
+      {localIsProcessing && (
         <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
           <div className="flex items-center space-x-3">
             <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-orange-600"></div>
             <div className="flex-1">
-              <h4 className="font-medium text-orange-900 mb-1">이미진를 OCR로 처리 중...</h4>
+              <h4 className="font-medium text-orange-900 mb-1">이미지 처리 중...</h4>
               <p className="text-sm text-orange-700">이미지에서 텍스트를 추출하고 주문 정보를 파싱하고 있습니다.</p>
             </div>
           </div>
         </div>
       )}
-      
-      {/* 에러 메시지 */}
-      {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <div className="flex items-center space-x-3">
-            <AlertCircle className="h-5 w-5 text-red-500" />
-            <div>
-              <h4 className="font-medium text-red-900">오류가 발생했습니다</h4>
-              <p className="text-sm text-red-700 mt-1">{error}</p>
-            </div>
-          </div>
-        </div>
-      )}
-      
+
       {/* 주문 정보 - 파싱 후에만 표시 */}
       {parsedOrder && !error && (
         <div className="space-y-4">
@@ -485,27 +482,26 @@ const ImageUploadTab: React.FC<ImageUploadTabProps> = ({
       {/* 전체 이미지 모달 */}
       {showFullImage && currentFile && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="relative max-w-4xl max-h-[90vh] bg-white rounded-lg overflow-hidden">
-            <div className="absolute top-4 right-4 z-10">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowFullImage(false)}
-                className="bg-white/80 hover:bg-white text-gray-700"
-              >
-                ✕
-              </Button>
+          <div className="relative bg-white rounded-lg max-w-4xl max-h-[90vh] p-4">
+            <button
+              onClick={() => setShowFullImage(false)}
+              className="absolute -top-2 -right-2 bg-white rounded-full p-1 shadow-lg hover:bg-gray-100 transition-colors"
+              aria-label="Close"
+            >
+              <X className="w-5 h-5 text-gray-600" />
+            </button>
+            <div className="w-full h-full max-h-[80vh] overflow-auto">
+              <img
+                src={URL.createObjectURL(currentFile)}
+                alt="업로드된 이미지"
+                className="w-full h-full object-contain"
+              />
             </div>
-            <img
-              src={URL.createObjectURL(currentFile)}
-              alt="전체 이미지"
-              className="w-full h-full object-contain"
-            />
           </div>
         </div>
       )}
     </div>
-  )
-}
+  );
+};
 
-export default ImageUploadTab 
+export default ImageUploadTab;

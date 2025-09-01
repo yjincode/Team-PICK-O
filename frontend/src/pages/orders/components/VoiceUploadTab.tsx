@@ -3,15 +3,14 @@
  * 음성 파일을 업로드하여 주문을 등록하는 탭입니다.
  */
 import { useRef, useState, useEffect } from "react"
+import { validateAndCompleteOrder } from "../../../utils/orderParser"
 import { Button } from "../../../components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../../components/ui/select"
 import { Input } from "../../../components/ui/input"
 import { Label } from "../../../components/ui/label"
 import { Mic, Upload, Play, Pause, Trash2, AlertCircle } from "lucide-react"
-import { sttApi, businessApi } from "../../../lib/api"
-import { validateAndCompleteOrder, parseVoiceOrderWithBusiness, fetchParsedOrder } from "../../../utils/orderParser"
+import { businessApi, exebaseApi, fishTypeApi } from "../../../lib/api"
 import type { Business, FishType } from "../../../types"
-import { fishTypeApi } from "../../../lib/api"
 
 interface ParsedOrderData {
   business_name?: string;
@@ -111,9 +110,9 @@ const VoiceUploadTab: React.FC<VoiceUploadTabProps> = ({
     if (!file) return
 
     // 파일 검증
-    const validTypes = ['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/m4a']
-    if (!validTypes.includes(file.type) && !file.name.match(/\.(mp3|wav|m4a)$/i)) {
-      const errorMsg = '지원되지 않는 파일 형식입니다. MP3, WAV, M4A 파일만 업로드 가능합니다.'
+    const validTypes = ['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/m4a', 'audio/webm', 'audio/ogg']
+    if (!validTypes.includes(file.type) && !file.name.match(/\.(mp3|wav|m4a|webm|ogg|weba)$/i)) {
+      const errorMsg = '지원되지 않는 파일 형식입니다. MP3, WAV, M4A, WEBM, OGG, WEBA 파일만 업로드 가능합니다.'
       setError(errorMsg)
       onError?.(errorMsg)
       return
@@ -131,91 +130,72 @@ const VoiceUploadTab: React.FC<VoiceUploadTabProps> = ({
     setError('')
     setTranscribedText('')
     
-    // STT 처리 시작
-    await parseVoiceFile(file)
+    // Process the audio file with the new API
+    await processAudioOrder(file)
   }
 
-  // const transcribeAudio = async (file: File) => {
-  //   setIsProcessing(true)
-  //   setError('')
-  //   setParsedOrder(null)
+  const processAudioOrder = async (file: File) => {
+    setIsProcessing(true)
+    setError('')
+    setParsedOrder(null)
     
-  //   try {
-  //     // const result = await sttApi.transcribe(file, 'ko')
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('type', 'voice')
       
-  //     // setTranscribedText(result.transcription)
-  //     // onTranscriptionComplete?.(result.transcription)
+      if (selectedBusinessId) {
+        formData.append('business_id', selectedBusinessId.toString())
+      }
       
-// <<<<<<< feature/cdtest4
-//       // 음성 텍스트를 주문 데이터로 파싱 시도 (거래처 매칭 포함)
-//       try {
-//         const fullOrderData = await parseVoiceOrderWithBusiness(result.transcription)
+      if (deliveryDate) {
+        formData.append('delivery_date', deliveryDate)
+      }
+      
+      // Process the order using the unified API
+      const result = await exebaseApi.processOrder(formData)
+      
+      if (result.success && result.order) {
+        // Update the transcribed text
+        const transcribedText = result.order.transcribed_text || ''
+        setTranscribedText(transcribedText)
+        onTranscriptionComplete?.(transcribedText)
         
-//         if (fullOrderData.items && fullOrderData.items.length > 0) {
-//           const validatedOrderData = validateAndCompleteOrder(fullOrderData)
-// =======
-  //     // 음성 텍스트를 주문 데이터로 파싱 시도 (거래처 매칭 포함)
-  //     try {
-  //       // console.log('📝 주문 데이터 및 거래처 파싱 시작:', result.transcription)
-  //       const fullOrderData = await fetchParsedOrder(file)
+        // Update the parsed order data
+        setParsedOrder(result.order)
         
-  //       if (fullOrderData.items && fullOrderData.items.length > 0) {
-  //         const validatedOrderData = validateAndCompleteOrder(fullOrderData)
-  //         console.log('🎯 파싱된 주문 데이터:', validatedOrderData)
-  //         console.log('🏢 매칭된 거래처:', fullOrderData.business)
-
-          
-  //         setParsedOrder(validatedOrderData)
-          
-  //         // 거래처가 매칭된 경우 자동 선택
-  //         if (fullOrderData.business) {
-  //           onBusinessChange?.(fullOrderData.business.id)
-  //         }
-          
-  //         // 배송일이 파싱된 경우 자동 설정
-  //         if (validatedOrderData.delivery_date) {
-  //           onDeliveryDateChange?.(validatedOrderData.delivery_date)
-  //         }
-          
-// <<<<<<< feature/cdtest4
-//           // 파싱된 데이터를 상위 컴포넌트로 전달
-//           onOrderParsed?.({ ...validatedOrderData, business: fullOrderData.business })
-//         } else {
-//           // 파싱 실패해도 텍스트는 유지하고, 거래처만 있다면 표시
-//           if (fullOrderData.business) {
-//             setParsedOrder({ ...fullOrderData, items: [] })
-//             onBusinessChange?.(fullOrderData.business.id)
-//           } else {
-//             setParsedOrder(null)
-//           }
-//         }
-//       } catch (parseError) {
-//         // 파싱 실패해도 STT 텍스트는 유지
-//         setParsedOrder(null)
-//       }
+        // Update business if available in the response
+        if (result.order.business_id && onBusinessChange) {
+          onBusinessChange(result.order.business_id)
+        }
+        
+        // Update delivery date if available in the response
+        if (result.order.delivery_date && onDeliveryDateChange) {
+          onDeliveryDateChange(result.order.delivery_date)
+        }
+        
+        // Notify parent component of the parsed order
+        onOrderParsed?.({
+          ...result.order,
+          business: result.order.business_id ? {
+            id: result.order.business_id,
+            business_name: result.order.business_name || '',
+            phone_number: result.order.phone_number || ''
+          } : undefined
+        })
+      } else {
+        throw new Error(result.error || '주문 처리 중 오류가 발생했습니다.')
+      }
       
-//     } catch (err) {
-//       const errorMsg = err instanceof Error ? err.message : 'STT 변환 중 오류가 발생했습니다.'
-//       setError(errorMsg)
-//       onError?.(errorMsg)
-//     } finally {
-//       setIsProcessing(false)
-//     }
-//   }
-// =======
-  //         // 파싱된 데이터를 상위 컴포넌트로 전달
-  //         onOrderParsed?.({ ...validatedOrderData, business: fullOrderData.business })
-  //       } else {
-  //         console.warn('⚠️ 주문 품목을 찾을 수 없습니다:', result.transcription)
-  //         // 파싱 실패해도 텍스트는 유지하고, 거래처만 있다면 표시
-  //         if (fullOrderData.business) {
-  //           console.log('🏢 거래처만 매칭됨:', fullOrderData.business)
-  //           setParsedOrder({ ...fullOrderData, items: [] })
-  //           onBusinessChange?.(fullOrderData.business.id)
-  //         } else {
-  //           setParsedOrder(null)
-  //         }
-  //       }
+    } catch (error) {
+      console.error('음성 주문 처리 오류:', error)
+      const errorMessage = error instanceof Error ? error.message : '음성 주문 처리 중 오류가 발생했습니다.'
+      setError(errorMessage)
+      onError?.(errorMessage)
+    } finally {
+      setIsProcessing(false)
+    }
+  }
   //     } catch (parseError) {
   //       console.error('❌ 주문 파싱 실패:', parseError)
   //       // 파싱 실패해도 STT 텍스트는 유지
@@ -273,7 +253,19 @@ const VoiceUploadTab: React.FC<VoiceUploadTabProps> = ({
     setParsedOrder(null)
   
     try {
-      const fullOrderData = await fetchParsedOrder(file)
+      const formData = new FormData()
+      formData.append('audio', file)
+      
+      const response = await fetch('http://localhost:8080/order', {
+        method: 'POST',
+        body: formData,
+      })
+      
+      if (!response.ok) {
+        throw new Error('서버에서 오류가 발생했습니다.')
+      }
+      
+      const fullOrderData = await response.json()
   
       // ✅ 변환된 텍스트 (있으면 표시)
       if (fullOrderData.transcribed_text) {

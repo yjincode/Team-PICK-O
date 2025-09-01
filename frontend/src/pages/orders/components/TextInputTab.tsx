@@ -2,7 +2,6 @@
  * 텍스트 입력 탭 컴포넌트
  * 텍스트를 입력하여 주문을 등록하는 탭입니다.
  */
-import { fetchParsedOrder } from "../../../utils/orderParser"
 import { useState, useEffect } from "react"
 import { Button } from "../../../components/ui/button"
 import { Label } from "../../../components/ui/label"
@@ -10,20 +9,25 @@ import { Textarea } from "../../../components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../../components/ui/select"
 import { Input } from "../../../components/ui/input"
 import { businessApi, fishTypeApi } from "../../../lib/api"
-import { parseVoiceOrderWithAPI, validateAndCompleteOrder } from "../../../utils/orderParser"
 import type { Business, FishType } from "../../../types"
+import { toast } from "react-hot-toast"
+import { exebaseApi } from "../../../lib/api"
+
+interface OrderItem {
+  fish_type_id: number;
+  quantity: number;
+  unit_price?: number;
+  unit: string;
+  item_name_snapshot?: string;
+  remarks?: string;
+}
 
 interface ParsedOrderData {
   business_name?: string;
   phone_number?: string;
   transcribed_text: string;
   delivery_date?: string;
-  items: Array<{
-    fish_type_id: number;
-    quantity: number;
-    unit_price?: number;
-    unit: string;
-  }>;
+  items: OrderItem[];
   memo?: string;
 }
 
@@ -103,26 +107,73 @@ const TextInputTab: React.FC<TextInputTabProps> = ({
     fetchFishTypes()
   }, [])
 
-  // 텍스트 전용 파싱 함수
-  const handleTextParsing = async () => {
+  // 텍스트 파싱 및 주문 생성
+  const handleParse = async () => {
     if (!textInput.trim()) return
     
     setIsLocalProcessing(true)
-    setParsedOrder(null)
     
     try {
-      const basicOrderData = await fetchParsedOrder(textInput) // API 연동 버전 사용
+      const formData = new FormData()
+      formData.append('text', textInput)
+      formData.append('type', 'text')
       
-      if (basicOrderData.items && basicOrderData.items.length > 0) {
-        const validatedOrderData = validateAndCompleteOrder(basicOrderData)
-        
-        setParsedOrder(validatedOrderData)
-        onOrderParsed?.(validatedOrderData)
-      } else {
-        setParsedOrder(null)
+      if (selectedBusinessId) {
+        formData.append('business_id', selectedBusinessId.toString())
       }
+      
+      if (deliveryDate) {
+        formData.append('delivery_date', deliveryDate)
+      }
+      
+      // 1. 텍스트 주문 데이터 전송
+      const result = await exebaseApi.processOrder(formData)
+      
+      console.log('API Response:', result)
+      
+      if (result.success) {
+        // If message is a string, parse it as JSON, otherwise use it as is
+        const orderData = typeof result.message === 'string' 
+          ? JSON.parse(result.message)
+          : result.message;
+        
+        // 2. 파싱된 주문 데이터 상태 업데이트
+        const formattedOrder: ParsedOrderData = {
+          business_name: orderData.business_name,
+          phone_number: orderData.phone_number || '',
+          transcribed_text: orderData.transcribed_text || '',
+          delivery_date: orderData.delivery_datetime || '',
+          items: (orderData.items || []).map((item: any) => ({
+            fish_type_id: item.fish_type_id || 0,
+            quantity: item.quantity || 0,
+            unit: item.unit || 'kg',
+            unit_price: item.unit_price || 0,
+            item_name_snapshot: item.item_name_snapshot || '',
+            remarks: item.remarks || ''
+          })),
+          memo: orderData.memo || ''
+        }
+        
+        setParsedOrder(formattedOrder)
+        
+        // 3. 배송일이 파싱된 경우 부모 컴포넌트에 알림
+        if (formattedOrder.delivery_date && onDeliveryDateChange) {
+          onDeliveryDateChange(formattedOrder.delivery_date)
+        }
+        
+        // 4. 파싱 완료 이벤트 발생
+        if (onOrderParsed) {
+          onOrderParsed(formattedOrder)
+        }
+        
+        toast.success('주문이 성공적으로 파싱되었습니다.')
+      } else {
+        throw new Error(result.error || '주문 처리 중 오류가 발생했습니다.')
+      }
+      
     } catch (error) {
-      setParsedOrder(null)
+      console.error('주문 파싱 오류:', error)
+      // 오류 처리 로직 (예: 사용자에게 알림)
     } finally {
       setIsLocalProcessing(false)
     }
@@ -141,18 +192,11 @@ const TextInputTab: React.FC<TextInputTabProps> = ({
         />
       </div>
       <Button 
-        onClick={handleTextParsing} 
-        className="w-full" 
-        disabled={!textInput.trim() || isProcessing || isLocalProcessing}
+        onClick={handleParse} 
+        disabled={isProcessing || isLocalProcessing || !textInput.trim()}
+        className="w-full"
       >
-        {(isProcessing || isLocalProcessing) ? (
-          <>
-            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
-            파싱 중...
-          </>
-        ) : (
-          "분석하기"
-        )}
+        {isLocalProcessing ? '처리 중...' : '주문 파싱하기'}
       </Button>
       
       {/* 주문 정보 - 파싱 후에만 표시 */}
