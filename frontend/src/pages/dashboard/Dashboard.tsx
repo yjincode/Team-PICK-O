@@ -13,13 +13,13 @@ import { OrderStatusBadge } from "../../components/common/OrderStatusBadge"
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts"
 import { dashboardApi, salesApi, orderApi } from "../../lib/api"
 import AuctionPriceChart from "../../components/charts/AuctionPriceChart"
+import { useNavigate } from "react-router-dom"
 
 // 대시보드 데이터 타입 정의
 interface DashboardStats {
   todayOrders: number;
   lowStockCount: number;
   totalOutstandingBalance: number;
-  businessCount: number;
 }
 
 interface RecentOrder {
@@ -38,6 +38,7 @@ interface LowStockItem {
   available_stock?: number;   // 가용 재고
   shortage?: number;         // 부족 수량
   total_stock?: number;      // 기존 API 호환성
+  stock_quantity?: number;   // 현재 재고량 
   unit: string;
   status: string;
 }
@@ -49,6 +50,7 @@ interface WeeklySalesData {
 }
 
 const Dashboard: React.FC = () => {
+  const navigate = useNavigate()
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [recentOrders, setRecentOrders] = useState<RecentOrder[]>([])
   const [lowStockItems, setLowStockItems] = useState<LowStockItem[]>([])
@@ -135,33 +137,48 @@ const Dashboard: React.FC = () => {
     }
   }
 
-  // 데이터 로딩
+    // 데이터 로딩 함수
+  const loadDashboardData = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+
+      // 병렬로 모든 데이터 로딩
+      const [statsData, ordersData, stockData] = await Promise.all([
+        dashboardApi.getStats(),
+        dashboardApi.getRecentOrders(10), // 더보기 버튼을 위해 더 많은 데이터 가져오기
+        dashboardApi.getLowStockItems()
+      ])
+
+      setStats(statsData)
+      setRecentOrders(ordersData as any) // 타입 캐스팅으로 order_status 타입 불일치 해결
+      setLowStockItems(stockData)
+
+    } catch (err) {
+      setError('데이터를 불러오는데 실패했습니다.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // 페이지 포커스 시 데이터 갱신
   useEffect(() => {
-    const loadDashboardData = async () => {
-      try {
-        setLoading(true)
-        setError(null)
-
-        // 병렬로 모든 데이터 로딩
-        const [statsData, ordersData, stockData] = await Promise.all([
-          dashboardApi.getStats(),
-          dashboardApi.getRecentOrders(5),
-          dashboardApi.getLowStockItems()
-        ])
-
-        setStats(statsData)
-        setRecentOrders(ordersData as any) // 타입 캐스팅으로 order_status 타입 불일치 해결
-        setLowStockItems(stockData)
-
-      } catch (err) {
-        setError('데이터를 불러오는데 실패했습니다.')
-      } finally {
-        setLoading(false)
-      }
+    const handleFocus = () => {
+      loadDashboardData()
+      loadWeeklySalesData()
     }
 
+    // 페이지가 포커스될 때 데이터 갱신
+    window.addEventListener('focus', handleFocus)
+    
+    // 초기 로딩
     loadDashboardData()
-    loadWeeklySalesData() // 주간 매출 데이터도 함께 로딩
+    loadWeeklySalesData()
+
+    // 클린업
+    return () => {
+      window.removeEventListener('focus', handleFocus)
+    }
   }, [])
   
   return (
@@ -185,31 +202,40 @@ const Dashboard: React.FC = () => {
         </div>
       )}
 
-      {/* 통계 카드 섹션 */}
+      {/* 날씨 위젯 및 통계 카드 섹션 */}
       {!loading && !error && stats && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+          {/* 날씨 위젯 */}
+          <div className="h-full flex items-stretch justify-center">
+            <WeatherWidget className="w-full h-full" />
+          </div>
+          
           <StatsCard
             title="오늘 주문 건수"
             value={`${stats.todayOrders}건`}
             subtitle="주문 관리에서 확인"
             icon={ShoppingCart}
             subtitleColor="text-blue-600"
+            onClick={() => navigate('/orders')}
           />
+          
           <StatsCard
-            title="재고 부족 알림"
+            title="재고현황"
             value={`${stats.lowStockCount}종`}
-            subtitle={stats.lowStockCount > 0 ? "긴급 발주 필요" : "재고 안정"}
+            subtitle={stats.lowStockCount > 0 ? "부족" : "안정"}
             icon={AlertTriangle}
             iconColor={stats.lowStockCount > 0 ? "text-orange-500" : "text-green-500"}
             valueColor={stats.lowStockCount > 0 ? "text-orange-600" : "text-green-600"}
+            onClick={() => navigate('/inventory')}
           />
           <StatsCard
             title="미수금 현황"
             value={formatCurrency(stats.totalOutstandingBalance)}
-            subtitle={`${stats.businessCount}개 거래처`}
+            subtitle="거래처별 미수금 관리"
             icon={DollarSign}
             iconColor="text-red-500"
             valueColor="text-red-600"
+            onClick={() => navigate('/business')}
           />
         </div>
       )}
@@ -220,31 +246,44 @@ const Dashboard: React.FC = () => {
       </div>
 
       {/* 하단 섹션: 최근 주문 및 재고 현황 */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 sm:gap-6">
-        {/* 최근 주문 현황 */}
-        <Card className="xl:col-span-2 shadow-sm">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 sm:gap-6">
+                 {/* 최근 주문 현황 */}
+         <Card className="lg:col-span-3 shadow-sm">
           <CardHeader>
             <CardTitle className="text-base sm:text-lg font-semibold text-gray-800">최근 주문 현황</CardTitle>
           </CardHeader>
           <CardContent>
             {!loading && !error && recentOrders.length > 0 ? (
               <div className="space-y-3 sm:space-y-4">
-                {recentOrders.map((order) => (
-                  <div key={order.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 bg-gray-50 rounded-lg gap-2 sm:gap-0">
-                    <div className="flex-1">
-                      <div className="font-medium text-gray-900 text-sm sm:text-base">{order.business_name}</div>
-                      <div className="text-xs sm:text-sm text-gray-600">
-                        {order.items_summary} · {formatCurrency(order.total_price)}
+                                                 {recentOrders.slice(0, 4).map((order) => (
+                  <div key={order.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border-l-4 border-blue-400">
+                    <div className="font-semibold text-sm text-gray-900">{order.business_name}</div>
+                    <div className="flex items-center space-x-4">
+                      <div className="text-sm text-gray-700">
+                        <span className="font-semibold">품목:</span> {order.items_summary}
                       </div>
-                      <div className="text-xs text-gray-500 mt-1">
+                      <div className="text-sm text-blue-700 font-semibold">
+                        <span>금액:</span> ₩{order.total_price.toLocaleString()}
+                      </div>
+                      <div className="text-sm text-gray-600">
                         {new Date(order.order_datetime).toLocaleDateString('ko-KR')} {new Date(order.order_datetime).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
                       </div>
-                    </div>
-                    <div className="flex-shrink-0">
                       <OrderStatusBadge status={order.order_status} />
                     </div>
                   </div>
                 ))}
+                 
+                                   {/* 더보기 버튼 */}
+                  {recentOrders.length > 4 && (
+                    <div className="mt-3 text-center">
+                      <button 
+                        onClick={() => navigate('/orders')}
+                        className="px-3 py-1.5 text-sm text-gray-700 bg-gray-50 hover:bg-gray-100 rounded-md border border-gray-200 font-medium transition-colors"
+                      >
+                        전체 주문보기 ({recentOrders.length}건)
+                      </button>
+                    </div>
+                  )}
               </div>
             ) : !loading && !error ? (
               <div className="text-center py-8 text-gray-500">
@@ -261,27 +300,32 @@ const Dashboard: React.FC = () => {
         {/* 재고 부족 알림 */}
         <Card className="shadow-sm">
           <CardHeader>
-            <CardTitle className="text-base sm:text-lg font-semibold text-gray-800">재고 부족 알림</CardTitle>
+            <CardTitle className="text-base sm:text-lg font-semibold text-gray-800">재고현황</CardTitle>
           </CardHeader>
           <CardContent>
             {!loading && !error && lowStockItems.length > 0 ? (
-              <div className="space-y-3 max-h-64 overflow-y-auto">
-                {lowStockItems.map((item, index) => (
+              <div className="space-y-3">
+                {lowStockItems.slice(0, 4).map((item, index) => (
                   <div key={index} className={`p-3 rounded-lg border-l-4 ${
                     item.status === 'out_of_stock' 
                       ? 'bg-red-50 border-red-500' 
                       : 'bg-orange-50 border-orange-400'
                   }`}>
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="font-semibold text-sm text-gray-900">{item.fish_name}</div>
-                      <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                        item.status === 'out_of_stock'
-                          ? 'bg-red-100 text-red-800'
-                          : 'bg-orange-100 text-orange-800'
-                      }`}>
-                        {item.status === 'out_of_stock' ? '품절' : '부족'}
-                      </span>
-                    </div>
+                                         <div className="flex items-center justify-between mb-2">
+                       <div className="font-semibold text-sm text-gray-900">{item.fish_name}</div>
+                       <div className="flex items-center space-x-2">
+                         <div className="text-xs text-gray-600">
+                           <span className="font-medium">현재고:</span> {item.stock_quantity || 0}{item.unit}
+                         </div>
+                         <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                           item.status === 'out_of_stock'
+                             ? 'bg-red-100 text-red-800'
+                             : 'bg-orange-100 text-orange-800'
+                         }`}>
+                           {item.status === 'out_of_stock' ? '품절' : '부족'}
+                         </span>
+                       </div>
+                     </div>
                     <div className="grid grid-cols-2 gap-2 text-xs">
                       {item.registered_stock !== undefined ? (
                         <>
@@ -300,14 +344,22 @@ const Dashboard: React.FC = () => {
                             </div>
                           )}
                         </>
-                      ) : (
-                        <div className="col-span-2 text-gray-600">
-                          <span className="font-medium">재고:</span> {item.total_stock || 0}{item.unit}
-                        </div>
-                      )}
+                                             ) : null}
                     </div>
                   </div>
                 ))}
+                
+                                 {/* 더보기 버튼 */}
+                 {lowStockItems.length > 4 && (
+                   <div className="mt-3 text-center">
+                     <button 
+                       onClick={() => navigate('/inventory')}
+                       className="px-3 py-1.5 text-sm text-gray-700 bg-gray-50 hover:bg-gray-100 rounded-md border border-gray-200 font-medium transition-colors"
+                     >
+                       전체 재고보기 ({lowStockItems.length}종)
+                     </button>
+                   </div>
+                 )}
               </div>
             ) : !loading && !error ? (
               <div className="text-center py-8 text-gray-500">
