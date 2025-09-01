@@ -16,7 +16,8 @@ urlpatterns = [
     # 지원하는 어종 목록
     path('species/', views.get_supported_species, name='supported_species'),
     
-
+    # 실제 경매가 데이터 조회
+    path('actual/', views.get_actual_auction_data, name='actual_auction_data'),
     
     # 헬스 체크
     path('health/', views.health_check, name='health_check'),

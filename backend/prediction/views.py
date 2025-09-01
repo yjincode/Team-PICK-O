@@ -288,7 +288,89 @@ def get_supported_species(request):
         ]
     })
 
-
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def get_actual_auction_data(request):
+    """실제 경매가 데이터 조회 API - 일주일치 데이터"""
+    try:
+        from .models import ActualAuctionPrice, FishSpecies
+        from datetime import datetime, timedelta
+        from django.db.models import Avg
+        
+        # 쿼리 파라미터
+        species = request.GET.get('species', '')
+        days = int(request.GET.get('days', 7))  # 기본 7일
+        
+        # 날짜 범위 계산 (현재 날짜 기준 일주일 전)
+        end_date = datetime.now().date()
+        start_date = end_date - timedelta(days=days)
+        
+        # 어종 필터링 (접두사 유무 관계없이 매핑)
+        fish_species = None
+        if species:
+            # (활) 접두사가 있는 경우
+            if species in SPECIES_MAPPING:
+                species_english = SPECIES_MAPPING[species]
+                fish_species = FishSpecies.objects.filter(english_name=species_english).first()
+            # (활) 접두사가 없는 경우 - 직접 매핑
+            else:
+                species_mapping_no_prefix = {
+                    '우럭': 'rockfish',
+                    '광어': 'flounder',  # 넙치 -> 광어
+                    '숭어': 'mullet',    # 참숭어 -> 숭어
+                    '참돔': 'red_sea_bream',
+                    '농어': 'sea_bass'
+                }
+                if species in species_mapping_no_prefix:
+                    species_english = species_mapping_no_prefix[species]
+                    fish_species = FishSpecies.objects.filter(english_name=species_english).first()
+        
+        # 실제 경매가 데이터 조회 (FWT_M: 1kg/마리 = 1미 규격)
+        query = ActualAuctionPrice.objects.filter(
+            trade_date__range=[start_date, end_date],
+            unit_weight_kg=1.00  # FWT_M: 1미 규격 (1kg/마리)
+        )
+        
+        if fish_species:
+            query = query.filter(fish_species=fish_species)
+        
+        # 어종별 + 일별 평균 가격 계산
+        if species and fish_species:
+            # 특정 어종만 조회
+            daily_prices = query.values('trade_date').annotate(
+                avg_price=Avg('auction_price')
+            ).order_by('trade_date')
+        else:
+            # 모든 어종의 일별 평균 (어종 구분 없이)
+            daily_prices = query.values('trade_date').annotate(
+                avg_price=Avg('auction_price')
+            ).order_by('trade_date')
+        
+        # 데이터 포맷팅
+        formatted_data = []
+        for item in daily_prices:
+            formatted_data.append({
+                'date': item['trade_date'].strftime('%Y-%m-%d'),
+                'price': float(item['avg_price']),
+                'formattedDate': f"{item['trade_date'].month}.{item['trade_date'].day}"
+            })
+        
+        return Response({
+            'success': True,
+            'data': formatted_data,
+            'species': species,
+            'date_range': {
+                'start_date': start_date.strftime('%Y-%m-%d'),
+                'end_date': end_date.strftime('%Y-%m-%d')
+            },
+            'total_days': len(formatted_data)
+        })
+        
+    except Exception as e:
+        return Response({
+            'success': False,
+            'error': f'실제 경매가 데이터 조회 실패: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
