@@ -15,6 +15,7 @@ import { TrendingUp, TrendingDown, ChevronLeft, ChevronRight, Brain, Play, Pause
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts"
 import { SpeciesPrediction } from "../../types/auction"
 import { mockAuctionPredictions } from "../../data/mockAuctionData"
+import { auctionApi } from "../../lib/api"
 
 
 // 컴포넌트 props 타입 정의
@@ -33,9 +34,74 @@ const AuctionPriceChart: React.FC<AuctionPriceChartProps> = ({
   const [chartData, setChartData] = useState<any[]>([])
   const [isAutoSlide, setIsAutoSlide] = useState(false) // 자동 슬라이드 상태 (기본 비활성화)
   const [autoSlideInterval, setAutoSlideInterval] = useState<NodeJS.Timeout | null>(null)
-
+  const [realData, setRealData] = useState<any[]>([]) // 실제 경매가 데이터
+  const [isLoadingRealData, setIsLoadingRealData] = useState(false)
+  const [predictedPrice, setPredictedPrice] = useState<number | null>(null) // 예측가
+  const [isLoadingPrediction, setIsLoadingPrediction] = useState(false)
 
   const currentSpecies = data[currentSpeciesIndex]
+
+  // 실제 경매가 데이터 가져오기 (현재 선택된 어종 기준)
+  const fetchRealData = async (targetSpecies?: string) => {
+    setIsLoadingRealData(true)
+    try {
+      const speciesToFetch = targetSpecies || currentSpecies?.species?.koreanName || ''
+      const response = await auctionApi.getActualAuctionData(speciesToFetch, 7)
+      if (response.success) {
+        setRealData(response.data)
+      }
+    } catch (error) {
+      console.error('실제 경매가 데이터 가져오기 실패:', error)
+    } finally {
+      setIsLoadingRealData(false)
+    }
+  }
+
+  // 예측가 가져오기 (내일 예측)
+  const fetchPrediction = async (targetSpecies?: string) => {
+    setIsLoadingPrediction(true)
+    try {
+      const speciesToFetch = targetSpecies || currentSpecies?.species?.koreanName || ''
+      
+      // 내일 날짜 계산
+      const tomorrow = new Date()
+      tomorrow.setDate(tomorrow.getDate() + 1)
+      const targetDate = tomorrow.toISOString().split('T')[0] // YYYY-MM-DD 형식
+      
+      // 환경 데이터 (기본값)
+      const environmentalData = {
+        temperature: 20,
+        water_temperature: 18,
+        humidity: 60,
+        precipitation: 0,
+        wind_speed: 5,
+        pressure: 1013
+      }
+      
+      const response = await auctionApi.predictSingleSpecies(speciesToFetch, targetDate, environmentalData)
+      if (response.success && response.predictions && response.predictions.length > 0) {
+        setPredictedPrice(response.predictions[0].predicted_price)
+      }
+    } catch (error) {
+      console.error('예측가 가져오기 실패:', error)
+    } finally {
+      setIsLoadingPrediction(false)
+    }
+  }
+
+  // 컴포넌트 마운트 시 실제 데이터와 예측가 가져오기
+  useEffect(() => {
+    fetchRealData()
+    fetchPrediction()
+  }, [])
+
+  // 어종이 변경될 때마다 해당 어종의 실제 데이터와 예측가 가져오기
+  useEffect(() => {
+    if (currentSpecies?.species?.koreanName) {
+      fetchRealData(currentSpecies.species.koreanName)
+      fetchPrediction(currentSpecies.species.koreanName)
+    }
+  }, [currentSpeciesIndex])
 
   // 자동 슬라이드 시작
   const startAutoSlide = () => {
@@ -82,9 +148,42 @@ const AuctionPriceChart: React.FC<AuctionPriceChartProps> = ({
     }
   }, [isAutoSlide, data.length])
 
-  // 차트 데이터 포맷팅
+  // 차트 데이터 포맷팅 (실제 데이터 우선 사용)
   useEffect(() => {
-    if (currentSpecies) {
+    if (realData.length > 0) {
+      // 실제 데이터가 있으면 실제 데이터 사용
+      const formattedData = realData.map((item) => {
+        const itemDate = new Date(item.date);
+        const today = new Date();
+        const isToday = itemDate.getDate() === today.getDate() && 
+                       itemDate.getMonth() === today.getMonth() && 
+                       itemDate.getFullYear() === today.getFullYear();
+        
+        return {
+          ...item,
+          // 날짜 포맷팅 (매우 간결하게)
+          formattedDate: item.formattedDate || `${itemDate.getMonth() + 1}.${itemDate.getDate()}`,
+          // 오늘 날짜인지 확인 (더 안전한 방법)
+          isToday
+        };
+      });
+      
+      // 예측가가 있으면 내일 날짜에 추가
+      if (predictedPrice) {
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        formattedData.push({
+          date: tomorrow.toISOString().split('T')[0],
+          price: predictedPrice,
+          formattedDate: `${tomorrow.getMonth() + 1}.${tomorrow.getDate()}`,
+          isToday: false,
+          isPrediction: true // 예측 데이터임을 표시
+        });
+      }
+      
+      setChartData(formattedData)
+    } else if (currentSpecies) {
+      // 실제 데이터가 없으면 목업 데이터 사용
       const formattedData = currentSpecies.priceHistory.map((item, index) => {
         const itemDate = new Date(item.date);
         const today = new Date();
@@ -101,12 +200,25 @@ const AuctionPriceChart: React.FC<AuctionPriceChartProps> = ({
         };
       });
       
+      // 예측가가 있으면 내일 날짜에 추가
+      if (predictedPrice) {
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        formattedData.push({
+          date: tomorrow.toISOString().split('T')[0],
+          price: predictedPrice,
+          formattedDate: `${tomorrow.getMonth() + 1}.${tomorrow.getDate()}`,
+          isToday: false,
+          isPrediction: true // 예측 데이터임을 표시
+        });
+      }
+      
       setChartData(formattedData)
       
       // 외부 콜백 호출
       onSpeciesChange?.(currentSpecies.species.id)
     }
-  }, [currentSpecies, onSpeciesChange])
+  }, [currentSpecies, realData, predictedPrice, onSpeciesChange])
 
   // 이전 어종으로 이동 (수동 조작 시 자동 슬라이드 일시정지)
   const goToPreviousSpecies = () => {
@@ -233,12 +345,23 @@ const AuctionPriceChart: React.FC<AuctionPriceChartProps> = ({
                    <div className="text-sm font-medium text-gray-600 mb-1">예측가</div>
                    <div className="flex items-center justify-center lg:justify-start space-x-3">
                      <div className="text-4xl font-bold text-blue-600">
-                       {formatCurrency(currentSpecies.predictedPrice)}
+                       {isLoadingPrediction ? (
+                         <div className="animate-pulse">로딩중...</div>
+                       ) : predictedPrice ? (
+                         formatCurrency(predictedPrice)
+                       ) : (
+                         formatCurrency(currentSpecies.predictedPrice)
+                       )}
                      </div>
-                     <div className={`inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium ${changeDisplay.bgColor} ${changeDisplay.color}`}>
-                       <ChangeIcon className="h-4 w-4 mr-1" />
-                       {changeDisplay.sign}{currentSpecies.priceChange}%
-                     </div>
+                     {predictedPrice && currentSpecies.currentPrice && (
+                       <div className={`inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium ${
+                         predictedPrice > currentSpecies.currentPrice ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                       }`}>
+                         <ChangeIcon className="h-4 w-4 mr-1" />
+                         {predictedPrice > currentSpecies.currentPrice ? '+' : ''}
+                         {(((predictedPrice - currentSpecies.currentPrice) / currentSpecies.currentPrice) * 100).toFixed(1)}%
+                       </div>
+                     )}
                    </div>
                  </div>
                </div>
@@ -248,7 +371,10 @@ const AuctionPriceChart: React.FC<AuctionPriceChartProps> = ({
              <div className="lg:col-span-4">
                                                          <div className="flex items-center justify-between">
                                <h3 className="text-lg font-semibold text-gray-800 text-left ml-20">
-                                 경매가 동향 <span className="text-sm font-normal text-gray-600">(실제 경매가 7일)</span>
+                                 경매가 동향 <span className="text-sm font-normal text-gray-600">
+                                   ({realData.length > 0 ? '실제 경매가 7일' : '목업 데이터'})
+                                   {predictedPrice && ' + 내일 예측가'}
+                                 </span>
                                </h3>
                                
                                                                {/* 차트 상단 네비게이션 컨트롤 */}
@@ -361,7 +487,15 @@ const AuctionPriceChart: React.FC<AuctionPriceChartProps> = ({
                          dataKey="price"
                          stroke="#3b82f6"
                          strokeWidth={3}
-                         dot={{ fill: '#3b82f6', strokeWidth: 2, r: 4 }}
+                         dot={(props) => {
+                           const isPrediction = chartData[props.index]?.isPrediction;
+                           return {
+                             fill: isPrediction ? '#ef4444' : '#3b82f6',
+                             strokeWidth: 2,
+                             r: 4,
+                             strokeDasharray: isPrediction ? '5 5' : '0'
+                           };
+                         }}
                          activeDot={{ r: 6, fill: '#1d4ed8' }}
                        />
                      </LineChart>

@@ -172,7 +172,49 @@ api.interceptors.response.use(
   }
 )
 
+// 경매가 예측 API 함수들
+export const auctionApi = {
+  // 실제 경매가 데이터 조회
+  getActualAuctionData: async (species?: string, days: number = 7) => {
+    const params = new URLSearchParams()
+    if (species) params.append('species', species)
+    params.append('days', days.toString())
+    
+    const response = await api.get(`/prediction/actual/?${params}`)
+    return response.data
+  },
 
+  // 모든 어종 예측
+  predictAllSpecies: async (targetDate: string, environmentalData: any) => {
+    const response = await api.post('/prediction/all/', {
+      target_date: targetDate,
+      environmental_data: environmentalData
+    })
+    return response.data
+  },
+
+  // 단일 어종 예측
+  predictSingleSpecies: async (species: string, targetDate: string, environmentalData: any) => {
+    const response = await api.post('/prediction/single/', {
+      species,
+      target_date: targetDate,
+      environmental_data: environmentalData
+    })
+    return response.data
+  },
+
+  // 지원하는 어종 목록
+  getSupportedSpecies: async () => {
+    const response = await api.get('/prediction/species/')
+    return response.data
+  },
+
+  // 헬스 체크
+  healthCheck: async () => {
+    const response = await api.get('/prediction/health/')
+    return response.data
+  }
+}
 
 // 거래처 관리 API
 export const businessApi = {
