@@ -11,12 +11,15 @@ import { Camera, Upload, Trash2, Eye, AlertCircle, X } from "lucide-react"
 import { businessApi, exebaseApi } from "../../../lib/api"
 import type { Business } from "../../../types"
 
+import toast from "react-hot-toast"
+
+
 interface ParsedOrderData {
   business_name?: string;
   phone_number?: string;
   transcribed_text: string;
   delivery_date?: string;
-  items: OrderItem[]
+  items: any;
   memo?: string;
 }
 
@@ -45,7 +48,7 @@ interface ParsedOrderData {
   phone_number?: string
   transcribed_text: string
   delivery_date?: string
-  items: OrderItem[]
+  items: any
   memo?: string
 }
 interface ImageUploadTabProps {
@@ -132,79 +135,176 @@ const ImageUploadTab: React.FC<ImageUploadTabProps> = ({
 
 
 
-  // 이미지 파일 처리 핸들러
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (!file) return
+//   // 이미지 파일 처리 핸들러
+//   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+//     const file = event.target.files?.[0]
+//     if (!file) return
 
-    // 파일 크기 검증 (5MB 이하)
-    if (file.size > 5 * 1024 * 1024) {
-      const errorMsg = '이미지 파일 크기는 5MB를 초과할 수 없습니다.'
-      setError(errorMsg)
-      onError?.(errorMsg)
-      return
-    }
+//     // 파일 크기 검증 (5MB 이하)
+//     if (file.size > 5 * 1024 * 1024) {
+//       const errorMsg = '이미지 파일 크기는 5MB를 초과할 수 없습니다.'
+//       setError(errorMsg)
+//       onError?.(errorMsg)
+//       return
+//     }
 
-    // 파일 타입 검증 (이미지 파일만 허용)
-    if (!file.type.startsWith('image/')) {
-      const errorMsg = '이미지 파일만 업로드 가능합니다.'
-      setError(errorMsg)
-      onError?.(errorMsg)
-      return
-    }
+//     // 파일 타입 검증 (이미지 파일만 허용)
+//     if (!file.type.startsWith('image/')) {
+//       const errorMsg = '이미지 파일만 업로드 가능합니다.'
+//       setError(errorMsg)
+//       onError?.(errorMsg)
+//       return
+//     }
 
-    setLocalUploadedFile(file)
-    setError('')
-    setLocalIsProcessing(true)
+//     setLocalUploadedFile(file)
+//     setError('')
+//     setLocalIsProcessing(true)
 
-    try {
-      const formData = new FormData()
-      formData.append('file', file)
-      formData.append('type', 'image')
+//     try {
+//       const formData = new FormData()
+//       formData.append('file', file)
+//       formData.append('type', 'image')
       
-      if (selectedBusinessId) {
-        formData.append('business_id', selectedBusinessId.toString())
-      }
+//       if (selectedBusinessId) {
+//         formData.append('business_id', selectedBusinessId.toString())
+//       }
       
-      if (deliveryDate) {
-        formData.append('delivery_date', deliveryDate)
-      }
+//       if (deliveryDate) {
+//         formData.append('delivery_date', deliveryDate)
+//       }
       
-      // exebaseApi를 사용하여 주문 처리
-      const result = await exebaseApi.processOrder(formData)
-      if (result.success && result.order) {
-        const parsedItems = Array.isArray(result.order.items) ? result.order.items : [];
+//       // exebaseApi를 사용하여 주문 처리
+//       const result = await exebaseApi.processOrder(formData)
+
+// if (result.success && result.order) {
+//   const parsedItems = Array.isArray(result.order.items) ? result.order.items : []
+
+//   setParsedOrder({
+//     ...result.order,
+//     items: parsedItems,
+//   })
+
+//   onOrderParsed?.({
+//     ...result.order,
+//     items: parsedItems,
+//     business: result.order.business_id
+//       ? {
+//           id: result.order.business_id,
+//           business_name: result.order.business_name || '',
+//           phone_number: result.order.phone_number || '',
+//         }
+//       : undefined,
+//   })
+// }
+
       
-        setParsedOrder({
-          ...result.order,
-          items: parsedItems,
-        });
       
-        // 나머지 콜백도 업데이트
-        onOrderParsed?.({
-          ...result.order,
-          items: parsedItems,
-          business: result.order.business_id
-            ? {
-                id: result.order.business_id,
-                business_name: result.order.business_name || '',
-                phone_number: result.order.phone_number || '',
-              }
-            : undefined,
-        });
-      }
-      
-      
-    } catch (error) {
-      console.error('이미지 처리 오류:', error)
-      const errorMessage = error instanceof Error ? error.message : '이미지 처리 중 오류가 발생했습니다.'
-      setError(errorMessage)
-      onError?.(errorMessage)
-    } finally {
-      setLocalIsProcessing(false)
-    }
+//     } catch (error) {
+//       console.error('이미지 처리 오류:', error)
+//       const errorMessage = error instanceof Error ? error.message : '이미지 처리 중 오류가 발생했습니다.'
+//       setError(errorMessage)
+//       onError?.(errorMessage)
+//     } finally {
+//       setLocalIsProcessing(false)
+//     }
+//   }
+
+
+
+
+const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const file = event.target.files?.[0]
+  if (!file) return
+
+  // 파일 크기 검증 (5MB 이하)
+  if (file.size > 5 * 1024 * 1024) {
+    const errorMsg = '이미지 파일 크기는 5MB를 초과할 수 없습니다.'
+    setError(errorMsg)
+    onError?.(errorMsg)
+    return
   }
 
+  // 파일 타입 검증 (이미지 파일만 허용)
+  if (!file.type.startsWith('image/')) {
+    const errorMsg = '이미지 파일만 업로드 가능합니다.'
+    setError(errorMsg)
+    onError?.(errorMsg)
+    return
+  }
+
+  setLocalUploadedFile(file)
+  setError('')
+  setLocalIsProcessing(true)
+
+  try {
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('type', 'image')
+
+    if (selectedBusinessId) {
+      formData.append('business_id', selectedBusinessId.toString())
+    }
+
+    if (deliveryDate) {
+      formData.append('delivery_date', deliveryDate)
+    }
+
+    // API 응답 타입 정의
+    interface ApiOrderResponse {
+      business_name?: string;
+      phone_number?: string;
+      transcribed_text: string;
+      delivery_datetime?: string;
+      items: any[];  // 또는 더 구체적인 타입이 있다면 사용하세요
+      memo?: string;
+      [key: string]: any;
+    }
+
+    // exebaseApi를 사용하여 주문 처리
+    const result = await exebaseApi.processOrder(formData) as { 
+      success: boolean; 
+      message: ApiOrderResponse | string 
+    };
+
+
+    // ✅ message 안에 데이터가 존재할 경우 처리
+    if (result.success && result.message) {
+      if (typeof result.message === 'string') {
+        console.error('Unexpected string response:', result.message);
+        return;
+      }
+      
+      const orderData: ApiOrderResponse = result.message;
+
+      const parsedItems = Array.isArray(orderData.items) ? orderData.items : [];
+
+      const parsedOrderData: ParsedOrderData = {
+        business_name: orderData.business_name || '',
+        phone_number: orderData.phone_number || '',
+        transcribed_text: orderData.transcribed_text || '',
+        delivery_date: orderData.delivery_datetime || '', // delivery_date로 매핑
+        items: parsedItems,
+        memo: orderData.memo || ''
+      };
+
+      setParsedOrder(parsedOrderData);
+
+      onOrderParsed?.(parsedOrderData);
+    } else {
+      const errorMessage = '파싱된 주문 데이터가 없습니다.';
+      setError(errorMessage);
+      onError?.(errorMessage);
+    }
+
+  } catch (error) {
+    console.error('이미지 처리 오류:', error)
+    const errorMessage = error instanceof Error ? error.message : '이미지 처리 중 오류가 발생했습니다.'
+    setError(errorMessage)
+    onError?.(errorMessage)
+  } finally {
+    setLocalIsProcessing(false)
+  }
+}
 
   const handleRemoveLocalFile = () => {
     // Reset local file state
@@ -237,6 +337,7 @@ const ImageUploadTab: React.FC<ImageUploadTabProps> = ({
     updatedItems[index] = { ...updatedItems[index], [key]: value }
     setParsedOrder({ ...parsedOrder, items: updatedItems })
   }
+
 
   // 항목 삭제 핸들러
   const handleRemoveItem = (index: number) => {
