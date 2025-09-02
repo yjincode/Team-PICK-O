@@ -107,7 +107,11 @@ api.interceptors.request.use(
       '/business/auth/register/',
       '/business/auth/refresh/',
       '/business/auth/super-login/',
-      '/business/auth/super-register/'
+      '/business/auth/super-register/',
+      '/prediction/',  // 예측 API 전체 경로 제외
+      '/dashboard/weather/',  // 기상청 API 제외
+      '/orders/',  // 주문 API 제외
+      '/dashboard/stats/',  // 대시보드 통계 제외
     ]
 
     const isPublicEndpoint = publicEndpoints.some(endpoint => config.url?.includes(endpoint))
@@ -175,10 +179,15 @@ api.interceptors.response.use(
 // 경매가 예측 API 함수들
 export const auctionApi = {
   // 실제 경매가 데이터 조회
-  getActualAuctionData: async (species?: string, days: number = 7) => {
+  getActualAuctionData: async (species?: string, days: number = 7, timestamp?: number) => {
     const params = new URLSearchParams()
     if (species) params.append('species', species)
     params.append('days', days.toString())
+    
+    // 캐시 방지를 위한 타임스탬프 추가
+    if (timestamp) {
+      params.append('_t', timestamp.toString())
+    }
     
     const response = await api.get(`/prediction/actual/?${params}`)
     return response.data

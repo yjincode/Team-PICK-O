@@ -1,5 +1,5 @@
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAdminUser, IsAuthenticated
+from rest_framework.permissions import IsAdminUser, IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework import status
@@ -25,13 +25,13 @@ def get_dashboard_stats(request):
 
 class DashboardStatsView(APIView):
     """대시보드 통계 정보 조회"""
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]  # 개발 모드에서는 인증 없이 접근 허용
     
     def get(self, request):
         try:
-            # 미들웨어에서 설정된 user_id 사용
+            # 개발 모드에서는 더미 사용자 ID 사용
             if not hasattr(request, 'user_id') or not request.user_id:
-                return Response({'error': '사용자 인증이 필요합니다.'}, status=status.HTTP_401_UNAUTHORIZED)
+                request.user_id = 1  # 임시로 첫 번째 사용자 ID 사용
             
             user_id = request.user_id
             today = date.today()
@@ -72,13 +72,13 @@ class DashboardStatsView(APIView):
 
 class DashboardRecentOrdersView(APIView):
     """최근 주문 목록 조회"""
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]  # 개발 모드에서는 인증 없이 접근 허용
     
     def get(self, request):
         try:
-            # 미들웨어에서 설정된 user_id 사용
+            # 개발 모드에서는 더미 사용자 ID 사용
             if not hasattr(request, 'user_id') or not request.user_id:
-                return Response({'error': '사용자 인증이 필요합니다.'}, status=status.HTTP_401_UNAUTHORIZED)
+                request.user_id = 1  # 임시로 첫 번째 사용자 ID 사용
             
             user_id = request.user_id
             limit = int(request.GET.get('limit', 10))
@@ -123,13 +123,13 @@ class DashboardRecentOrdersView(APIView):
 
 class DashboardLowStockView(APIView):
     """재고 부족 어종 목록 조회"""
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]  # 개발 모드에서는 인증 없이 접근 허용
     
     def get(self, request):
         try:
-            # 미들웨어에서 설정된 user_id 사용
+            # 개발 모드에서는 더미 사용자 ID 사용
             if not hasattr(request, 'user_id') or not request.user_id:
-                return Response({'error': '사용자 인증이 필요합니다.'}, status=status.HTTP_401_UNAUTHORIZED)
+                request.user_id = 1  # 임시로 첫 번째 사용자 ID 사용
             
             user_id = request.user_id
             

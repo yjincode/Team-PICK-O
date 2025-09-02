@@ -30,7 +30,7 @@ import SalesChart from './pages/sales/SalesChart';
 const App: React.FC = () => {
   return (
     <AuthProvider>
-      <Router>
+      <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <Routes>
           {/* 로그인 페이지는 레이아웃 없이 */}
           <Route 
