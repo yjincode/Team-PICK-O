@@ -8,6 +8,7 @@ FastAPI 기반 어류 질병 분석 AI 서버
 - **VGG16**: 질병 분류 및 심각도 판정
 - **통합 분석**: 증상 탐지 → 영역 크롭 → 질병 분류 파이프라인
 - **건강 상태**: 전체 건강 상태 평가 (상/중/하)
+- **🆕 LLM 텍스트 파싱**: Phi-3 Mini 기반 수산물 주문 텍스트 구조화
 
 ## 📋 요구사항
 
@@ -15,6 +16,24 @@ FastAPI 기반 어류 질병 분석 AI 서버
 ```bash
 pip install -r requirements.txt
 ```
+
+### 🤖 LLM 텍스트 파싱 (로컬 개발용)
+```bash
+# 자동 설정 스크립트 실행 (권장)
+./setup_local_llm.sh
+
+# 또는 수동 설정
+# 1. Ollama 설치
+curl -fsSL https://ollama.com/install.sh | sh
+
+# 2. Ollama 서비스 시작
+ollama serve &
+
+# 3. Phi-3 Mini 모델 다운로드 (2.3GB)
+ollama pull phi3:mini
+```
+
+> 📚 **자세한 LLM 설정 가이드**: [README_LLM.md](./README_LLM.md) 참조
 
 ### 주요 의존성
 - **FastAPI**: 웹 API 프레임워크
@@ -245,3 +264,5 @@ async def call_ai_server(image_file):
 
 로그는 `loguru`를 사용하여 콘솔에 출력됩니다.
 로그 레벨은 `.env` 파일의 `LOG_LEVEL`로 설정 가능합니다.
+
+v0.12

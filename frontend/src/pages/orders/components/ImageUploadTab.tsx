@@ -10,7 +10,7 @@ import { Label } from "../../../components/ui/label"
 import { Camera, Upload, Trash2, Eye, AlertCircle, X } from "lucide-react"
 import { businessApi, exebaseApi } from "../../../lib/api"
 import type { Business } from "../../../types"
-import toast from "react-hot-toast"
+
 interface ParsedOrderData {
   business_name?: string;
   phone_number?: string;
@@ -131,6 +131,7 @@ const ImageUploadTab: React.FC<ImageUploadTabProps> = ({
   // }, [])
 
 
+
   // 이미지 파일 처리 핸들러
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -203,6 +204,7 @@ const ImageUploadTab: React.FC<ImageUploadTabProps> = ({
       setLocalIsProcessing(false)
     }
   }
+
 
   const handleRemoveLocalFile = () => {
     // Reset local file state

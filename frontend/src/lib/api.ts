@@ -51,134 +51,233 @@ let isRefreshing = false
 let refreshPromise: Promise<string | null> | null = null
 
 // // 액세스 토큰 자동 갱신 함수
-// const refreshAccessToken = async (): Promise<string | null> => {
-//   if (isRefreshing && refreshPromise) {
-//     return await refreshPromise
-//   }
+const refreshAccessToken = async (): Promise<string | null> => {
+  if (isRefreshing && refreshPromise) {
+    return await refreshPromise
+  }
 
-//   isRefreshing = true
-//   refreshPromise = new Promise(async (resolve) => {
-//     try {
-//       const refreshToken = TokenManager.getRefreshToken()
+  isRefreshing = true
+  refreshPromise = new Promise(async (resolve) => {
+    try {
+      const refreshToken = TokenManager.getRefreshToken()
 
-//       if (!refreshToken) {
-//         resolve(null)
-//         return
-//       }
-          
-//       const response = await fetch(`${API_BASE_URL}/business/auth/refresh/`, {
-//         method: 'POST',
-//         headers: {
-//           'Content-Type': 'application/json',
-//         },
-//         body: JSON.stringify({
-//           refresh_token: refreshToken
-//         })
-//       })
+      if (!refreshToken) {
+        resolve(null)
+        return
+      }
+      const response = await fetch(`${API_BASE_URL}/business/auth/refresh/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          refresh_token: refreshToken
+        })
+      })
 
-//       if (response.ok) {
-//         const data = await response.json()
-//         const newAccessToken = data.access_token
+      if (response.ok) {
+        const data = await response.json()
+        const newAccessToken = data.access_token
 
-//         TokenManager.setAccessToken(newAccessToken)
-//         resolve(newAccessToken)
-//       } else {
-//         TokenManager.removeTokens()
-//         resolve(null)
-//       }
-//     } catch (error) {
-//       TokenManager.removeTokens()
-//       resolve(null)
-//     }
-//   })
+        TokenManager.setAccessToken(newAccessToken)
+        resolve(newAccessToken)
+      } else {
+        TokenManager.removeTokens()
+        resolve(null)
+      }
+    } catch (error) {
+      TokenManager.removeTokens()
+      resolve(null)
+    }
+  })
 
-//   const result = await refreshPromise
-//   isRefreshing = false
-//   refreshPromise = null
+  const result = await refreshPromise
+  isRefreshing = false
+  refreshPromise = null
 
-//   return result
-// }
+  return result
+}
 
-// api.interceptors.request.use(
-//   async (config) => {
-//     // 🔥 토큰이 필요하지 않은 엔드포인트들
-//     const publicEndpoints = [
-//       '/business/auth/firebase-to-jwt/',
-//       '/business/auth/register/',
-//       '/business/auth/refresh/',
-//       '/business/auth/super-login/',
-//       '/business/auth/super-register/'
-//     ]
+api.interceptors.request.use(
+  async (config) => {
+    // 🔥 토큰이 필요하지 않은 엔드포인트들
+    const publicEndpoints = [
+      '/business/auth/firebase-to-jwt/',
+      '/business/auth/register/',
+      '/business/auth/refresh/',
+      '/business/auth/super-login/',
+      '/business/auth/super-register/'
+    ]
 
-//     const isPublicEndpoint = publicEndpoints.some(endpoint => config.url?.includes(endpoint))
+    const isPublicEndpoint = publicEndpoints.some(endpoint => config.url?.includes(endpoint))
 
-//     if (isPublicEndpoint) {
-//       return config
-//     }
+    if (isPublicEndpoint) {
+      return config
+    }
 
-//     // 일반 엔드포인트는 토큰 필요
-//     let accessToken = TokenManager.getAccessToken()
+    // 일반 엔드포인트는 토큰 필요
+    let accessToken = TokenManager.getAccessToken()
 
-//     // 액세스 토큰이 없거나 5분 이내 만료 예정인 경우 갱신 시도
-//     const timeUntilExpiry = TokenManager.getAccessTokenTimeUntilExpiry()
-//     if (!accessToken || !TokenManager.isAccessTokenValid() || timeUntilExpiry < 300) {  // 5분(300초) 이내 만료 시 갱신
-//       accessToken = await refreshAccessToken()
+    // 액세스 토큰이 없거나 5분 이내 만료 예정인 경우 갱신 시도
+    const timeUntilExpiry = TokenManager.getAccessTokenTimeUntilExpiry()
+    if (!accessToken || !TokenManager.isAccessTokenValid() || timeUntilExpiry < 300) {  // 5분(300초) 이내 만료 시 갱신
+      accessToken = await refreshAccessToken()
 
-//       // 갱신에 실패한 경우 토큰 제거만 하고 조용히 처리
-//       if (!accessToken) {
-//         return Promise.reject({ 
-//           name: 'AuthenticationError',
-//           message: '인증이 필요합니다',
-//           config: config
-//         })
-//       }
-//     }
+      // 갱신에 실패한 경우 토큰 제거만 하고 조용히 처리
+      if (!accessToken) {
+        return Promise.reject({ 
+          name: 'AuthenticationError',
+          message: '인증이 필요합니다',
+          config: config
+        })
+      }
+    }
 
-//     // Authorization 헤더에 액세스 토큰 추가
-//     if (accessToken) {
-//       config.headers.Authorization = `Bearer ${accessToken}`
-//     }
+    // Authorization 헤더에 액세스 토큰 추가
+    if (accessToken) {
+      config.headers.Authorization = `Bearer ${accessToken}`
+    }
 
-//     return config
-//   },
-//   (error) => {
-//     return Promise.reject(error)
-//   }
-// )
+    return config
+  },
+  (error) => {
+    return Promise.reject(error)
+  }
+)
 
-// // 응답 인터셉터: 401 오류 시 토큰 갱신 재시도
-// api.interceptors.response.use(
-//   (response) => {
-//     return response;
-//   },
-//   async (error) => {
-//     // 401 오류 시 토큰 갱신 후 재시도
-//     if (error.response?.status === 401 && !error.config._retry) {
-//       error.config._retry = true;
+// 응답 인터셉터: 401 오류 시 토큰 갱신 재시도
+api.interceptors.response.use(
+  (response) => {
+    return response;
+  },
+  async (error) => {
+    // 401 오류 시 토큰 갱신 후 재시도
+    if (error.response?.status === 401 && !error.config._retry) {
+      error.config._retry = true;
+=======
+      const response = await fetch(`${API_BASE_URL}/business/auth/refresh/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          refresh_token: refreshToken
+        })
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        const newAccessToken = data.access_token
+
+        TokenManager.setAccessToken(newAccessToken)
+        resolve(newAccessToken)
+      } else {
+        TokenManager.removeTokens()
+        resolve(null)
+      }
+    } catch (error) {
+      TokenManager.removeTokens()
+      resolve(null)
+    }
+  })
+
+  const result = await refreshPromise
+  isRefreshing = false
+  refreshPromise = null
+
+  return result
+}
+
+api.interceptors.request.use(
+  async (config) => {
+    // 🔥 토큰이 필요하지 않은 엔드포인트들
+    const publicEndpoints = [
+      '/business/auth/firebase-to-jwt/',
+      '/business/auth/register/',
+      '/business/auth/refresh/',
+      '/business/auth/super-login/',
+      '/business/auth/super-register/',
+      '/prediction/',  // 예측 API 전체 경로 제외
+      '/dashboard/weather/',  // 기상청 API 제외
+      '/orders/',  // 주문 API 제외
+      '/dashboard/stats/',  // 대시보드 통계 제외
+    ]
+
+    const isPublicEndpoint = publicEndpoints.some(endpoint => config.url?.includes(endpoint))
+
+    if (isPublicEndpoint) {
+      return config
+    }
+
+    // 일반 엔드포인트는 토큰 필요
+    let accessToken = TokenManager.getAccessToken()
+
+    // 액세스 토큰이 없거나 5분 이내 만료 예정인 경우 갱신 시도
+    const timeUntilExpiry = TokenManager.getAccessTokenTimeUntilExpiry()
+    if (!accessToken || !TokenManager.isAccessTokenValid() || timeUntilExpiry < 300) {  // 5분(300초) 이내 만료 시 갱신
+      accessToken = await refreshAccessToken()
+
+      // 갱신에 실패한 경우 토큰 제거만 하고 조용히 처리
+      if (!accessToken) {
+        return Promise.reject({ 
+          name: 'AuthenticationError',
+          message: '인증이 필요합니다',
+          config: config
+        })
+      }
+    }
+
+    // Authorization 헤더에 액세스 토큰 추가
+    if (accessToken) {
+      config.headers.Authorization = `Bearer ${accessToken}`
+    }
+
+    return config
+  },
+  (error) => {
+    return Promise.reject(error)
+  }
+)
+
+// 응답 인터셉터: 401 오류 시 토큰 갱신 재시도
+api.interceptors.response.use(
+  (response) => {
+    return response;
+  },
+  async (error) => {
+    // 401 오류 시 토큰 갱신 후 재시도
+    if (error.response?.status === 401 && !error.config._retry) {
+      error.config._retry = true;
+
       
-//       const newAccessToken = await refreshAccessToken();
+      const newAccessToken = await refreshAccessToken();
 
-//       if (newAccessToken) {
-//         // 새로운 액세스 토큰으로 원래 요청 재시도
-//         error.config.headers.Authorization = `Bearer ${newAccessToken}`;
-//         return api(error.config);
-//       } else {
-//         // 토큰 갱신 실패 시 토큰 제거만 하고 리다이렉트는 AuthContext에 맡김
-//         TokenManager.removeTokens();
-//       }
-//     }
+      if (newAccessToken) {
+        // 새로운 액세스 토큰으로 원래 요청 재시도
+        error.config.headers.Authorization = `Bearer ${newAccessToken}`;
+        return api(error.config);
+      } else {
+        // 토큰 갱신 실패 시 토큰 제거만 하고 리다이렉트는 AuthContext에 맡김
+        TokenManager.removeTokens();
+      }
+    }
 
-//     return Promise.reject(error)
-//   }
-// )
+    return Promise.reject(error)
+  }
+)
 
 // 경매가 예측 API 함수들
 export const auctionApi = {
   // 실제 경매가 데이터 조회
-  getActualAuctionData: async (species?: string, days: number = 7) => {
+  getActualAuctionData: async (species?: string, days: number = 7, timestamp?: number) => {
     const params = new URLSearchParams()
     if (species) params.append('species', species)
     params.append('days', days.toString())
+    
+    // 캐시 방지를 위한 타임스탬프 추가
+    if (timestamp) {
+      params.append('_t', timestamp.toString())
+    }
     
     const response = await api.get(`/prediction/actual/?${params}`)
     return response.data
@@ -703,6 +802,41 @@ export const sttApi = {
     }
 
     return await response.json()
+  },
+
+  // 텍스트 파싱 (LLM 기반)
+  parseText: async (text: string): Promise<{
+    success: boolean;
+    data?: {
+      items: Array<{
+        fish_type_id: number | null;
+        quantity: number;
+        unit_price?: number | null;
+        unit: string;
+        fish_name?: string;
+      }>;
+      memo: string;
+      delivery_date?: string;
+      business_name?: string;
+      business_id?: number;
+      unmatched_items?: Array<{
+        fish_name: string;
+        quantity: number;
+        unit: string;
+        suggested_matches: Array<{
+          fish_name: string;
+          similarity: number;
+        }>;
+      }>;
+      validation_warnings?: string[];
+    };
+    message?: string;
+  }> => {
+    const response = await api.post('/transcription/parse-text/', 
+      { text },
+      { timeout: 90000 } // 90초 timeout (LLM 처리 대기)
+    );
+    return response.data;
   },
 }
 

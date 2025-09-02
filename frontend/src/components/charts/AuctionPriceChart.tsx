@@ -38,6 +38,7 @@ const AuctionPriceChart: React.FC<AuctionPriceChartProps> = ({
   const [isLoadingRealData, setIsLoadingRealData] = useState(false)
   const [predictedPrice, setPredictedPrice] = useState<number | null>(null) // 예측가
   const [isLoadingPrediction, setIsLoadingPrediction] = useState(false)
+  const [lastUpdateTime, setLastUpdateTime] = useState<Date>(new Date()) // 마지막 업데이트 시간
 
   const currentSpecies = data[currentSpeciesIndex]
 
@@ -79,8 +80,8 @@ const AuctionPriceChart: React.FC<AuctionPriceChartProps> = ({
       }
       
       const response = await auctionApi.predictSingleSpecies(speciesToFetch, targetDate, environmentalData)
-      if (response.success && response.predictions && response.predictions.length > 0) {
-        setPredictedPrice(response.predictions[0].predicted_price)
+      if (response.success && response.prediction) {
+        setPredictedPrice(response.prediction.predicted_price)
       }
     } catch (error) {
       console.error('예측가 가져오기 실패:', error)
@@ -89,10 +90,17 @@ const AuctionPriceChart: React.FC<AuctionPriceChartProps> = ({
     }
   }
 
+
+
   // 컴포넌트 마운트 시 실제 데이터와 예측가 가져오기
   useEffect(() => {
     fetchRealData()
     fetchPrediction()
+    
+    // 알림 권한 요청
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission()
+    }
   }, [])
 
   // 어종이 변경될 때마다 해당 어종의 실제 데이터와 예측가 가져오기
@@ -168,10 +176,14 @@ const AuctionPriceChart: React.FC<AuctionPriceChartProps> = ({
         };
       });
       
-      // 예측가가 있으면 내일 날짜에 추가
+      // 예측가가 있으면 내일 날짜에 추가 (실제 데이터와 자연스럽게 연결)
       if (predictedPrice) {
         const tomorrow = new Date();
         tomorrow.setDate(tomorrow.getDate() + 1);
+        
+        // 마지막 실제 데이터의 가격을 기준으로 예측가 점을 자연스럽게 연결
+        const lastRealPrice = formattedData[formattedData.length - 1]?.price || 0;
+        
         formattedData.push({
           date: tomorrow.toISOString().split('T')[0],
           price: predictedPrice,
@@ -200,10 +212,14 @@ const AuctionPriceChart: React.FC<AuctionPriceChartProps> = ({
         };
       });
       
-      // 예측가가 있으면 내일 날짜에 추가
+      // 예측가가 있으면 내일 날짜에 추가 (실제 데이터와 자연스럽게 연결)
       if (predictedPrice) {
         const tomorrow = new Date();
         tomorrow.setDate(tomorrow.getDate() + 1);
+        
+        // 마지막 실제 데이터의 가격을 기준으로 예측가 점을 자연스럽게 연결
+        const lastRealPrice = formattedData[formattedData.length - 1]?.price || 0;
+        
         formattedData.push({
           date: tomorrow.toISOString().split('T')[0],
           price: predictedPrice,
@@ -276,6 +292,54 @@ const AuctionPriceChart: React.FC<AuctionPriceChartProps> = ({
     return [6000, 20000]
   }
 
+  // 가장 현실적인 가격 선택 함수
+  const getMostRealisticPrice = (data: any[]): number => {
+    if (!data || data.length === 0) return 0
+    
+    // 규격별로 그룹화
+    const priceGroups: { [key: string]: number[] } = {}
+    
+    data.forEach(item => {
+      const weight = item.unit_weight_kg || 0
+      if (!priceGroups[weight]) {
+        priceGroups[weight] = []
+      }
+      priceGroups[weight].push(item.price)
+    })
+    
+    // 규격별 평균 가격 계산
+    const avgPrices = Object.entries(priceGroups).map(([weight, prices]) => ({
+      weight: parseFloat(weight),
+      avgPrice: prices.reduce((sum, price) => sum + price, 0) / prices.length,
+      count: prices.length
+    }))
+    
+    // 현실적인 규격 우선 선택 (100g 이하는 제외, 적당한 크기 우선)
+    const realisticWeights = avgPrices.filter(item => item.weight >= 0.2) // 200g 이상만 고려
+    
+    if (realisticWeights.length > 0) {
+      // 1kg 근처의 규격을 우선적으로 선택
+      const preferredWeight = realisticWeights.find(item => 
+        item.weight >= 0.5 && item.weight <= 1.2
+      )
+      
+      if (preferredWeight) {
+        return Math.round(preferredWeight.avgPrice)
+      }
+      
+      // 선호 규격이 없으면 가장 많은 데이터를 가진 현실적인 규격 선택
+      const mostCommon = realisticWeights.reduce((prev, current) => 
+        current.count > prev.count ? current : prev
+      )
+      return Math.round(mostCommon.avgPrice)
+    }
+    
+    // 현실적인 규격이 없으면 전체 평균
+    const allPrices = data.map(item => item.price)
+    const overallAvg = allPrices.reduce((sum, price) => sum + price, 0) / allPrices.length
+    return Math.round(overallAvg)
+  }
+
   if (loading) {
     return (
       <Card>
@@ -336,7 +400,31 @@ const AuctionPriceChart: React.FC<AuctionPriceChartProps> = ({
                  <div className="text-center lg:text-left lg:ml-4 mb-4">
                    <div className="text-sm font-medium text-gray-600 mb-1">현재가</div>
                    <div className="text-4xl font-bold text-gray-800">
-                     {formatCurrency(currentSpecies.currentPrice)}
+                     {(() => {
+                       if (isLoadingRealData) {
+                         return <div className="animate-pulse">로딩중...</div>
+                       }
+                       
+                       if (realData.length > 0) {
+                         // 오늘 날짜의 경매가 찾기
+                         const today = new Date()
+                         const todayStr = today.toISOString().split('T')[0]
+                         const todayData = realData.find(item => item.date === todayStr)
+                         
+                         if (todayData) {
+                           return formatCurrency(todayData.price)
+                         }
+                         
+                         // 오늘 데이터가 없으면 가장 최근 데이터
+                         const latestData = realData[realData.length - 1]
+                         if (latestData) {
+                           return formatCurrency(latestData.price)
+                         }
+                       }
+                       
+                       // 실제 데이터가 없으면 목업 데이터 사용
+                       return formatCurrency(currentSpecies.currentPrice)
+                     })()}
                    </div>
                  </div>
                  
@@ -353,15 +441,40 @@ const AuctionPriceChart: React.FC<AuctionPriceChartProps> = ({
                          formatCurrency(currentSpecies.predictedPrice)
                        )}
                      </div>
-                     {predictedPrice && currentSpecies.currentPrice && (
-                       <div className={`inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium ${
-                         predictedPrice > currentSpecies.currentPrice ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                       }`}>
-                         <ChangeIcon className="h-4 w-4 mr-1" />
-                         {predictedPrice > currentSpecies.currentPrice ? '+' : ''}
-                         {(((predictedPrice - currentSpecies.currentPrice) / currentSpecies.currentPrice) * 100).toFixed(1)}%
-                       </div>
-                     )}
+                     {predictedPrice && (() => {
+                       // 현재가 계산
+                       let currentPrice = currentSpecies.currentPrice
+                       
+                       if (realData.length > 0) {
+                         const today = new Date()
+                         const todayStr = today.toISOString().split('T')[0]
+                         const todayData = realData.find(item => item.date === todayStr)
+                         
+                         if (todayData) {
+                           currentPrice = todayData.price
+                         } else {
+                           const latestData = realData[realData.length - 1]
+                           if (latestData) {
+                             currentPrice = latestData.price
+                           }
+                         }
+                       }
+                       
+                       if (currentPrice) {
+                         const isPositive = predictedPrice > currentPrice
+                         return (
+                           <div className={`inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium ${
+                             isPositive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                           }`}>
+                             <ChangeIcon className="h-4 w-4 mr-1" />
+                             {isPositive ? '+' : ''}
+                             {(((predictedPrice - currentPrice) / currentPrice) * 100).toFixed(1)}%
+                           </div>
+                         )
+                       }
+                       
+                       return null
+                     })()}
                    </div>
                  </div>
                </div>
@@ -370,15 +483,40 @@ const AuctionPriceChart: React.FC<AuctionPriceChartProps> = ({
                                                {/* 오른쪽 패널 - 차트 */}
              <div className="lg:col-span-4">
                                                          <div className="flex items-center justify-between">
-                               <h3 className="text-lg font-semibold text-gray-800 text-left ml-20">
-                                 경매가 동향 <span className="text-sm font-normal text-gray-600">
-                                   ({realData.length > 0 ? '실제 경매가 7일' : '목업 데이터'})
-                                   {predictedPrice && ' + 내일 예측가'}
-                                 </span>
-                               </h3>
+                               <div className="text-left ml-20">
+                                 <h3 className="text-lg font-semibold text-gray-800">경매가 동향</h3>
+                                 <p className="text-sm text-gray-600 mt-1">(실제 경매가 7일) + 내일 예측가</p>
+                               </div>
                                
                                                                {/* 차트 상단 네비게이션 컨트롤 */}
                                 <div className="flex items-center space-x-3 bg-white/90 backdrop-blur-sm px-4 py-3 rounded-lg mr-5">
+                                 {/* 수동 새로고침 컨트롤 */}
+                                 <div className="flex items-center justify-end space-x-6 mr-4 min-w-0" style={{ flexWrap: 'nowrap' }}>
+                                   <div className="flex items-center space-x-2 h-8 flex-shrink-0">
+                                     <span className="text-xs text-gray-500 whitespace-nowrap" style={{ whiteSpace: 'nowrap' }}>업데이트:</span>
+                                     <span className="text-xs font-medium text-gray-700 bg-gray-50 px-2 py-1 rounded whitespace-nowrap flex items-center" style={{ whiteSpace: 'nowrap' }}>
+                                       {lastUpdateTime.toLocaleTimeString('ko-KR', { 
+                                         hour: '2-digit', 
+                                         minute: '2-digit' 
+                                       })}
+                                     </span>
+                                   </div>
+                                   
+                                   <button
+                                     onClick={() => {
+                                       fetchRealData()
+                                       fetchPrediction()
+                                       setLastUpdateTime(new Date())
+                                     }}
+                                     className="h-8 w-8 flex items-center justify-center text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-all duration-200 border border-gray-200 hover:border-blue-300 hover:shadow-md flex-shrink-0"
+                                     title="지금 새로고침"
+                                   >
+                                     <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                     </svg>
+                                   </button>
+                                 </div>
+                                 
                                  {/* 왼쪽 화살표 버튼 */}
                                  <Button
                                    variant="outline"
@@ -457,7 +595,8 @@ const AuctionPriceChart: React.FC<AuctionPriceChartProps> = ({
                            );
                          }}
                          stroke="#666"
-                         interval={1}
+                         interval={0}
+                         allowDuplicatedCategory={false}
                        />
                                               <YAxis 
                           domain={['dataMin - 1000', 'dataMax + 1000']}
@@ -489,12 +628,48 @@ const AuctionPriceChart: React.FC<AuctionPriceChartProps> = ({
                          strokeWidth={3}
                          dot={(props) => {
                            const isPrediction = chartData[props.index]?.isPrediction;
-                           return {
-                             fill: isPrediction ? '#ef4444' : '#3b82f6',
-                             strokeWidth: 2,
-                             r: 4,
-                             strokeDasharray: isPrediction ? '5 5' : '0'
-                           };
+                           const isLastRealPoint = props.index === chartData.length - 2; // 예측가 점 제외한 마지막 실제 데이터
+                           
+                           // 예측가 점이면 더 크고 눈에 띄게
+                           if (isPrediction) {
+                             return (
+                               <circle
+                                 cx={props.cx}
+                                 cy={props.cy}
+                                 r={6}
+                                 fill="#ef4444"
+                                 stroke="#dc2626"
+                                 strokeWidth={3}
+                                 opacity={0.9}
+                               />
+                             );
+                           }
+                           
+                           // 마지막 실제 데이터 점이면 연결점 강조
+                           if (isLastRealPoint && !isPrediction) {
+                             return (
+                               <circle
+                                 cx={props.cx}
+                                 cy={props.cy}
+                                 r={5}
+                                 fill="#3b82f6"
+                                 stroke="#1d4ed8"
+                                 strokeWidth={2}
+                               />
+                             );
+                           }
+                           
+                           // 일반 데이터 점
+                           return (
+                             <circle
+                               cx={props.cx}
+                               cy={props.cy}
+                               r={4}
+                               fill="#3b82f6"
+                               stroke="#3b82f6"
+                               strokeWidth={1}
+                             />
+                           );
                          }}
                          activeDot={{ r: 6, fill: '#1d4ed8' }}
                        />

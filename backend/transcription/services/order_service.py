@@ -34,6 +34,8 @@ class OrderCreationService:
             'delivery_date': datetime.now().date() + timedelta(days=1),  # Default to tomorrow
             'memo': f"자동 주문 생성 - {datetime.now().strftime('%Y-%m-%d %H:%M')}",
             'source_type': 'voice',
+            'business_name': None,
+            'business_id': None,
         }
         
         # Extract fish items with quantities
@@ -65,6 +67,26 @@ class OrderCreationService:
             if phrase in text:
                 order_data['delivery_date'] = datetime.now().date() + timedelta(days=days)
                 break
+        
+        # AI Server를 사용한 고급 파싱 시도
+        ai_parsed_data = self._parse_with_ai_server(text)
+        if ai_parsed_data:
+            # AI Server 결과를 우선 사용
+            if ai_parsed_data.get('items'):
+                order_data['items'] = ai_parsed_data['items']
+            if ai_parsed_data.get('business_name'):
+                order_data['business_name'] = ai_parsed_data['business_name']
+            if ai_parsed_data.get('delivery_date'):
+                order_data['delivery_date'] = ai_parsed_data['delivery_date']
+            if ai_parsed_data.get('memo'):
+                order_data['memo'] = ai_parsed_data['memo']
+        
+        # 업체명이 없는 경우 기존 로직으로 추출
+        if not order_data.get('business_name'):
+            matched_business = self._extract_business_from_text(text)
+            if matched_business:
+                order_data['business_name'] = matched_business.business_name
+                order_data['business_id'] = matched_business.id
         
         return order_data
     
@@ -133,3 +155,94 @@ class OrderCreationService:
             order.save()
             
             return order, order_items
+    
+    def _extract_business_from_text(self, text: str) -> Optional[Business]:
+        """
+        Extract business name from text and find matching business in database.
+        
+        Expected patterns:
+        - "바다수산에 주문합니다"
+        - "동해마트로 배송해주세요"
+        - "해양식품한테 연락드립니다"
+        """
+        import re
+        from difflib import SequenceMatcher
+        
+        # Business name extraction patterns
+        business_patterns = [
+            r'([가-힣]+(?:수산|마트|식품|어장|회사|상회|업체|점))[에게로한테으로]',
+            r'([가-힣]+(?:수산|마트|식품|어장|회사|상회|업체|점))',
+            r'([가-힣]{2,8})[에게로한테으로]\s*(?:주문|배송|연락|문의)',
+            r'([가-힣]{2,8})\s*(?:업체|거래처|매장|상호)',
+        ]
+        
+        extracted_names = set()
+        
+        for pattern in business_patterns:
+            matches = re.finditer(pattern, text)
+            for match in matches:
+                business_name = match.group(1).strip()
+                if 2 <= len(business_name) <= 10:  # Reasonable business name length
+                    extracted_names.add(business_name)
+        
+        if not extracted_names:
+            return None
+        
+        # Get all businesses from database
+        try:
+            all_businesses = Business.objects.all()
+            
+            best_match = None
+            best_similarity = 0.0
+            
+            for extracted_name in extracted_names:
+                for business in all_businesses:
+                    # Exact match
+                    if extracted_name == business.business_name:
+                        return business
+                    
+                    # Partial match (contains)
+                    if extracted_name in business.business_name or business.business_name in extracted_name:
+                        return business
+                    
+                    # Similarity match
+                    similarity = SequenceMatcher(None, extracted_name, business.business_name).ratio()
+                    if similarity > best_similarity and similarity > 0.6:  # 60% similarity threshold
+                        best_similarity = similarity
+                        best_match = business
+            
+            return best_match
+            
+        except Exception as e:
+            print(f"Error in business extraction: {e}")
+            return None
+    
+    def _parse_with_ai_server(self, text: str) -> Optional[Dict]:
+        """
+        AI Server의 LLM을 사용하여 텍스트 파싱
+        """
+        try:
+            import requests
+            import os
+            
+            ai_server_url = os.getenv('AI_SERVER_URL', 'http://localhost:8001')
+            ai_server_url = f"{ai_server_url}/api/v1/text/parse-text"
+            
+            response = requests.post(
+                ai_server_url,
+                json={"text": text},
+                timeout=90  # AI Server LLM 처리를 위한 긴 timeout
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                if result.get('success') and result.get('data'):
+                    print(f"✅ AI Server 파싱 성공: {len(result['data'].get('items', []))}개 품목")
+                    return result['data']
+            else:
+                print(f"⚠️ AI Server 파싱 실패: {response.status_code}")
+                
+        except Exception as e:
+            print(f"⚠️ AI Server 연결 실패: {e}")
+        
+        return None

@@ -349,7 +349,7 @@ class FishAnalysisService:
                 stat = ImageStat.Stat(img)
                 avg_brightness = sum(stat.mean) / len(stat.mean)
                 
-                # 너무 어둡거나 밝은 이미지 거부
+                # 너무 어둡거나 밝은 이미지 거부 
                 if avg_brightness < 30 or avg_brightness > 230:
                     logger.info(f"⚠️ 부적절한 밝기: {avg_brightness:.1f}")
                     return False

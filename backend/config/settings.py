@@ -100,7 +100,7 @@ MIDDLEWARE = [
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
-    'core.middleware.JWTAuthMiddleware',
+    # 'core.middleware.JWTAuthMiddleware',  # 임시로 비활성화
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -150,6 +150,7 @@ def get_database_config():
             'PORT': os.getenv('DB_PORT', '5432'),
             'OPTIONS': {
                 'connect_timeout': 10,
+                'client_encoding': 'UTF8',
             },
         }
         print(f"🌐 배포 환경: EC2 데이터베이스 연결")
@@ -167,6 +168,7 @@ def get_database_config():
         'PORT': '5432',
         'OPTIONS': {
             'connect_timeout': 5,
+            'client_encoding': 'UTF8',
         },
     }
     
@@ -180,6 +182,7 @@ def get_database_config():
         'PORT': '5432',
         'OPTIONS': {
             'connect_timeout': 5,
+            'client_encoding': 'UTF8',
         },
     }
     
@@ -192,7 +195,8 @@ def get_database_config():
             user=team_server_config['USER'],
             password=team_server_config['PASSWORD'],
             database=team_server_config['NAME'],
-            connect_timeout=3
+            connect_timeout=3,
+            options='-c client_encoding=utf8'
         )
         conn.close()
         print("✅ 1차: 팀 공동 로컬서버 연결 성공!")
@@ -209,7 +213,8 @@ def get_database_config():
             user=docker_db_config['USER'],
             password=docker_db_config['PASSWORD'],
             database=docker_db_config['NAME'],
-            connect_timeout=3
+            connect_timeout=3,
+            options='-c client_encoding=utf8'
         )
         conn.close()
         print("✅ 2차: 개인 로컬 도커 데이터베이스 연결 성공!")
