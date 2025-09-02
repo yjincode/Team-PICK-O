@@ -46,11 +46,11 @@ const api = axios.create({
 
 import { TokenManager } from './tokenManager'
 
-// 토큰 갱신 중인지 추적
+// // 토큰 갱신 중인지 추적
 let isRefreshing = false
 let refreshPromise: Promise<string | null> | null = null
 
-// 액세스 토큰 자동 갱신 함수
+// // 액세스 토큰 자동 갱신 함수
 const refreshAccessToken = async (): Promise<string | null> => {
   if (isRefreshing && refreshPromise) {
     return await refreshPromise
@@ -65,7 +65,96 @@ const refreshAccessToken = async (): Promise<string | null> => {
         resolve(null)
         return
       }
-          
+      const response = await fetch(`${API_BASE_URL}/business/auth/refresh/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          refresh_token: refreshToken
+        })
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        const newAccessToken = data.access_token
+
+        TokenManager.setAccessToken(newAccessToken)
+        resolve(newAccessToken)
+      } else {
+        TokenManager.removeTokens()
+        resolve(null)
+      }
+    } catch (error) {
+      TokenManager.removeTokens()
+      resolve(null)
+    }
+  })
+
+  const result = await refreshPromise
+  isRefreshing = false
+  refreshPromise = null
+
+  return result
+}
+
+api.interceptors.request.use(
+  async (config) => {
+    // 🔥 토큰이 필요하지 않은 엔드포인트들
+    const publicEndpoints = [
+      '/business/auth/firebase-to-jwt/',
+      '/business/auth/register/',
+      '/business/auth/refresh/',
+      '/business/auth/super-login/',
+      '/business/auth/super-register/'
+    ]
+
+    const isPublicEndpoint = publicEndpoints.some(endpoint => config.url?.includes(endpoint))
+
+    if (isPublicEndpoint) {
+      return config
+    }
+
+    // 일반 엔드포인트는 토큰 필요
+    let accessToken = TokenManager.getAccessToken()
+
+    // 액세스 토큰이 없거나 5분 이내 만료 예정인 경우 갱신 시도
+    const timeUntilExpiry = TokenManager.getAccessTokenTimeUntilExpiry()
+    if (!accessToken || !TokenManager.isAccessTokenValid() || timeUntilExpiry < 300) {  // 5분(300초) 이내 만료 시 갱신
+      accessToken = await refreshAccessToken()
+
+      // 갱신에 실패한 경우 토큰 제거만 하고 조용히 처리
+      if (!accessToken) {
+        return Promise.reject({ 
+          name: 'AuthenticationError',
+          message: '인증이 필요합니다',
+          config: config
+        })
+      }
+    }
+
+    // Authorization 헤더에 액세스 토큰 추가
+    if (accessToken) {
+      config.headers.Authorization = `Bearer ${accessToken}`
+    }
+
+    return config
+  },
+  (error) => {
+    return Promise.reject(error)
+  }
+)
+
+// 응답 인터셉터: 401 오류 시 토큰 갱신 재시도
+api.interceptors.response.use(
+  (response) => {
+    return response;
+  },
+  async (error) => {
+    // 401 오류 시 토큰 갱신 후 재시도
+    if (error.response?.status === 401 && !error.config._retry) {
+      error.config._retry = true;
+=======
       const response = await fetch(`${API_BASE_URL}/business/auth/refresh/`, {
         method: 'POST',
         headers: {
@@ -159,6 +248,7 @@ api.interceptors.response.use(
     // 401 오류 시 토큰 갱신 후 재시도
     if (error.response?.status === 401 && !error.config._retry) {
       error.config._retry = true;
+
       
       const newAccessToken = await refreshAccessToken();
 
@@ -657,6 +747,34 @@ export const aiApi = {
   runAnalysis: async (data: any): Promise<any> => {
     const response = await api.post('/ai/analysis', data)
     return response.data
+  },
+}
+
+export const exebaseApi = {
+  // Process order with different input types
+  async processOrder(data: FormData): Promise<{
+    success: boolean;
+    message: string;
+    order?: any;
+    error?: string;
+  }> {
+    try {
+      const response = await fetch('/ai/order', {
+        method: 'POST',
+        body: data,
+        // Don't set Content-Type header, let the browser set it with the correct boundary
+      });
+      console.log(response)
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || '주문 처리 중 오류가 발생했습니다.');
+      }
+      
+      return await response.json();
+    } catch (error) {
+      console.error('주문 처리 오류:', error);
+      throw error;
+    }
   },
 }
 

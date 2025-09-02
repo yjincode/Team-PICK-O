@@ -4,7 +4,7 @@
  */
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider } from './contexts/AuthContext';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { PrivateRoute, PublicRoute } from './components/auth/PrivateRoute';
 import MainLayout from './components/layout/MainLayout';
 import Dashboard from './pages/dashboard/Dashboard';
@@ -26,9 +26,38 @@ import InventoryAnomaliesPage from './pages/inventory/InventoryAnomaliesPage';
 import AuctionPredictionChart from './pages/sales/AuctionPredictionChart';
 import LoginPage from './pages/login/LoginPage';
 import SalesChart from './pages/sales/SalesChart';
+import { useEffect } from 'react'
+
+
+export function DevHelper() {
+  const { superAccountDirectLogin } = useAuth()
+
+  useEffect(() => {
+    // 전역에 함수 등록
+    // @ts-ignore
+    window.superLogin = async (phone) => {
+      try {
+        const res = await superAccountDirectLogin(phone)
+        console.log('superLogin 결과:', res)
+        return res
+      } catch (e) {
+        console.error('superLogin 에러:', e)
+        throw e
+      }
+    }
+    
+    // 컴포넌트 언마운트시 함수 삭제 (선택사항)
+    return () => {
+      // @ts-ignore
+      delete window.superLogin
+    }
+  }, [superAccountDirectLogin])
+
+  return null
+}
 
 const App: React.FC = () => {
-  return (
+  return (<>
     <AuthProvider>
       <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <Routes>
@@ -89,21 +118,21 @@ const App: React.FC = () => {
         <Route 
           path="/orders" 
           element={
-            <PrivateRoute>
+   
               <MainLayout>
                 <OrderList />
               </MainLayout>
-            </PrivateRoute>
+         
           } 
         />
         <Route 
           path="/orders/:id" 
           element={
-            <PrivateRoute>
+           
               <MainLayout>
                 <OrderDetail />
               </MainLayout>
-            </PrivateRoute>
+        
           } 
         />
         <Route 
@@ -240,8 +269,10 @@ const App: React.FC = () => {
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
       </Router>
-    </AuthProvider>
+      <DevHelper />  </AuthProvider>    </>
+
   );
 };
+
 
 export default App; 
