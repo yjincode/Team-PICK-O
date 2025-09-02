@@ -10,6 +10,7 @@ import { Label } from "../../../components/ui/label"
 import { Camera, Upload, Trash2, Eye, AlertCircle, X } from "lucide-react"
 import { businessApi, exebaseApi } from "../../../lib/api"
 import type { Business } from "../../../types"
+
 import toast from "react-hot-toast"
 
 
@@ -131,6 +132,7 @@ const ImageUploadTab: React.FC<ImageUploadTabProps> = ({
 
   //   fetchFishTypes()
   // }, [])
+
 
 
 //   // 이미지 파일 처리 핸들러
@@ -264,6 +266,7 @@ const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
       message: ApiOrderResponse | string 
     };
 
+
     // ✅ message 안에 데이터가 존재할 경우 처리
     if (result.success && result.message) {
       if (typeof result.message === 'string') {
@@ -334,6 +337,7 @@ const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     updatedItems[index] = { ...updatedItems[index], [key]: value }
     setParsedOrder({ ...parsedOrder, items: updatedItems })
   }
+
 
   // 항목 삭제 핸들러
   const handleRemoveItem = (index: number) => {

@@ -42,7 +42,14 @@ interface AuthProviderProps {
 export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
   const [user, setUser] = useState<UserData | null>(null)
   const [loading, setLoading] = useState<boolean>(true)
-
+  useEffect(() => {
+    if (isDevMode) {
+      devLogin() // 무조건 로그인된 상태로
+    } else {
+      initializeAuth()
+    }
+  }, [])
+  
   // 초기화: 저장된 토큰으로 자동 로그인 복원
   useEffect(() => {
     initializeAuth()
@@ -226,6 +233,15 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
     }
   }
 
+  const isDevMode = process.env.NODE_ENV === 'development'
+
+  const devLogin = () => {
+    if (!isDevMode) return
+  
+    TokenManager.setTokens('dev-access-token', 'dev-refresh-token')
+    setUser({ user_id: 1, business_name: '개발 테스트' })
+  }
+  
   // 슈퍼계정 직접 회원가입 (Firebase 완전 우회)
   const superAccountDirectRegister = async (userData: any): Promise<void> => {
     try {

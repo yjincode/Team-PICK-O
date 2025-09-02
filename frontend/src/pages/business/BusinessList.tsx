@@ -400,7 +400,7 @@ const BusinessList: React.FC = () => {
               />
 
             </div>
-            <div>
+            <div className="flex flex-col space-y-2">
               <Input 
                 placeholder="주소" 
                 value={newAddress} 
@@ -484,7 +484,7 @@ const BusinessList: React.FC = () => {
                 disabled={isUpdating}
               />
             </div>
-            <div>
+            <div className="flex flex-col space-y-2">
               <Input 
                 placeholder="주소" 
                 value={editingBusiness.address} 
