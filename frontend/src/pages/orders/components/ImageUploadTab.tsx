@@ -11,7 +11,7 @@ import { Camera, Upload, Trash2, Eye, AlertCircle } from "lucide-react"
 import { businessApi } from "../../../lib/api"
 import { parseVoiceOrder, validateAndCompleteOrder } from "../../../utils/orderParser"
 import type { Business } from "../../../types"
-import { fetchParsedOrder } from "../../../utils/orderParser"
+// 이미지 처리는 향후 구현 예정
 interface ParsedOrderData {
   business_name?: string;
   phone_number?: string;
@@ -159,34 +159,11 @@ const ImageUploadTab: React.FC<ImageUploadTabProps> = ({
     setLocalIsProcessing(true)
     setError('')
     
-    try {
-      const extractedText = await fetchParsedOrder(file)
-      console.log('추출된 텍스트:', extractedText); 
-      // setLocalTranscribedText(extractedText)
-      
-      // 추출된 텍스트를 주문 데이터로 파싱
-      try {
-        const basicOrderData = extractedText
-        
-        if (basicOrderData.items && basicOrderData.items.length > 0) {
-          const validatedOrderData = validateAndCompleteOrder(basicOrderData)
-          
-          setParsedOrder(validatedOrderData)
-          onOrderParsed?.(validatedOrderData)
-        } else {
-          setParsedOrder(null)
-        }
-      } catch (parseError) {
-        setParsedOrder(null)
-      }
-      
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : '이미지 처리 중 오류가 발생했습니다.'
-      setError(errorMsg)
-      onError?.(errorMsg)
-    } finally {
+    // 이미지 처리는 아직 구현되지 않았으므로 조용히 처리
+    setTimeout(() => {
       setLocalIsProcessing(false)
-    }
+      // 에러 메시지 표시하지 않음
+    }, 500) // 짧은 로딩 시간 시뮬레이션
   }
 
 

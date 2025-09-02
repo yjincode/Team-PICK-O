@@ -22,6 +22,9 @@ RUN apt-get update && apt-get install -y \
     libatk1.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
+# Ollama 설치 (LLM 텍스트 파싱용)
+RUN curl -fsSL https://ollama.com/install.sh | sh
+
 # 작업 디렉토리 설정
 WORKDIR /app
 

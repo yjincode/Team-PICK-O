@@ -136,6 +136,10 @@ services:
       - AI_SERVER_PORT=8001
       - AI_SERVER_HOST=0.0.0.0
       
+      # 백엔드 연결 설정 (컨테이너 간 통신)
+      - BACKEND_HOST=backend
+      - BACKEND_PORT=8000
+      
       # 모델 파일 경로 설정
       - VGG16_MODEL_PATH=/app/models/vgg16/best_model.h5
       - YOLO_MODEL_PATH=/app/models/yolo/best.pt
