@@ -23,11 +23,11 @@ class EfficientNetService:
     def __init__(self):
         self.model = None
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        # EfficientNet 모델 파일 경로
+        # EfficientNet 모델 파일 경로입니다
         self.model_path = os.getenv("EFFICIENTNET_MODEL_PATH", "./app/models/efficientNet/best_model.pth")
         self.classes_path = "./app/models/efficientNet/classes.json"
         self.disease_classes = {}
-        self.input_size = (224, 224)  # EfficientNet 기본 입력 크기
+        self.input_size = (224, 224)  # EfficientNet 기본 입력 크기 이피션트넷을 사용한 어류분류 로직이 아직도 남아있네 
         self._model_load_count = 0
         self._prediction_count = 0
         self._max_predictions_before_reload = 100

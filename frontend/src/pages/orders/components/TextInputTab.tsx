@@ -2,7 +2,7 @@
  * 텍스트 입력 탭 컴포넌트
  * 텍스트를 입력하여 주문을 등록하는 탭입니다.
  */
-import { fetchParsedOrder } from "../../../utils/orderParser"
+import { parseVoiceOrderWithBusiness } from "../../../utils/orderParser"
 import { useState, useEffect } from "react"
 import { Button } from "../../../components/ui/button"
 import { Label } from "../../../components/ui/label"
@@ -18,11 +18,13 @@ interface ParsedOrderData {
   phone_number?: string;
   transcribed_text: string;
   delivery_date?: string;
+  business_id?: number;
   items: Array<{
-    fish_type_id: number;
+    fish_type_id: number | null;
     quantity: number;
-    unit_price?: number;
+    unit_price?: number | null;
     unit: string;
+    fish_name?: string;
   }>;
   memo?: string;
 }
@@ -38,6 +40,7 @@ interface TextInputTabProps {
   deliveryDate?: string
   onDeliveryDateChange?: (date: string) => void
   onOrderParsed?: (orderData: ParsedOrderData) => void
+  onError?: (error: string) => void
 }
 
 const TextInputTab: React.FC<TextInputTabProps> = ({
@@ -50,7 +53,8 @@ const TextInputTab: React.FC<TextInputTabProps> = ({
   onBusinessChange,
   deliveryDate,
   onDeliveryDateChange,
-  onOrderParsed
+  onOrderParsed,
+  onError
 }) => {
   const [businesses, setBusinesses] = useState<Business[]>([])
   const [fishTypes, setFishTypes] = useState<FishType[]>([])
@@ -111,22 +115,80 @@ const TextInputTab: React.FC<TextInputTabProps> = ({
     setParsedOrder(null)
     
     try {
-      const basicOrderData = await fetchParsedOrder(textInput) // API 연동 버전 사용
+      console.log('🔍 텍스트 파싱 시작:', textInput);
+      const basicOrderData = await parseVoiceOrderWithBusiness(textInput) // 기존 방식 사용
+      
+      console.log('🔍 parseVoiceOrderWithBusiness 결과:', basicOrderData);
       
       if (basicOrderData.items && basicOrderData.items.length > 0) {
         const validatedOrderData = validateAndCompleteOrder(basicOrderData)
         
+        console.log('🔍 검증된 주문 데이터:', validatedOrderData);
+        console.log('🔍 매칭된 거래처:', basicOrderData.business);
+        
+        // 거래처가 매칭된 경우 자동 선택
+        if (basicOrderData.business) {
+          onBusinessChange?.(basicOrderData.business.id);
+          console.log('✅ 거래처 자동 선택됨:', basicOrderData.business.business_name);
+        }
+        
         setParsedOrder(validatedOrderData)
-        onOrderParsed?.(validatedOrderData)
+        // onOrderParsed 호출 제거 - 파싱된 결과만 표시하고 수동으로 추가하도록 변경
       } else {
+        console.log('❌ 파싱된 항목이 없음');
         setParsedOrder(null)
       }
     } catch (error) {
+      console.error('❌ 텍스트 파싱 중 오류:', error);
       setParsedOrder(null)
     } finally {
       setIsLocalProcessing(false)
     }
   }
+
+  // 주문 추가 함수
+  const handleAddToOrder = () => {
+    if (!parsedOrder) return
+
+    // 유효성 검증
+    const unmatchedItems = parsedOrder.items.filter(item => !item.fish_type_id)
+    const zeropriceItems = parsedOrder.items.filter(item => item.fish_type_id && (!item.unit_price || item.unit_price === 0))
+    const zeroQuantityItems = parsedOrder.items.filter(item => !item.quantity || item.quantity <= 0)
+    
+    if (unmatchedItems.length > 0 || zeropriceItems.length > 0 || zeroQuantityItems.length > 0) {
+      let errorMessage = ""
+      if (unmatchedItems.length > 0) {
+        const unmatchedNames = unmatchedItems.map(item => item.fish_name || '알 수 없는 어종').join(', ')
+        errorMessage += `매칭되지 않은 어종이 있습니다: ${unmatchedNames}. `
+      }
+      if (zeropriceItems.length > 0) {
+        const zeropriceNames = zeropriceItems.map(item => {
+          const fishName = item.fish_name || fishTypes.find(f => f.id === item.fish_type_id)?.name || '알 수 없는 어종'
+          return fishName
+        }).join(', ')
+        errorMessage += `단가를 입력해주세요: ${zeropriceNames}. `
+      }
+      if (zeroQuantityItems.length > 0) {
+        errorMessage += "수량을 입력해주세요."
+      }
+      
+      onError?.(errorMessage)
+      return
+    }
+
+    // 거래처 정보 추가
+    const selectedBusiness = businesses.find(b => b.id === selectedBusinessId)
+    const orderWithBusiness = {
+      ...parsedOrder,
+      business: selectedBusiness,
+      business_name: selectedBusiness?.business_name || parsedOrder.business_name,
+      business_id: selectedBusinessId,
+      transcribed_text: textInput // 원본 텍스트 포함
+    }
+
+    onOrderParsed?.(orderWithBusiness)
+  }
+
   return (
     <div className="space-y-4">
       <div className="space-y-2">
@@ -214,19 +276,30 @@ const TextInputTab: React.FC<TextInputTabProps> = ({
                       <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-center">
                         <div className="space-y-1">
                           <label className="text-xs text-gray-500 font-medium">어종</label>
-                          <select
-                            className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:border-green-500 focus:outline-none"
-                            value={item.fish_type_id}
-                            onChange={(e) => {
-                              // TODO: 어종 변경 핸들러 구현
-                            }}
-                          >
-                            {fishTypes.map((fish) => (
-                              <option key={fish.id} value={fish.id}>
-                                {fish.name}
-                              </option>
-                            ))}
-                          </select>
+                          {item.fish_type_id ? (
+                            <select
+                              className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:border-green-500 focus:outline-none"
+                              value={item.fish_type_id}
+                              onChange={(e) => {
+                                const newFishTypeId = parseInt(e.target.value)
+                                const updatedItems = [...parsedOrder.items]
+                                updatedItems[index] = { ...updatedItems[index], fish_type_id: newFishTypeId }
+                                setParsedOrder({ ...parsedOrder, items: updatedItems })
+                              }}
+                            >
+                              {fishTypes.map((fish) => (
+                                <option key={fish.id} value={fish.id}>
+                                  {fish.name}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <div className="w-full px-2 py-1 text-sm border border-red-300 rounded bg-red-50">
+                              <span className="text-red-700">
+                                {item.fish_name} (매칭 안됨)
+                              </span>
+                            </div>
+                          )}
                         </div>
                         
                         <div className="space-y-1">
@@ -234,10 +307,14 @@ const TextInputTab: React.FC<TextInputTabProps> = ({
                           <input
                             type="number"
                             className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:border-green-500 focus:outline-none"
-                            value={item.quantity}
-                            min="1"
+                            value={item.quantity || ''}
+                            min="0"
+                            step="0.1"
                             onChange={(e) => {
-                              // TODO: 수량 변경 핸들러 구현
+                              const newQuantity = e.target.value === '' ? 0 : parseFloat(e.target.value)
+                              const updatedItems = [...parsedOrder.items]
+                              updatedItems[index] = { ...updatedItems[index], quantity: newQuantity }
+                              setParsedOrder({ ...parsedOrder, items: updatedItems })
                             }}
                           />
                         </div>
@@ -247,10 +324,14 @@ const TextInputTab: React.FC<TextInputTabProps> = ({
                           <input
                             type="number"
                             className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:border-green-500 focus:outline-none"
-                            value={item.unit_price || 0}
+                            value={item.unit_price || ''}
                             min="0"
+                            step="100"
                             onChange={(e) => {
-                              // TODO: 단가 변경 핸들러 구현
+                              const newPrice = e.target.value === '' ? 0 : parseFloat(e.target.value)
+                              const updatedItems = [...parsedOrder.items]
+                              updatedItems[index] = { ...updatedItems[index], unit_price: newPrice }
+                              setParsedOrder({ ...parsedOrder, items: updatedItems })
                             }}
                           />
                         </div>
@@ -261,7 +342,10 @@ const TextInputTab: React.FC<TextInputTabProps> = ({
                             className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:border-green-500 focus:outline-none"
                             value={item.unit}
                             onChange={(e) => {
-                              // TODO: 단위 변경 핸들러 구현
+                              const newUnit = e.target.value
+                              const updatedItems = [...parsedOrder.items]
+                              updatedItems[index] = { ...updatedItems[index], unit: newUnit }
+                              setParsedOrder({ ...parsedOrder, items: updatedItems })
                             }}
                           >
                             <option value="박스">박스</option>
@@ -283,7 +367,8 @@ const TextInputTab: React.FC<TextInputTabProps> = ({
                         <button
                           className="text-red-500 hover:text-red-700 text-sm font-medium"
                           onClick={() => {
-                            // TODO: 항목 삭제 핸들러 구현
+                            const updatedItems = parsedOrder.items.filter((_, i) => i !== index)
+                            setParsedOrder({ ...parsedOrder, items: updatedItems })
                           }}
                         >
                           삭제
@@ -314,8 +399,19 @@ const TextInputTab: React.FC<TextInputTabProps> = ({
               </div>
             )}
             
+            {/* 주문 추가 버튼 */}
+            <div className="mt-4">
+              <Button 
+                onClick={handleAddToOrder}
+                className="w-full bg-green-600 hover:bg-green-700 text-white"
+                disabled={!parsedOrder || !parsedOrder.items || parsedOrder.items.length === 0}
+              >
+                📝 주문 목록에 추가
+              </Button>
+            </div>
+            
             <p className="text-xs text-green-600 mt-3">
-              ✅ 위 정보를 확인하고 수정한 후 주문을 등록해주세요.
+              ✅ 위 정보를 확인하고 수정한 후 "주문 목록에 추가" 버튼을 클릭하세요.
             </p>
           </div>
         </div>

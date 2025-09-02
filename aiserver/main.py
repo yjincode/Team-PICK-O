@@ -32,9 +32,10 @@ if os.path.exists("uploads"):
     app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 # API 라우터 등록
-from app.api import analysis
+from app.api import analysis, text_parsing
 
 app.include_router(analysis.router, prefix="/api/v1/analysis", tags=["analysis"])
+app.include_router(text_parsing.router, prefix="/api/v1/text", tags=["text-parsing"])
 
 @app.get("/")
 async def root():
@@ -45,6 +46,7 @@ async def root():
         "version": "1.0.0",
         "endpoints": {
             "analyze": "/api/v1/analysis/predict",
+            "text_parsing": "/api/v1/text/parse-text",
             "health": "/health",
             "docs": "/docs"
         }

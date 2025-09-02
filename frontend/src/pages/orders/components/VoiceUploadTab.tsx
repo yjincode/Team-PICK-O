@@ -7,9 +7,9 @@ import { Button } from "../../../components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../../components/ui/select"
 import { Input } from "../../../components/ui/input"
 import { Label } from "../../../components/ui/label"
-import { Mic, Upload, Play, Pause, Trash2, AlertCircle } from "lucide-react"
+import { Mic, Upload, Play, Pause, Trash2, AlertCircle, Square, MicOff } from "lucide-react"
 import { sttApi, businessApi } from "../../../lib/api"
-import { validateAndCompleteOrder, parseVoiceOrderWithBusiness, fetchParsedOrder } from "../../../utils/orderParser"
+import { validateAndCompleteOrder, parseVoiceOrderWithBusiness, transcribeAudio } from "../../../utils/orderParser"
 import type { Business, FishType } from "../../../types"
 import { fishTypeApi } from "../../../lib/api"
 
@@ -18,13 +18,26 @@ interface ParsedOrderData {
   phone_number?: string;
   transcribed_text: string;
   delivery_date?: string;
+  business_id?: number;
   items: Array<{
-    fish_type_id: number;
+    fish_type_id: number | null;
     quantity: number;
-    unit_price?: number;
+    unit_price?: number | null;
     unit: string;
+    fish_name?: string;
   }>;
   memo?: string;
+  unmatched_items?: Array<{
+    original_fish_name: string;
+    quantity: number;
+    unit: string;
+    suggested_matches: Array<{
+      fish_type_id: number;
+      name: string;
+      similarity: number;
+    }>;
+  }>;
+  validation_warnings?: string[];
 }
 
 interface VoiceUploadTabProps {
@@ -48,6 +61,7 @@ const VoiceUploadTab: React.FC<VoiceUploadTabProps> = ({
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const audioRef = useRef<HTMLAudioElement>(null)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const [isPlaying, setIsPlaying] = useState(false)
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
@@ -56,6 +70,12 @@ const VoiceUploadTab: React.FC<VoiceUploadTabProps> = ({
   const [error, setError] = useState<string>('')
   const [businesses, setBusinesses] = useState<Business[]>([])
   const [fishTypes, setFishTypes] = useState<FishType[]>([])
+  
+  // 녹음 관련 상태
+  const [isRecording, setIsRecording] = useState(false)
+  const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null)
+  const [recordingTime, setRecordingTime] = useState(0)
+  const [recordingTimer, setRecordingTimer] = useState<NodeJS.Timeout | null>(null)
 
 
 
@@ -106,6 +126,15 @@ const VoiceUploadTab: React.FC<VoiceUploadTabProps> = ({
     fetchFishTypes()
   }, [])
 
+  // 컴포넌트 언마운트 시 타이머 정리
+  useEffect(() => {
+    return () => {
+      if (recordingTimer) {
+        clearInterval(recordingTimer)
+      }
+    }
+  }, [recordingTimer])
+
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (!file) return
@@ -130,107 +159,12 @@ const VoiceUploadTab: React.FC<VoiceUploadTabProps> = ({
     setUploadedFile(file)
     setError('')
     setTranscribedText('')
+    setParsedOrder(null)
     
-    // STT 처리 시작
-    await parseVoiceFile(file)
+    // STT만 수행 (파싱은 별도 버튼으로)
+    await transcribeAudioFile(file)
   }
 
-  // const transcribeAudio = async (file: File) => {
-  //   setIsProcessing(true)
-  //   setError('')
-  //   setParsedOrder(null)
-    
-  //   try {
-  //     // const result = await sttApi.transcribe(file, 'ko')
-      
-  //     // setTranscribedText(result.transcription)
-  //     // onTranscriptionComplete?.(result.transcription)
-      
-// <<<<<<< feature/cdtest4
-//       // 음성 텍스트를 주문 데이터로 파싱 시도 (거래처 매칭 포함)
-//       try {
-//         const fullOrderData = await parseVoiceOrderWithBusiness(result.transcription)
-        
-//         if (fullOrderData.items && fullOrderData.items.length > 0) {
-//           const validatedOrderData = validateAndCompleteOrder(fullOrderData)
-// =======
-  //     // 음성 텍스트를 주문 데이터로 파싱 시도 (거래처 매칭 포함)
-  //     try {
-  //       // console.log('📝 주문 데이터 및 거래처 파싱 시작:', result.transcription)
-  //       const fullOrderData = await fetchParsedOrder(file)
-        
-  //       if (fullOrderData.items && fullOrderData.items.length > 0) {
-  //         const validatedOrderData = validateAndCompleteOrder(fullOrderData)
-  //         console.log('🎯 파싱된 주문 데이터:', validatedOrderData)
-  //         console.log('🏢 매칭된 거래처:', fullOrderData.business)
-
-          
-  //         setParsedOrder(validatedOrderData)
-          
-  //         // 거래처가 매칭된 경우 자동 선택
-  //         if (fullOrderData.business) {
-  //           onBusinessChange?.(fullOrderData.business.id)
-  //         }
-          
-  //         // 배송일이 파싱된 경우 자동 설정
-  //         if (validatedOrderData.delivery_date) {
-  //           onDeliveryDateChange?.(validatedOrderData.delivery_date)
-  //         }
-          
-// <<<<<<< feature/cdtest4
-//           // 파싱된 데이터를 상위 컴포넌트로 전달
-//           onOrderParsed?.({ ...validatedOrderData, business: fullOrderData.business })
-//         } else {
-//           // 파싱 실패해도 텍스트는 유지하고, 거래처만 있다면 표시
-//           if (fullOrderData.business) {
-//             setParsedOrder({ ...fullOrderData, items: [] })
-//             onBusinessChange?.(fullOrderData.business.id)
-//           } else {
-//             setParsedOrder(null)
-//           }
-//         }
-//       } catch (parseError) {
-//         // 파싱 실패해도 STT 텍스트는 유지
-//         setParsedOrder(null)
-//       }
-      
-//     } catch (err) {
-//       const errorMsg = err instanceof Error ? err.message : 'STT 변환 중 오류가 발생했습니다.'
-//       setError(errorMsg)
-//       onError?.(errorMsg)
-//     } finally {
-//       setIsProcessing(false)
-//     }
-//   }
-// =======
-  //         // 파싱된 데이터를 상위 컴포넌트로 전달
-  //         onOrderParsed?.({ ...validatedOrderData, business: fullOrderData.business })
-  //       } else {
-  //         console.warn('⚠️ 주문 품목을 찾을 수 없습니다:', result.transcription)
-  //         // 파싱 실패해도 텍스트는 유지하고, 거래처만 있다면 표시
-  //         if (fullOrderData.business) {
-  //           console.log('🏢 거래처만 매칭됨:', fullOrderData.business)
-  //           setParsedOrder({ ...fullOrderData, items: [] })
-  //           onBusinessChange?.(fullOrderData.business.id)
-  //         } else {
-  //           setParsedOrder(null)
-  //         }
-  //       }
-  //     } catch (parseError) {
-  //       console.error('❌ 주문 파싱 실패:', parseError)
-  //       // 파싱 실패해도 STT 텍스트는 유지
-  //       setParsedOrder(null)
-  //     }
-      
-  //   } catch (err) {
-  //     console.error('❌ STT 변환 또는 파싱 실패:', err)
-  //     const errorMsg = err instanceof Error ? err.message : 'STT 변환 중 오류가 발생했습니다.'
-  //     setError(errorMsg)
-  //     onError?.(errorMsg)
-  //   } finally {
-  //     setIsProcessing(false)
-  //   }
-  // }
 
 
   const handleRemoveFile = () => {
@@ -267,58 +201,282 @@ const VoiceUploadTab: React.FC<VoiceUploadTabProps> = ({
     const i = Math.floor(Math.log(bytes) / Math.log(k))
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
   }
-  const parseVoiceFile = async (file: File) => {
+
+  // 녹음 시작
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const mediaRecorder = new MediaRecorder(stream, {
+        mimeType: 'audio/webm;codecs=opus'
+      })
+      
+      const audioChunks: BlobPart[] = []
+      
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunks.push(event.data)
+        }
+      }
+      
+      mediaRecorder.onstop = () => {
+        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' })
+        setRecordedBlob(audioBlob)
+        
+        // 스트림 정리
+        stream.getTracks().forEach(track => track.stop())
+      }
+      
+      mediaRecorderRef.current = mediaRecorder
+      mediaRecorder.start()
+      setIsRecording(true)
+      setRecordingTime(0)
+      setError('')
+      
+      // 녹음 시간 타이머 시작
+      const timer = setInterval(() => {
+        setRecordingTime(prev => prev + 1)
+      }, 1000)
+      setRecordingTimer(timer)
+      
+    } catch (error) {
+      const errorMsg = '마이크 접근 권한이 필요합니다.'
+      setError(errorMsg)
+      onError?.(errorMsg)
+    }
+  }
+
+  // 녹음 정지
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop()
+      setIsRecording(false)
+      
+      // 타이머 정리
+      if (recordingTimer) {
+        clearInterval(recordingTimer)
+        setRecordingTimer(null)
+      }
+    }
+  }
+
+  // 음성 파일 → 텍스트 변환 (STT만)
+  const transcribeAudioFile = async (file: File) => {
+    setIsProcessing(true)
+    setError('')
+    
+    try {
+      const transcribedText = await transcribeAudio(file)
+      setTranscribedText(transcribedText)
+      onTranscriptionComplete?.(transcribedText)
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : '음성 변환 중 오류가 발생했습니다.'
+      setError(errorMessage)
+      onError?.(errorMessage)
+    } finally {
+      setIsProcessing(false)
+    }
+  }
+
+  // 텍스트 → 주문 데이터 파싱
+  const handleTextParsing = async () => {
+    if (!transcribedText.trim()) return
+    
     setIsProcessing(true)
     setError('')
     setParsedOrder(null)
-  
+    
     try {
-      const fullOrderData = await fetchParsedOrder(file)
-  
-      // ✅ 변환된 텍스트 (있으면 표시)
-      if (fullOrderData.transcribed_text) {
-        setTranscribedText(fullOrderData.transcribed_text)
-        onTranscriptionComplete?.(fullOrderData.transcribed_text)
-      }
-  
-      // ✅ 주문 품목 확인
+      const fullOrderData = await parseVoiceOrderWithBusiness(transcribedText)
+      
       if (fullOrderData.items && fullOrderData.items.length > 0) {
         const validatedOrderData = validateAndCompleteOrder(fullOrderData)
         setParsedOrder(validatedOrderData)
-        onOrderParsed?.({ ...validatedOrderData, business: fullOrderData.business })
-  
+        // onOrderParsed 호출 제거 - 파싱된 결과만 표시하고 수동으로 추가하도록 변경
+
         if (fullOrderData.business) {
           onBusinessChange?.(fullOrderData.business.id)
         }
-  
+
         if (validatedOrderData.delivery_date) {
           onDeliveryDateChange?.(validatedOrderData.delivery_date)
         }
       } else {
         setParsedOrder(null)
-  
-        // 거래처만 매칭된 경우
+
         if (fullOrderData.business) {
           onBusinessChange?.(fullOrderData.business.id)
         }
-  
-        setError("주문 품목을 파악할 수 없습니다. 텍스트 또는 파일을 다시 확인해 주세요.")
+        
+        setError("주문 품목을 파악할 수 없습니다. 텍스트를 다시 확인해 주세요.")
       }
-  
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : '파일 분석 중 오류가 발생했습니다.'
-      setError(errorMsg)
-      onError?.(errorMsg)
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : '텍스트 파싱 중 오류가 발생했습니다.'
+      setError(errorMessage)
+      onError?.(errorMessage)
     } finally {
       setIsProcessing(false)
     }
   }
+
+  // 녹음된 오디오 처리
+  const processRecordedAudio = async () => {
+    if (!recordedBlob) return
+    
+    // Blob을 File 객체로 변환
+    const audioFile = new File([recordedBlob], 'recorded-audio.webm', {
+      type: 'audio/webm'
+    })
+    
+    setUploadedFile(audioFile)
+    await transcribeAudioFile(audioFile)
+  }
+
+  // 녹음 삭제
+  const deleteRecording = () => {
+    setRecordedBlob(null)
+    setRecordingTime(0)
+    setUploadedFile(null)
+    setTranscribedText('')
+    setParsedOrder(null)
+    setError('')
+  }
+
+  // 녹음 시간 포맷팅
+  const formatRecordingTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60)
+    const secs = seconds % 60
+    return `${mins}:${secs.toString().padStart(2, '0')}`
+  }
+
+  // parseVoiceFile 함수 제거 - 이제 transcribeAudioFile과 handleTextParsing으로 분리
+
+  // 주문 추가 함수
+  const handleAddToOrder = () => {
+    if (!parsedOrder) return
+
+    // 유효성 검증
+    const hasInvalidItems = parsedOrder.items.some(item => 
+      !item.fish_type_id || // 어종이 매칭되지 않음
+      !item.unit_price || item.unit_price === 0 // 단가가 0원
+    )
+    
+    if (hasInvalidItems) {
+      const unmatchedItems = parsedOrder.items.filter(item => !item.fish_type_id)
+      const zeropriceItems = parsedOrder.items.filter(item => item.fish_type_id && (!item.unit_price || item.unit_price === 0))
+      
+      let errorMessage = ""
+      if (unmatchedItems.length > 0) {
+        const unmatchedNames = unmatchedItems.map(item => item.fish_name || '알 수 없는 어종').join(', ')
+        errorMessage += `매칭되지 않은 어종이 있습니다: ${unmatchedNames}. `
+      }
+      if (zeropriceItems.length > 0) {
+        errorMessage += "0원인 품목이 있습니다. 단가를 입력해주세요."
+      }
+      
+      setError(errorMessage)
+      onError?.(errorMessage)
+      return
+    }
+
+    // 거래처 정보 추가
+    const selectedBusiness = businesses.find(b => b.id === selectedBusinessId)
+    const orderWithBusiness = {
+      ...parsedOrder,
+      business: selectedBusiness,
+      business_name: selectedBusiness?.business_name || parsedOrder.business_name
+    }
+
+    onOrderParsed?.(orderWithBusiness)
+    
+    // 성공 메시지 (선택사항)
+    setError("")
+  }
   
   return (
     <div className="space-y-4">
+      {/* 음성 녹음 섹션 - 주석 처리 */}
+      {/* 
+      <div className="border-2 border-blue-200 rounded-lg p-6 bg-blue-50">
+        <div className="text-center mb-4">
+          <Mic className="h-12 w-12 mx-auto text-blue-500 mb-2" />
+          <h3 className="text-lg font-medium text-blue-900">음성 직접 녹음</h3>
+          <p className="text-sm text-blue-700 mt-1">마이크를 사용해 주문을 직접 녹음하세요</p>
+        </div>
+
+        {!isRecording && !recordedBlob && (
+          <div className="text-center">
+            <Button
+              onClick={startRecording}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg"
+              disabled={isProcessing}
+            >
+              <Mic className="h-5 w-5 mr-2" />
+              녹음 시작
+            </Button>
+          </div>
+        )}
+
+        {isRecording && (
+          <div className="text-center">
+            <div className="mb-4">
+              <div className="inline-flex items-center px-4 py-2 bg-red-100 border border-red-300 rounded-lg">
+                <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse mr-2"></div>
+                <span className="text-red-700 font-medium">녹음 중... {formatRecordingTime(recordingTime)}</span>
+              </div>
+            </div>
+            <Button
+              onClick={stopRecording}
+              className="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg"
+            >
+              <Square className="h-5 w-5 mr-2" />
+              녹음 정지
+            </Button>
+          </div>
+        )}
+
+        {recordedBlob && !isProcessing && (
+          <div className="text-center space-y-3">
+            <div className="inline-flex items-center px-4 py-2 bg-green-100 border border-green-300 rounded-lg">
+              <span className="text-green-700 font-medium">녹음 완료! ({formatRecordingTime(recordingTime)})</span>
+            </div>
+            <div className="flex justify-center space-x-3">
+              <Button
+                onClick={processRecordedAudio}
+                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg"
+                disabled={isProcessing}
+              >
+                <Upload className="h-4 w-4 mr-2" />
+                음성 변환하기
+              </Button>
+              <Button
+                onClick={deleteRecording}
+                variant="outline"
+                className="px-4 py-2 rounded-lg"
+                disabled={isProcessing}
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                다시 녹음
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* 구분선 */}
+      {/* <div className="relative">
+        <div className="absolute inset-0 flex items-center">
+          <div className="w-full border-t border-gray-300" />
+        </div>
+        <div className="relative flex justify-center text-sm">
+          <span className="px-2 bg-white text-gray-500">또는</span>
+        </div>
+      </div>
+       */}
+
+      {/* 파일 업로드 섹션 */}
       {!uploadedFile ? (
         <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-gray-400 transition-colors">
-          <Mic className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+          <Upload className="h-12 w-12 mx-auto text-gray-400 mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">
             음성 파일을 업로드하세요
           </h3>
@@ -498,13 +656,31 @@ const VoiceUploadTab: React.FC<VoiceUploadTabProps> = ({
           </p>
         </div>
       )}
+
+      {/* 분석 버튼 */}
+      {transcribedText && !error && (
+        <Button 
+          onClick={handleTextParsing} 
+          className="w-full" 
+          disabled={!transcribedText.trim() || isProcessing}
+        >
+          {isProcessing ? (
+            <>
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
+              파싱 중...
+            </>
+          ) : (
+            "분석하기"
+          )}
+        </Button>
+      )}
       
       {/* 주문 정보 - 파싱 후에만 표시 */}
       {parsedOrder && !error && (
         <div className="space-y-4">
           {/* 거래처 선택 */}
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <h4 className="font-medium text-blue-900 mb-3">🎯 주문 정보:</h4>
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+            <h4 className="font-medium text-green-900 mb-3">📝 주문 정보:</h4>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* 파싱된 거래처 표시 및 수정 */}
@@ -514,7 +690,7 @@ const VoiceUploadTab: React.FC<VoiceUploadTabProps> = ({
                   value={selectedBusinessId?.toString() || ""} 
                   onValueChange={(value: string) => onBusinessChange?.(value ? parseInt(value) : null)}
                 >
-                  <SelectTrigger className="bg-white border-blue-300">
+                  <SelectTrigger className="bg-white border-green-300">
                     <SelectValue placeholder="음성에서 파싱된 거래처를 확인하고 수정하세요" />
                   </SelectTrigger>
                   <SelectContent>
@@ -529,7 +705,7 @@ const VoiceUploadTab: React.FC<VoiceUploadTabProps> = ({
                   </SelectContent>
                 </Select>
                 {selectedBusinessId && (
-                  <div className="text-sm text-blue-700 bg-blue-100 px-2 py-1 rounded">
+                  <div className="text-sm text-green-700 bg-green-100 px-2 py-1 rounded">
                     ✓ 선택된 거래처: {businesses.find((b: Business) => b.id === selectedBusinessId)?.business_name}
                   </div>
                 )}
@@ -542,7 +718,7 @@ const VoiceUploadTab: React.FC<VoiceUploadTabProps> = ({
                   type="date"
                   value={deliveryDate || ''}
                   onChange={(e) => onDeliveryDateChange?.(e.target.value)}
-                  className="bg-white border-blue-300"
+                  className="bg-white border-green-300"
                   placeholder="음성에서 파싱된 배송일을 확인하고 수정하세요"
                 />
               </div>
@@ -554,23 +730,31 @@ const VoiceUploadTab: React.FC<VoiceUploadTabProps> = ({
                 <h5 className="font-medium text-gray-900 mb-2">🐟 파싱된 주문 품목:</h5>
                 <div className="space-y-2">
                   {parsedOrder.items.map((item, index) => (
-                    <div key={index} className="bg-white rounded-md p-4 border border-blue-200">
+                    <div key={index} className="bg-white rounded-md p-4 border border-green-200">
                       <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-center">
                         <div className="space-y-1">
                           <label className="text-xs text-gray-500 font-medium">어종</label>
-                          <select
-                            className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:border-blue-500 focus:outline-none"
-                            value={item.fish_type_id}
-                            onChange={(e) => {
-                              // TODO: 어종 변경 핸들러 구현
-                            }}
-                          >
-                            {fishTypes.map((fish) => (
-                              <option key={fish.id} value={fish.id}>
-                                {fish.name}
-                              </option>
-                            ))}
-                          </select>
+                          {item.fish_type_id ? (
+                            <select
+                              className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:border-green-500 focus:outline-none"
+                              value={item.fish_type_id}
+                              onChange={(e) => {
+                                // TODO: 어종 변경 핸들러 구현
+                              }}
+                            >
+                              {fishTypes.map((fish) => (
+                                <option key={fish.id} value={fish.id}>
+                                  {fish.name}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <div className="w-full px-2 py-1 text-sm border border-red-300 rounded bg-red-50">
+                              <span className="text-red-700">
+                                {item.fish_name} (매칭 안됨)
+                              </span>
+                            </div>
+                          )}
                         </div>
                         
                         <div className="space-y-1">
@@ -620,7 +804,7 @@ const VoiceUploadTab: React.FC<VoiceUploadTabProps> = ({
                       
                       <div className="mt-3 flex justify-between items-center">
                         <div className="text-sm text-gray-600">
-                          소계: <span className="font-semibold text-blue-600">
+                          소계: <span className="font-semibold text-green-600">
                             {((item.unit_price || 0) * item.quantity).toLocaleString()}원
                           </span>
                         </div>
@@ -637,10 +821,10 @@ const VoiceUploadTab: React.FC<VoiceUploadTabProps> = ({
                   ))}
                 </div>
                 
-                <div className="mt-3 p-3 bg-blue-100 rounded-lg">
+                <div className="mt-3 p-3 bg-green-100 rounded-lg">
                   <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium text-blue-900">총 합계:</span>
-                    <span className="text-lg font-bold text-blue-900">
+                    <span className="text-sm font-medium text-green-900">총 합계:</span>
+                    <span className="text-lg font-bold text-green-900">
                       {parsedOrder.items.reduce((total, item) => total + ((item.unit_price || 0) * item.quantity), 0).toLocaleString()}원
                     </span>
                   </div>
@@ -658,8 +842,19 @@ const VoiceUploadTab: React.FC<VoiceUploadTabProps> = ({
               </div>
             )}
             
-            <p className="text-xs text-blue-600 mt-3">
-              ✅ 위 정보를 확인하고 수정한 후 주문을 등록해주세요.
+            {/* 주문 추가 버튼 */}
+            <div className="mt-4">
+              <Button 
+                onClick={handleAddToOrder}
+                className="w-full bg-green-600 hover:bg-green-700 text-white"
+                disabled={!parsedOrder || !parsedOrder.items || parsedOrder.items.length === 0}
+              >
+                📝 주문 목록에 추가
+              </Button>
+            </div>
+            
+            <p className="text-xs text-green-600 mt-3">
+              ✅ 위 정보를 확인하고 수정한 후 "주문 목록에 추가" 버튼을 클릭하세요.
             </p>
           </div>
         </div>

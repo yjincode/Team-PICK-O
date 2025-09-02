@@ -281,10 +281,6 @@ const AddInventoryModal: React.FC<AddInventoryModalProps> = ({
       }
     }
 
-    if (formData.unit_price === '') {
-      toast.error('단가를 입력해주세요')
-      return
-    }
 
     setLoading(true)
 
@@ -554,38 +550,6 @@ const AddInventoryModal: React.FC<AddInventoryModalProps> = ({
               </div>
             </div>
           )}
-
-          {/* 단가 */}
-          <div className="space-y-2">
-            <Label htmlFor="unit_price">단가 *</Label>
-            {mode === 'edit' && isEditing ? (
-              // 편집 모드: 수정 가능
-              <Input
-                id="unit_price"
-                type="number"
-                min="0"
-                step="1"
-                value={formData.unit_price}
-                onChange={handleUnitPriceChange}
-                placeholder="단가를 입력하세요"
-                required
-              />
-            ) : (
-              // 읽기 모드 또는 생성 모드
-              <Input
-                id="unit_price"
-                type="number"
-                min="0"
-                step="1"
-                value={formData.unit_price}
-                onChange={handleUnitPriceChange}
-                placeholder="단가를 입력하세요"
-                required
-                readOnly={mode === 'edit' && !isEditing}
-                className={mode === 'edit' && !isEditing ? 'bg-gray-50' : ''}
-              />
-            )}
-          </div>
 
 
 

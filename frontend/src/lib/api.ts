@@ -634,6 +634,41 @@ export const sttApi = {
 
     return await response.json()
   },
+
+  // 텍스트 파싱 (LLM 기반)
+  parseText: async (text: string): Promise<{
+    success: boolean;
+    data?: {
+      items: Array<{
+        fish_type_id: number | null;
+        quantity: number;
+        unit_price?: number | null;
+        unit: string;
+        fish_name?: string;
+      }>;
+      memo: string;
+      delivery_date?: string;
+      business_name?: string;
+      business_id?: number;
+      unmatched_items?: Array<{
+        fish_name: string;
+        quantity: number;
+        unit: string;
+        suggested_matches: Array<{
+          fish_name: string;
+          similarity: number;
+        }>;
+      }>;
+      validation_warnings?: string[];
+    };
+    message?: string;
+  }> => {
+    const response = await api.post('/transcription/parse-text/', 
+      { text },
+      { timeout: 90000 } // 90초 timeout (LLM 처리 대기)
+    );
+    return response.data;
+  },
 }
 
 // 어류 질병 분석 API

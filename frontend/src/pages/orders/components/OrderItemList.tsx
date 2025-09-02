@@ -13,12 +13,14 @@ interface OrderItemListProps {
   onEditItem: (index: number) => void;
   onRemoveItem: (index: number) => void;
   totalPrice: number;
+  deliveryDate?: string;
 }
 
 const OrderItemList: React.FC<OrderItemListProps> = ({
   items,
   onRemoveItem,
-  totalPrice
+  totalPrice,
+  deliveryDate
 }) => {
   if (items.length === 0) {
     return null
@@ -47,7 +49,7 @@ const OrderItemList: React.FC<OrderItemListProps> = ({
               <TableCell>{item.unit_price.toLocaleString()}원</TableCell>
               <TableCell>{item.unit}</TableCell>
               <TableCell>{item.remarks || "-"}</TableCell>
-              <TableCell>-</TableCell>
+              <TableCell>{deliveryDate ? new Date(deliveryDate).toLocaleDateString('ko-KR') : "-"}</TableCell>
               <TableCell>
                 <Button
                   variant="ghost"

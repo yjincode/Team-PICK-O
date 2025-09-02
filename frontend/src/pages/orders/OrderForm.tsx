@@ -78,7 +78,6 @@ interface OrderFormProps {
 interface FormData {
   business_name: string;
   phone_number: string;
-  memo: string;
   source_type: "voice" | "text" | "manual" | "image";
   transcribed_text: string;
   raw_input_path: string;
@@ -199,7 +198,6 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
     return {
       business_name: "",
       phone_number: "",
-      memo: "",
       source_type: "text" as "voice" | "text" | "manual" | "image",
       transcribed_text: "",
       raw_input_path: "",
@@ -427,7 +425,6 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
   //       setFormData((prev: FormData) => ({
   //         ...prev,
   //         delivery_datetime: validatedData.delivery_date || prev.delivery_datetime,
-  //         memo: validatedData.memo || prev.memo,
   //         items: validatedData.items.map((item: any) => ({
   //           id: Date.now().toString(),
   //           fish_type_id: item.fish_type_id,
@@ -458,7 +455,6 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
         setFormData((prev: FormData) => ({
           ...prev,
           delivery_datetime: validatedData.delivery_date || prev.delivery_datetime,
-          memo: validatedData.memo || prev.memo,
           items: validatedData.items.map((item: any) => ({
             id: Date.now(),
             fish_type_id: item.fish_type_id,
@@ -594,25 +590,19 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     
-    if (!selectedBusinessId) {
-      toast.error('거래처를 선택해주세요!', {
-        duration: 3000,
-        style: {
-          background: '#dc2626',
-          color: '#fff'
-        }
-      })
-      return
-    }
+    // 거래처 선택은 선택사항으로 변경
+    // if (!selectedBusinessId) {
+    //   toast.error('거래처를 선택해주세요!', {
+    //     duration: 3000,
+    //     style: {
+    //       background: '#dc2626',
+    //       color: '#fff'
+    //     }
+    //   })
+    //   return
+    // }
     
     if (formData.items.length === 0) {
-      toast.error('주문할 어종을 최소 1개 이상 입력해주세요!', {
-        duration: 3000,
-        style: {
-          background: '#dc2626',
-          color: '#fff'
-        }
-      })
       return
     }
     
@@ -657,7 +647,6 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
     const orderData = {
       business_id: selectedBusinessId,
       total_price: parseInt(total_price.toString()),
-      memo: formData.memo || '',
       source_type: formData.source_type === 'manual' || formData.source_type === 'image' ? 'manual' : formData.source_type as 'voice' | 'text',
       raw_input_path: formData.raw_input_path || '',
       transcribed_text: formData.transcribed_text || '',
@@ -711,7 +700,6 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
           // STT 상태를 폴링하여 확인
           pollTranscriptionStatus(transcriptionId, businessId, setFormData, onSubmit)
         } else if (response.ok && result.data) {
-          toast.success('주문이 성공적으로 저장되었습니다!')
           onSubmit(result.data)
         } else {
           throw new Error(result.error || '주문 저장에 실패했습니다.')
@@ -750,7 +738,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
               }
             })
           } else {
-            toast.success('주문이 성공적으로 저장되었습니다!')
+            toast.success(result.message || '주문이 성공적으로 등록되었습니다.')
           }
           
           onSubmit(result.data)
@@ -963,13 +951,13 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
               <div className="p-4 bg-red-50 border-2 border-red-300 rounded-lg">
                 <div className="flex items-center gap-2 mb-2">
                   <div className="w-4 h-4 bg-red-500 rounded-full flex-shrink-0"></div>
-                  <h3 className="text-lg font-semibold text-red-800">거래처 선택 필요</h3>
+                  <h3 className="text-lg font-semibold text-red-800">어종 추가 필요</h3>
                 </div>
                 <p className="text-red-700 text-sm mb-2">
-                  주문을 등록하려면 먼저 거래처를 선택해주세요.
+                  주문을 등록하려면 먼저 어종을 추가해주세요.
                 </p>
                 <p className="text-red-600 text-xs font-medium">
-                  ⚠️ 위의 '거래처 선택' 섹션에서 거래처를 선택하신 후 주문을 진행하세요.
+                  ⚠️ 위의 탭에서 어종과 수량을 입력하신 후 주문을 진행하세요.
                 </p>
               </div>
             )}
@@ -1022,7 +1010,6 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
                         ...prev,
                         transcribed_text: orderData.transcribed_text,
                         delivery_datetime: orderData.delivery_date || prev.delivery_datetime,
-                        memo: orderData.memo || prev.memo,
                         items: orderData.items?.map((item: any, index: number) => ({
                           id: Date.now() + index,
                           fish_type_id: item.fish_type_id,
@@ -1067,8 +1054,8 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
                       // 파싱된 데이터로 폼 업데이트
                       setFormData((prev: FormData) => ({
                         ...prev,
+                        transcribed_text: orderData.transcribed_text || '',
                         delivery_datetime: orderData.delivery_date || prev.delivery_datetime,
-                        memo: orderData.memo || prev.memo,
                         items: orderData.items?.map((item: any, index: number) => ({
                           id: Date.now() + index,
                           fish_type_id: item.fish_type_id,
@@ -1079,6 +1066,14 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
                           remarks: ''
                         })) || prev.items
                       }))
+                      
+                      // 거래처 자동 선택
+                      if (orderData.business_id) {
+                        setSelectedBusinessId(orderData.business_id)
+                      }
+                    }}
+                    onError={(error: string) => {
+                      toast.error(error)
                     }}
                   />
                 </TabsContent>
@@ -1115,8 +1110,8 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
                       // 파싱된 데이터로 폼 업데이트
                       setFormData((prev: FormData) => ({
                         ...prev,
+                        transcribed_text: orderData.transcribed_text || '',
                         delivery_datetime: orderData.delivery_date || prev.delivery_datetime,
-                        memo: orderData.memo || prev.memo,
                         items: orderData.items?.map((item: any, index: number) => ({
                           id: Date.now() + index,
                           fish_type_id: item.fish_type_id,
@@ -1127,6 +1122,11 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
                           remarks: ''
                         })) || prev.items
                       }))
+                      
+                      // 거래처 자동 선택
+                      if (orderData.business_id) {
+                        setSelectedBusinessId(orderData.business_id)
+                      }
                     }}
                     onError={(error: string) => {
                       toast.error(`이미지 처리 실패: ${error}`)
@@ -1136,17 +1136,6 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
               </Tabs>
             </div>
 
-            {/* 메모 */}
-            <div>
-              <Label htmlFor="memo">메모</Label>
-              <Textarea
-                id="memo"
-                value={formData.memo}
-                onChange={(e: ChangeEvent<HTMLTextAreaElement>) => handleInputChange("memo", e.target.value)}
-                placeholder="추가 메모를 입력하세요"
-                rows={2}
-              />
-            </div>
 
             {/* 재고 상태 메시지 */}
             {formData.items.length > 0 && (
@@ -1352,6 +1341,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
               }}
               onRemoveItem={removeItem}
               totalPrice={formData.items.reduce((sum: number, item: OrderItem) => sum + (item.quantity * item.unit_price), 0)}
+              deliveryDate={formData.delivery_datetime}
             />
 
             {/* 버튼 */}
