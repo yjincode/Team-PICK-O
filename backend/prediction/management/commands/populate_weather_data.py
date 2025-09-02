@@ -111,9 +111,9 @@ class Command(BaseCommand):
             end_date = datetime.datetime.strptime(end_date_str, '%Y-%m-%d').date()
             self.stdout.write(self.style.SUCCESS(f"=== 지정된 기간의 기상 데이터 수집 시작: {start_date_str} ~ {end_date_str} ==="))
         else:
-            # 기본값: 2022년 1월 1일부터 2025년 8월 18일까지
-            start_date = datetime.date(2022, 1, 1)
-            end_date = datetime.date(2025, 8, 18)
+            # 기본값: 어제부터 어제까지 (하루치만)
+            start_date = datetime.date.today() - datetime.timedelta(days=1)
+            end_date = datetime.date.today() - datetime.timedelta(days=1)
             self.stdout.write(self.style.SUCCESS(f"=== 기상 데이터 수집 시작: {start_date} ~ {end_date} ==="))
             
         self.stdout.write(f"DEBUG: 최종 시작일: {start_date}")
