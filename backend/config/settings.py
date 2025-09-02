@@ -100,7 +100,7 @@ MIDDLEWARE = [
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
-    # 'core.middleware.JWTAuthMiddleware',  # 임시로 비활성화
+    'core.middleware.JWTAuthMiddleware',  # JWT 인증 미들웨어 활성화
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
