@@ -546,9 +546,61 @@ class BusinessListAPIView(ListAPIView):
             raise PermissionDenied('사용자 인증이 필요합니다.')
         return Business.objects.filter(user_id=self.request.user_id).order_by('-id')
 
-class BusinessDetailAPIView(generics.RetrieveAPIView):
-    queryset = Business.objects.all()
+class BusinessDetailAPIView(generics.RetrieveAPIView, generics.UpdateAPIView, generics.DestroyAPIView):
     serializer_class = BusinessSerializer
+    permission_classes = [AllowAny]  # 권한 검사 비활성화 (JWT 미들웨어에서 처리)
+    authentication_classes = []      # DRF 인증 비활성화 (JWT 미들웨어에서 처리)
+    
+    def get_queryset(self):
+        # 디버깅 로그 추가
+        print(f"🔍 BusinessDetailAPIView - request.user_id: {getattr(self.request, 'user_id', 'NOT SET')}")
+        print(f"🔍 BusinessDetailAPIView - Authorization header: {self.request.headers.get('Authorization', 'NOT SET')}")
+        print(f"🔍 BusinessDetailAPIView - HTTP method: {self.request.method}")
+        
+        # 미들웨어에서 설정된 user_id 사용 (JWT 미들웨어 인증 필요)
+        if not hasattr(self.request, 'user_id') or not self.request.user_id:
+            print(f"❌ BusinessDetailAPIView - 사용자 인증 실패")
+            raise PermissionDenied('사용자 인증이 필요합니다.')
+        
+        print(f"✅ BusinessDetailAPIView - 사용자 인증 성공: user_id={self.request.user_id}")
+        return Business.objects.filter(user_id=self.request.user_id)
+    
+    def destroy(self, request, *args, **kwargs):
+        print(f"🗑️ BusinessDetailAPIView.destroy 호출됨")
+        print(f"🔍 request.user_id: {getattr(request, 'user_id', 'NOT SET')}")
+        print(f"🔍 Authorization header: {request.headers.get('Authorization', 'NOT SET')}")
+        
+        try:
+            # 미들웨어에서 설정된 user_id 사용
+            if not hasattr(request, 'user_id') or not request.user_id:
+                print(f"❌ destroy - 사용자 인증 실패")
+                raise PermissionDenied('사용자 인증이 필요합니다.')
+            
+            business = self.get_object()
+            print(f"✅ destroy - 거래처 조회 성공: business_id={business.id}")
+            
+            # 연관된 주문이 있는지 확인
+            related_orders = Order.objects.filter(business_id=business.id).exists()
+            if related_orders:
+                print(f"⚠️ destroy - 연관된 주문 있음")
+                return Response({
+                    'error': '연관된 주문이 있어 삭제할 수 없습니다. 주문을 먼저 삭제해주세요.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            print(f"🗑️ destroy - 거래처 삭제 실행")
+            business.delete()
+            print(f"✅ destroy - 거래처 삭제 완료")
+            return Response({'message': '거래처가 성공적으로 삭제되었습니다.'}, status=status.HTTP_204_NO_CONTENT)
+            
+        except Business.DoesNotExist:
+            print(f"❌ destroy - 거래처 없음")
+            return Response({'error': '거래처를 찾을 수 없습니다.'}, status=status.HTTP_404_NOT_FOUND)
+        except PermissionDenied as e:
+            print(f"❌ destroy - 권한 없음: {str(e)}")
+            return Response({'error': str(e)}, status=status.HTTP_403_FORBIDDEN)
+        except Exception as e:
+            print(f"❌ destroy - 예외 발생: {str(e)}")
+            return Response({'error': f'삭제 중 오류가 발생했습니다: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 def unpaid_orders_view(request, business_id):

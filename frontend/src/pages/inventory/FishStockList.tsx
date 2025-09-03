@@ -9,7 +9,7 @@ import { Badge } from "../../components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select"
 import { Input } from "../../components/ui/input"
 import { Label } from "../../components/ui/label"
-import { Package, AlertTriangle, Plus, RefreshCw, Search, Filter } from "lucide-react"
+import { Package, AlertTriangle, Plus, RefreshCw, Search, Filter, ChevronLeft, ChevronRight } from "lucide-react"
 import AddInventoryModal from "../../components/modals/AddInventoryModal"
 import toast from 'react-hot-toast'
 import { inventoryApi } from '../../lib/api'
@@ -451,6 +451,65 @@ const FishStockList: React.FC = () => {
               )
             })}
           </div>
+
+          {/* 페이지네이션 */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between mt-6">
+              <div className="text-sm text-gray-700">
+                {((currentPage - 1) * itemsPerPage) + 1} - {Math.min(currentPage * itemsPerPage, filteredInventories.length)} / {filteredInventories.length}건
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                  disabled={currentPage === 1}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  이전
+                </Button>
+                
+                {(() => {
+                  // 페이지 번호를 최대 15개까지만 표시
+                  const maxVisiblePages = 15
+                  let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2))
+                  let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1)
+                  
+                  // 끝에서부터 계산해서 시작 페이지 조정
+                  if (endPage - startPage + 1 < maxVisiblePages) {
+                    startPage = Math.max(1, endPage - maxVisiblePages + 1)
+                  }
+                  
+                  const pages = []
+                  for (let i = startPage; i <= endPage; i++) {
+                    pages.push(i)
+                  }
+                  
+                  return pages.map(pageNum => (
+                    <Button
+                      key={pageNum}
+                      variant={currentPage === pageNum ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setCurrentPage(pageNum)}
+                      className="w-8 h-8 p-0"
+                    >
+                      {pageNum}
+                    </Button>
+                  ))
+                })()}
+                
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                  disabled={currentPage === totalPages}
+                >
+                  다음
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          )}
         </>
       )}
 

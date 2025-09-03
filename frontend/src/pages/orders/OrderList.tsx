@@ -349,9 +349,9 @@ const OrderList: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="flex-1 space-y-4 sm:space-y-6 p-4 sm:p-6 bg-gray-50 min-h-screen">
       {/* 헤더 */}
-      <header className="px-6 py-4 bg-white border-b border-gray-200">
+      <header className="bg-white border-b border-gray-200 -mx-4 sm:-mx-6 px-6 py-4">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">주문 목록</h1>
@@ -367,16 +367,16 @@ const OrderList: React.FC = () => {
         </div>
       </header>
 
-      <div className="p-6">
+      <div className="max-w-7xl mx-auto">
         {/* 필터 바 */}
-        <Card className="mb-6">
-          <CardHeader>
+        <Card className="mb-6 -mx-4 sm:-mx-6">
+          <CardHeader className="px-6">
             <CardTitle className="flex items-center gap-2 text-lg">
               <Filter className="h-5 w-5" />
               필터 및 검색
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-6">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               {/* 거래처 필터 - 가장 왼쪽 */}
               <div className="space-y-2">
@@ -470,13 +470,13 @@ const OrderList: React.FC = () => {
         </Card>
 
         {/* 주문 테이블 */}
-        <Card>
-          <CardHeader>
+        <Card className="-mx-4 sm:-mx-6">
+          <CardHeader className="px-6">
             <CardTitle className="flex items-center justify-between">
               <span>주문 목록</span>
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-6">
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
@@ -586,7 +586,7 @@ const OrderList: React.FC = () => {
                               </Button>
                             )}
 
-                            {/* 환불 버튼 - 결제 완료 상태일 때만 표시 */}
+                            {/* 결제 취소 버튼 - 결제 완료 상태일 때만 표시 */}
                             {order.payment?.payment_status === 'paid' && (
                               <Button
                                 variant="outline"
@@ -598,7 +598,7 @@ const OrderList: React.FC = () => {
                                 className="border-orange-600 text-orange-600 hover:bg-orange-50"
                               >
                                 <RotateCcw className="h-4 w-4 mr-1" />
-                                환불
+                                결제취소
                               </Button>
                             )}
 

@@ -45,8 +45,9 @@ const RefundCancelModal: React.FC<RefundCancelModalProps> = ({
     { value: 'other', label: '기타' },
   ]
 
-  // 환불 사유 옵션
+  // 환불/결제취소 사유 옵션
   const refundReasons = [
+    { value: 'wrong_payment', label: '실수로 결제함' },
     { value: 'customer_request', label: '고객 요청' },
     { value: 'product_defect', label: '상품 하자' },
     { value: 'wrong_delivery', label: '잘못된 배송' },
@@ -74,12 +75,12 @@ const RefundCancelModal: React.FC<RefundCancelModalProps> = ({
   if (!isOpen) return null
 
   const isRefund = type === 'refund'
-  const title = isRefund ? '환불 처리' : '주문 취소'
+  const title = isRefund ? '결제 취소' : '주문 취소'
   const description = isRefund 
-    ? '환불 사유를 선택해주세요.' 
+    ? '결제 취소 사유를 선택해주세요. (실수로 결제한 경우에만 사용)' 
     : '주문 취소 사유를 선택해주세요.'
   const icon = isRefund ? <CreditCard className="h-5 w-5" /> : <Ban className="h-5 w-5" />
-  const buttonText = isRefund ? '환불 처리' : '주문 취소'
+  const buttonText = isRefund ? '결제 취소' : '주문 취소'
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -110,7 +111,7 @@ const RefundCancelModal: React.FC<RefundCancelModalProps> = ({
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-3">
                 <Label className="text-sm font-medium">
-                  {isRefund ? '환불 사유' : '취소 사유'}
+                  {isRefund ? '결제 취소 사유' : '주문 취소 사유'}
                 </Label>
                 <RadioGroup
                   value={selectedReason}

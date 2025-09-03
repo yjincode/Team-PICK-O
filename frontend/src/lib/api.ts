@@ -86,6 +86,11 @@ api.interceptors.request.use(
 
     if (accessToken && TokenManager.isAccessTokenValid()) {
       config.headers.Authorization = `Bearer ${accessToken}`
+      // defaults에도 설정하여 로깅 시 확인 가능하도록
+      api.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`
+    } else {
+      // 토큰이 없거나 유효하지 않으면 defaults에서도 제거
+      delete api.defaults.headers.common['Authorization']
     }
 
     return config
@@ -219,6 +224,17 @@ export const businessApi = {
 
   // 거래처 삭제
   delete: async (id: number): Promise<ApiResponse<void>> => {
+    console.log('🗑️ 거래처 삭제 API 호출:', id);
+    
+    const accessToken = TokenManager.getAccessToken()
+    console.log('🔑 Access token exists:', !!accessToken);
+    console.log('🔑 Access token valid:', TokenManager.isAccessTokenValid());
+    console.log('🔑 Authorization header:', api.defaults.headers.common['Authorization']);
+    
+    if (!accessToken || !TokenManager.isAccessTokenValid()) {
+      throw new Error('로그인이 필요합니다. 다시 로그인해주세요.');
+    }
+    
     const response = await api.delete(`/business/customers/${id}/`)
     return response.data
   },
@@ -828,6 +844,12 @@ export const paymentApi = {
   // 주문 취소
   cancelOrder: async (data: CancelOrderRequest): Promise<ApiResponse<CancelOrderResponse>> => {
     const response = await api.post('/payments/cancel-order/', data)
+    return response.data
+  },
+
+  // 결제 상태 롤백 (실제 환불 없이 상태만 변경)
+  rollback: async (data: { orderId: number; rollbackReason: string }): Promise<ApiResponse<any>> => {
+    const response = await api.post('/payments/rollback/', data)
     return response.data
   },
 }

@@ -52,6 +52,7 @@ const PaginationLink = ({
         variant: isActive ? "outline" : "ghost",
         size,
       }),
+      "cursor-pointer", // 손가락 모양 커서 추가
       className
     )}
     {...props}
