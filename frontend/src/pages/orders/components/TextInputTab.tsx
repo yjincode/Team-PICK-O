@@ -181,19 +181,25 @@ const TextInputTab: React.FC<TextInputTabProps> = ({
   // 어종 이름으로 fish_type_id 보정 (선택 후 fish_type_id 채워짐)
   useEffect(() => {
     if (parsedOrder && fishTypes.length > 0) {
-      const updatedItems = parsedOrder.items.map((item) => {
-        if (item.fish_type_id === 0 && item.item_name_snapshot) {
-          const matched = fishTypes.find((f) => f.name === item.item_name_snapshot)
-          return {
-            ...item,
-            fish_type_id: matched?.id || 0,
+      const hasUnmatchedItems = parsedOrder.items.some(item => 
+        item.fish_type_id === 0 && item.item_name_snapshot
+      )
+      
+      if (hasUnmatchedItems) {
+        const updatedItems = parsedOrder.items.map((item) => {
+          if (item.fish_type_id === 0 && item.item_name_snapshot) {
+            const matched = fishTypes.find((f) => f.name === item.item_name_snapshot)
+            return {
+              ...item,
+              fish_type_id: matched?.id || 0,
+            }
           }
-        }
-        return item
-      })
-      setParsedOrder({ ...parsedOrder, items: updatedItems })
+          return item
+        })
+        setParsedOrder({ ...parsedOrder, items: updatedItems })
+      }
     }
-  }, [fishTypes, parsedOrder])
+  }, [fishTypes])
 
   // 주문 파싱 요청
   const handleParse = async () => {

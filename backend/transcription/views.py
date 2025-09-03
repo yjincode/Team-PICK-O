@@ -159,56 +159,14 @@ def parse_text_to_order(request):
         
         # user_id가 없어도 계속 진행 (AI 서버는 공개 API로 동작)
         
-        # AI Server로 직접 요청 전송 (프록시 역할)
-        try:
-            import requests
-            import os
-            
-            # 환경에 따른 AI 서버 URL 설정
-            ai_server_url = os.getenv('AI_SERVER_URL', 'http://localhost:8001')
-            ai_server_url = f"{ai_server_url}/api/v1/text/parse-text"
-            
-            # 인증 헤더 준비
-            headers = {}
-            auth_header = request.headers.get('Authorization')
-            if auth_header:
-                headers['Authorization'] = auth_header
-            
-            ai_response = requests.post(
-                ai_server_url,
-                json={
-                    "text": text,
-                    "user_id": user_id
-                },
-                headers=headers,
-                timeout=90
-            )
-            
-            if ai_response.status_code == 200:
-                # AI Server 응답을 그대로 프론트엔드에 전달
-                return Response(ai_response.json(), status=status.HTTP_200_OK)
-            else:
-                # AI Server 실패 시 한글 오류 메시지 반환
-                logger.error(f"AI Server 응답 오류: {ai_response.status_code}")
-                return Response(
-                    {
-                        "success": False,
-                        "message": f"AI 서버 텍스트 파싱에 실패했습니다 (오류 코드: {ai_response.status_code})"
-                    },
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
-                )
-                
-        except Exception as ai_error:
-            logger.error(f"AI Server 요청 실패: {ai_error}")
-            
-            # AI Server 연결 실패 시 한글 오류 메시지 반환 (정규식 fallback 제거)
-            return Response(
-                {
-                    "success": False,
-                    "message": f"AI 서버에 연결할 수 없습니다: {str(ai_error)}"
-                },
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+        # 텍스트 파싱 기능 비활성화 - AI 서버 의존성 제거
+        return Response(
+            {
+                "success": False,
+                "message": "텍스트 파싱 기능은 현재 비활성화되었습니다."
+            },
+            status=status.HTTP_501_NOT_IMPLEMENTED
+        )
         
     except Exception as e:
         logger.error(f"Text parsing error: {str(e)}")

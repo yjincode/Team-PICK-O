@@ -17,7 +17,7 @@ load_dotenv(BASE_DIR / '.env')
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
-# AI Server settings
+# AI Server settings (어류 질병 분석용)
 AI_SERVER_URL = os.getenv('AI_SERVER_URL', 'http://localhost:8001')
 
 # Tesseract OCR Configuration
