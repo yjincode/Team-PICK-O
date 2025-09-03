@@ -35,9 +35,6 @@ const App: React.FC = () => {
   return (<>
     <AuthProvider>
 
-    
-      <Router>
-
       <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
 
         <Routes>
@@ -250,10 +247,7 @@ const App: React.FC = () => {
         </Routes>
       </Router>
 
-      <DevHelper /> </AuthProvider>    </>
-
       </AuthProvider>    </>
-
 
   );
 };

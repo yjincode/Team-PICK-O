@@ -18,6 +18,8 @@ interface ParsedOrderData {
     fish_name?: string; // 원본 어종명
   }>;
   memo?: string;
+  unmatched_items?: any[];
+  validation_warnings?: any[];
 }
 
 // 어종 매핑 (음성 인식 결과와 DB ID 매핑)

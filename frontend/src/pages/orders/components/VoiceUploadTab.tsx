@@ -51,6 +51,8 @@ interface VoiceUploadTabProps {
   onDeliveryDateChange?: (date: string) => void;
   selectedBusinessId?: number | null;
   deliveryDate?: string;
+  onTranscriptionComplete?: (text: string) => void;
+  onOrderParsed?: (orderData: ParsedOrderData) => void;
 }
 
 const VoiceUploadTab: React.FC<VoiceUploadTabProps> = ({
@@ -61,6 +63,8 @@ const VoiceUploadTab: React.FC<VoiceUploadTabProps> = ({
   onDeliveryDateChange,
   selectedBusinessId,
   deliveryDate,
+  onTranscriptionComplete,
+  onOrderParsed,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
