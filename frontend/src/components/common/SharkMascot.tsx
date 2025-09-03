@@ -7,14 +7,12 @@ import { Link } from "react-router-dom";
 
 export const SharkMascot: React.FC = () => {
   return (
-    <Link to="/dashboard" className="w-full h-full flex items-cener justify-center">
-    <div className="w-full h-full flex items-center justify-center">
+    <Link to="/dashboard" className="w-full h-full flex items-center justify-center">
       <img 
         src="/logo.png" 
         alt="바다 대장부 로고" 
         className="w-full h-full object-contain"
       />
-    </div>
     </Link>
   )
 } 

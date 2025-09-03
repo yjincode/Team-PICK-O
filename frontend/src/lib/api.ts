@@ -39,146 +39,114 @@ const api = axios.create({
     'Content-Type': 'application/json',
   },
 })
-
-
-
-// Request interceptor (JWT 토큰 전용, 매우 간단하고 빠름)
-
 import { TokenManager } from './tokenManager'
 
-// // 토큰 갱신 중인지 추적
+// 토큰 갱신 중인지 추적 (중복 요청 방지)
 let isRefreshing = false
 let refreshPromise: Promise<string | null> | null = null
 
-// // 액세스 토큰 자동 갱신 함수
-// const refreshAccessToken = async (): Promise<string | null> => {
-//   if (isRefreshing && refreshPromise) {
-//     return await refreshPromise
-//   }
+// 토큰 갱신 함수 (TokenManager에 위임)
+const refreshAccessToken = async (): Promise<string | null> => {
+  if (isRefreshing && refreshPromise) {
+    return await refreshPromise
+  }
 
-//   isRefreshing = true
-//   refreshPromise = new Promise(async (resolve) => {
-//     try {
-//       const refreshToken = TokenManager.getRefreshToken()
+  isRefreshing = true
+  refreshPromise = TokenManager.refreshToken()
 
-//       if (!refreshToken) {
-//         resolve(null)
-//         return
-//       }
-          
-//       const response = await fetch(`${API_BASE_URL}/business/auth/refresh/`, {
-//         method: 'POST',
-//         headers: {
-//           'Content-Type': 'application/json',
-//         },
-//         body: JSON.stringify({
-//           refresh_token: refreshToken
-//         })
-//       })
+  try {
+    const result = await refreshPromise
+    return result
+  } finally {
+    isRefreshing = false
+    refreshPromise = null
+  }
+}
 
-//       if (response.ok) {
-//         const data = await response.json()
-//         const newAccessToken = data.access_token
+// Request 인터셉터: 토큰 자동 추가
+api.interceptors.request.use(
+  async (config) => {
+    // 토큰이 필요하지 않은 공개 엔드포인트
+    const publicEndpoints = [
+      '/business/auth/firebase-to-jwt/',
+      '/business/auth/register/',
+      '/business/auth/refresh/',
+      '/transcription/transcribe/',
+      '/transcription/parse-text/'
+    ]
 
-//         TokenManager.setAccessToken(newAccessToken)
-//         resolve(newAccessToken)
-//       } else {
-//         TokenManager.removeTokens()
-//         resolve(null)
-//       }
-//     } catch (error) {
-//       TokenManager.removeTokens()
-//       resolve(null)
-//     }
-//   })
+    const isPublicEndpoint = publicEndpoints.some(endpoint => config.url?.includes(endpoint))
+    
+    if (isPublicEndpoint) {
+      return config
+    }
 
-//   const result = await refreshPromise
-//   isRefreshing = false
-//   refreshPromise = null
+    // 일반 엔드포인트는 토큰 필요
+    const accessToken = TokenManager.getAccessToken()
 
-//   return result
-// }
+    if (accessToken && TokenManager.isAccessTokenValid()) {
+      config.headers.Authorization = `Bearer ${accessToken}`
+    }
 
-// api.interceptors.request.use(
-//   async (config) => {
-//     // 🔥 토큰이 필요하지 않은 엔드포인트들
-//     const publicEndpoints = [
-//       '/business/auth/firebase-to-jwt/',
-//       '/business/auth/register/',
-//       '/business/auth/refresh/',
-//       '/business/auth/super-login/',
-//       '/business/auth/super-register/'
-//     ]
+    return config
+  },
+  (error) => {
+    return Promise.reject(error)
+  }
+)
 
-//     const isPublicEndpoint = publicEndpoints.some(endpoint => config.url?.includes(endpoint))
+// Response 인터셉터: 401 에러 시 토큰 갱신 (1회만)
+api.interceptors.response.use(
+  (response) => {
+    return response
+  },
+  async (error) => {
+    const originalRequest = error.config
 
-//     if (isPublicEndpoint) {
-//       return config
-//     }
+    // 401 에러이고 아직 재시도하지 않은 경우
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      originalRequest._retry = true
 
-//     // 일반 엔드포인트는 토큰 필요
-//     let accessToken = TokenManager.getAccessToken()
+      try {
+        const newAccessToken = await refreshAccessToken()
+        
+        if (newAccessToken) {
+          // 새 토큰으로 원래 요청 재시도
+          originalRequest.headers.Authorization = `Bearer ${newAccessToken}`
+          return api(originalRequest)
+        } else {
+          // 토큰 갱신 실패 - 로그아웃 처리
+          TokenManager.removeTokens()
+          return Promise.reject({
+            ...error,
+            message: '인증이 만료되었습니다. 다시 로그인해주세요.'
+          })
+        }
+      } catch (refreshError) {
+        TokenManager.removeTokens()
+        return Promise.reject({
+          ...error,
+          message: '인증이 만료되었습니다. 다시 로그인해주세요.'
+        })
+      }
+    }
 
-//     // 액세스 토큰이 없거나 5분 이내 만료 예정인 경우 갱신 시도
-//     const timeUntilExpiry = TokenManager.getAccessTokenTimeUntilExpiry()
-//     if (!accessToken || !TokenManager.isAccessTokenValid() || timeUntilExpiry < 300) {  // 5분(300초) 이내 만료 시 갱신
-//       accessToken = await refreshAccessToken()
-
-//       // 갱신에 실패한 경우 토큰 제거만 하고 조용히 처리
-//       if (!accessToken) {
-//         return Promise.reject({ 
-//           name: 'AuthenticationError',
-//           message: '인증이 필요합니다',
-//           config: config
-//         })
-//       }
-//     }
-
-//     // Authorization 헤더에 액세스 토큰 추가
-//     if (accessToken) {
-//       config.headers.Authorization = `Bearer ${accessToken}`
-//     }
-
-//     return config
-//   },
-//   (error) => {
-//     return Promise.reject(error)
-//   }
-// )
-
-// // 응답 인터셉터: 401 오류 시 토큰 갱신 재시도
-// api.interceptors.response.use(
-//   (response) => {
-//     return response;
-//   },
-//   async (error) => {
-//     // 401 오류 시 토큰 갱신 후 재시도
-//     if (error.response?.status === 401 && !error.config._retry) {
-//       error.config._retry = true;
-      
-//       const newAccessToken = await refreshAccessToken();
-
-//       if (newAccessToken) {
-//         // 새로운 액세스 토큰으로 원래 요청 재시도
-//         error.config.headers.Authorization = `Bearer ${newAccessToken}`;
-//         return api(error.config);
-//       } else {
-//         // 토큰 갱신 실패 시 토큰 제거만 하고 리다이렉트는 AuthContext에 맡김
-//         TokenManager.removeTokens();
-//       }
-//     }
-
-//     return Promise.reject(error)
-//   }
-// )
+    return Promise.reject(error)
+  }
+)
 
 // 경매가 예측 API 함수들
 export const auctionApi = {
   // 실제 경매가 데이터 조회
-  getActualAuctionData: async (species?: string, days: number = 7) => {
+  getActualAuctionData: async (species?: string, days: number = 7, timestamp?: number) => {
     const params = new URLSearchParams()
     if (species) params.append('species', species)
     params.append('days', days.toString())
+    
+    // 캐시 방지를 위한 타임스탬프 추가
+    if (timestamp) {
+      params.append('_t', timestamp.toString())
+    }
     
     const response = await api.get(`/prediction/actual/?${params}`)
     return response.data
@@ -502,23 +470,6 @@ export const authApi = {
     }
   },
 
-  // 슈퍼계정 직접 로그인 (Firebase 완전 우회)
-  superAccountLogin: async (phoneNumber: string): Promise<any> => {
-    const response = await api.post('/business/auth/super-login/', {
-      phone_number: phoneNumber
-    })
-    return response.data
-  },
-
-  // 슈퍼계정 직접 회원가입 (Firebase 완전 우회)
-  superAccountRegister: async (userData: {
-    business_name: string;
-    owner_name: string;
-    address: string;
-  }): Promise<any> => {
-    const response = await api.post('/business/auth/super-register/', userData)
-    return response.data
-  },
 }
 
 // Sales API
@@ -710,6 +661,41 @@ export const sttApi = {
     }
 
     return await response.json()
+  },
+
+  // 텍스트 파싱 (LLM 기반)
+  parseText: async (text: string): Promise<{
+    success: boolean;
+    data?: {
+      items: Array<{
+        fish_type_id: number | null;
+        quantity: number;
+        unit_price?: number | null;
+        unit: string;
+        fish_name?: string;
+      }>;
+      memo: string;
+      delivery_date?: string;
+      business_name?: string;
+      business_id?: number;
+      unmatched_items?: Array<{
+        fish_name: string;
+        quantity: number;
+        unit: string;
+        suggested_matches: Array<{
+          fish_name: string;
+          similarity: number;
+        }>;
+      }>;
+      validation_warnings?: string[];
+    };
+    message?: string;
+  }> => {
+    const response = await api.post('/transcription/parse-text/', 
+      { text },
+      { timeout: 90000 } // 90초 timeout (LLM 처리 대기)
+    );
+    return response.data;
   },
 }
 

@@ -78,6 +78,27 @@ logs/
 *.log
 *.out
 
+# LLM 및 Ollama 관련 파일 (Git에 올리지 않음)
+.ollama/
+ollama_models/
+*.gguf
+*.ggml
+*.safetensors
+# Ollama 모델 저장소 (자동 다운로드되므로 제외)
+~/.ollama/
+# AI 모델 파일들
+*.pkl
+*.model
+*.h5
+*.pb
+*.pth
+*.pt
+*.onnx
+*.tflite
+*.bin
+models/
+checkpoints/
+
 # 개발 도구 설정
 .coverage
 htmlcov/

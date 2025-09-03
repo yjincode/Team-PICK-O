@@ -30,38 +30,16 @@ import { useEffect } from 'react'
 import Chatbot from './components/Chatbot';
 
 
-export function DevHelper() {
-  const { superAccountDirectLogin } = useAuth()
-
-  useEffect(() => {
-    // 전역에 함수 등록
-    // @ts-ignore
-    window.superLogin = async (phone) => {
-      try {
-        const res = await superAccountDirectLogin(phone)
-        console.log('superLogin 결과:', res)
-        return res
-      } catch (e) {
-        console.error('superLogin 에러:', e)
-        throw e
-      }
-    }
-    
-    // 컴포넌트 언마운트시 함수 삭제 (선택사항)
-    return () => {
-      // @ts-ignore
-      delete window.superLogin
-    }
-  }, [superAccountDirectLogin])
-
-  return null
-}
 
 const App: React.FC = () => {
   return (<>
     <AuthProvider>
+
     
       <Router>
+
+      <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+
         <Routes>
           {/* 로그인 페이지는 레이아웃 없이 */}
           <Route 
@@ -120,21 +98,21 @@ const App: React.FC = () => {
         <Route 
           path="/orders" 
           element={
-   
+            <PrivateRoute>
               <MainLayout>
                 <OrderList />
               </MainLayout>
-         
+            </PrivateRoute>
           } 
         />
         <Route 
           path="/orders/:id" 
           element={
-           
+            <PrivateRoute>
               <MainLayout>
                 <OrderDetail />
               </MainLayout>
-        
+            </PrivateRoute>
           } 
         />
         <Route 
@@ -271,7 +249,11 @@ const App: React.FC = () => {
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
       </Router>
+
       <DevHelper /> </AuthProvider>    </>
+
+      </AuthProvider>    </>
+
 
   );
 };

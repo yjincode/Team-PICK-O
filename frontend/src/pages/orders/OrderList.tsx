@@ -202,7 +202,6 @@ const OrderList: React.FC = () => {
           setOrders(Array.isArray(ordersData) ? ordersData : [])
         }
         setShowOrderForm(false)
-        toast.success('주문이 성공적으로 등록되었습니다!')
       } catch (error) {
         toast.error('주문 목록을 새로고침하는데 실패했습니다.')
       }
@@ -474,7 +473,7 @@ const OrderList: React.FC = () => {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center justify-between">
-              <span>주문 목록 ({totalCount}건)</span>
+              <span>주문 목록</span>
             </CardTitle>
           </CardHeader>
           <CardContent>

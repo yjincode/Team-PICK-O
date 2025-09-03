@@ -370,6 +370,65 @@ def calculate_quantity_based_stats(df):
     
     return stats
 
+def collect_single_species_daily(species_name, target_date_str):
+    """단일 어종의 특정 날짜 데이터를 수집합니다."""
+    
+    print(f"🐟 {species_name} {target_date_str} 데이터 수집 중...")
+    
+    # API 설정
+    url = "https://www.susansijang.co.kr/nsis/miw/ko/info/excel/miw3130"
+    
+    cookies = {
+        "__smVisitorID": "g9mATaAcvHx",
+        "JSESSIONIDMIW": "zDQVT9tHza1NFPra0YvHoR1P41NV9EYF4CE3h1pos73T6LTklpFLN9CEq5i1wJEg.amV1c19kb21haW4vTUlXX1NFUlZFUjE="
+    }
+    
+    headers = {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+    }
+    
+    try:
+        # API 요청 데이터
+        data = {
+            "pageIndex": 1,
+            "pageUnit": 100,
+            "pageSize": 100,
+            "kdfshNm": species_name,
+            "kdfshCode": species_name,
+            "searchStartDe": target_date_str.replace('-', '.'),
+            "searchEndDe": target_date_str.replace('-', '.')
+        }
+        
+        print(f"  📥 {target_date_str} 데이터 다운로드 중...")
+        
+        response = requests.post(url, headers=headers, cookies=cookies, data=data, timeout=30)
+        
+        if response.status_code == 200 and len(response.content) > 0:
+            # 임시 파일로 저장
+            temp_filename = f"temp_{species_name}_{target_date_str}.xls"
+            
+            with open(temp_filename, "wb") as f:
+                f.write(response.content)
+            
+            print(f"  ✅ 임시 파일 저장 완료")
+            
+            # 엑셀 파일 처리 및 DB 저장
+            processed_count = process_daily_excel(temp_filename, species_name)
+            
+            # 임시 파일 삭제
+            os.remove(temp_filename)
+            print(f"  🗑️ 임시 파일 삭제 완료")
+            
+            return processed_count
+        else:
+            print(f"  ❌ {target_date_str} 다운로드 실패 또는 빈 데이터")
+            return 0
+            
+    except Exception as e:
+        print(f"  ❌ {target_date_str} 오류: {e}")
+        return 0
+
 if __name__ == "__main__":
     import sys
     

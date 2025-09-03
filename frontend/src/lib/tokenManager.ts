@@ -171,4 +171,47 @@ export class TokenManager {
       return 0
     }
   }
+
+  /**
+   * 토큰 갱신 (백엔드 API 호출)
+   */
+  static async refreshToken(): Promise<string | null> {
+    const refreshToken = this.getRefreshToken()
+    
+    if (!refreshToken) {
+      return null
+    }
+
+    // API_BASE_URL을 동적으로 가져오기
+    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1'
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/business/auth/refresh/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          refresh_token: refreshToken
+        })
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        const newAccessToken = data.access_token
+        
+        // 새 액세스 토큰 저장
+        this.setAccessToken(newAccessToken)
+        return newAccessToken
+      } else {
+        // 갱신 실패 시 모든 토큰 제거
+        this.removeTokens()
+        return null
+      }
+    } catch (error) {
+      console.error('토큰 갱신 실패:', error)
+      this.removeTokens()
+      return null
+    }
+  }
 }

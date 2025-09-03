@@ -42,9 +42,27 @@ class WholesaleMarket(models.Model):
     def __str__(self):
         return self.market_name_kr
 
+class AuctionFishSpecies(models.Model):
+    """
+    Auction Prediction 전용 어종 모델
+    노량진 경매 시세 예측에 사용되는 활어 어종 관리 (예: (활)우럭, (활)참돔)
+    """
+    korean_name = models.CharField(max_length=100, unique=True, verbose_name="한글명 (예: (활)우럭)")
+    english_code = models.CharField(max_length=50, unique=True, verbose_name="영문 코드 (예: rockfish)")
+    model_file_prefix = models.CharField(max_length=50, verbose_name="모델 파일 접두사")
+    is_active = models.BooleanField(default=True, verbose_name="활성 상태")
+    
+    class Meta:
+        verbose_name = "Auction 예측 어종"
+        verbose_name_plural = "Auction 예측 어종 목록"
+        db_table = 'prediction_auction_fish_species'
+
+    def __str__(self):
+        return f"{self.korean_name} ({self.english_code})"
+
 class FishSpecies(models.Model):
     """
-    어종 마스터 모델 [cite: 117]
+    어종 마스터 모델 [cite: 117] - 레거시 호환성 유지
     농축수산물 표준코드의 품목 정보를 바탕으로 어종 데이터를 관리합니다.
     """
     item_large_category_code = models.CharField(max_length=50, verbose_name="대분류 코드")
@@ -84,9 +102,35 @@ class FishWeightTier(models.Model):
 # AI 경매가 예측 모델 학습 및 추론에 사용될 외부 데이터를 저장합니다.
 # -------------------------------------------------------------------
 
+class AuctionPriceData(models.Model):
+    """
+    Auction Prediction 전용 경매 가격 데이터
+    노량진 시장의 활어 경매 데이터만 저장 (regularized_models_4years 모델용)
+    """
+    trade_date = models.DateField(verbose_name="거래일")
+    fish_species = models.ForeignKey(AuctionFishSpecies, on_delete=models.CASCADE, verbose_name="경매 어종")
+    unit_weight_kg = models.DecimalField(max_digits=5, decimal_places=2, verbose_name="단위 중량(kg)")
+    auction_price = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="경매 단가(원/kg)")
+    trade_volume = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True, verbose_name="거래량")
+    grade = models.CharField(max_length=20, default="특급", verbose_name="등급")
+    
+    # 메타데이터
+    data_source = models.CharField(max_length=50, default="노량진수산시장_일별", verbose_name="데이터 출처")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="수집일시")
+    
+    class Meta:
+        verbose_name = "Auction 경매가 데이터"
+        verbose_name_plural = "Auction 경매가 데이터 목록"
+        ordering = ['-trade_date']
+        unique_together = ['trade_date', 'fish_species', 'unit_weight_kg']
+        db_table = 'prediction_auction_price_data'
+
+    def __str__(self):
+        return f"{self.trade_date} / {self.fish_species.korean_name} / {self.auction_price}원"
+
 class ActualAuctionPrice(models.Model):
     """
-    실제 경매 가격 데이터 모델 [cite: 1]
+    실제 경매 가격 데이터 모델 [cite: 1] - 레거시 호환성 유지
     aT, EPIS 등에서 제공하는 일별/실시간 경매 데이터를 저장합니다.
     """
     auction_sequence_id = models.CharField(max_length=100, unique=True, verbose_name="경매 일련번호")  # [cite: 5]
@@ -150,3 +194,102 @@ class ExternalEnvironmentalData(models.Model):
 
     def __str__(self):
         return f"{self.data_timestamp} / {self.location_identifier} / {self.data_type}: {self.value}{self.unit}"
+
+
+def get_or_create_auction_fish_species(korean_name: str):
+    """
+    Auction 어종을 조회하거나 없으면 자동 생성
+    데이터 수집 시 실시간으로 어종 생성
+    """
+    # 영문 코드 매핑
+    korean_to_english = {
+        '(활)우럭': {'english': 'rockfish', 'prefix': 'rockfish'},
+        '(활)넙치': {'english': 'flounder', 'prefix': 'flounder'},
+        '(활)참숭어': {'english': 'mullet', 'prefix': 'mullet'},
+        '(활)참돔': {'english': 'red_sea_bream', 'prefix': 'red_sea_bream'},
+        '(활)농어': {'english': 'sea_bass', 'prefix': 'sea_bass'},
+    }
+    
+    # 기존 어종 조회 시도
+    try:
+        return AuctionFishSpecies.objects.get(korean_name=korean_name)
+    except AuctionFishSpecies.DoesNotExist:
+        # 없으면 자동 생성
+        mapping = korean_to_english.get(korean_name)
+        if mapping:
+            fish_species, created = AuctionFishSpecies.objects.get_or_create(
+                korean_name=korean_name,
+                defaults={
+                    'english_code': mapping['english'],
+                    'model_file_prefix': mapping['prefix'], 
+                    'is_active': True
+                }
+            )
+            if created:
+                print(f"✅ 새로운 Auction 어종 생성: {korean_name}")
+            return fish_species
+        else:
+            # 매핑 정보가 없는 경우 기본값으로 생성
+            fish_species, created = AuctionFishSpecies.objects.get_or_create(
+                korean_name=korean_name,
+                defaults={
+                    'english_code': korean_name.replace('(활)', '').lower(),
+                    'model_file_prefix': korean_name.replace('(활)', '').lower(),
+                    'is_active': False  # 모델이 없으므로 비활성
+                }
+            )
+            if created:
+                print(f"⚠️ 알 수 없는 Auction 어종 생성 (비활성): {korean_name}")
+            return fish_species
+
+def create_initial_data():
+    """레거시 호환성을 위한 기본 데이터 생성"""
+    
+    # 1. CommonCode 생성
+    codes_to_create = [
+        {'type': 'PLOR', 'value': 'KOREA', 'name': '국내산'},
+        {'type': 'PKG', 'value': 'BOX', 'name': '상자'},
+        {'type': 'GRD', 'value': 'SPECIAL', 'name': '특급'},
+        {'type': 'UNIT', 'value': 'KG', 'name': '킬로그램'},
+    ]
+    
+    for code in codes_to_create:
+        CommonCode.objects.get_or_create(
+            code_type=code['type'],
+            code_value=code['value'],
+            defaults={'code_name_kr': code['name']}
+        )
+    
+    # 2. FishWeightTier 생성
+    weight_tiers = [
+        {'code': 'FWT_XS', 'name': '초소형 (0.05kg)', 'min': 0.05, 'max': 0.2},
+        {'code': 'FWT_S', 'name': '소형 (0.2kg)', 'min': 0.2, 'max': 0.5},
+        {'code': 'FWT_M', 'name': '중형 (0.5kg)', 'min': 0.5, 'max': 0.8},
+        {'code': 'FWT_L', 'name': '대형 (1.0kg)', 'min': 0.8, 'max': 1.2},
+        {'code': 'FWT_XL', 'name': '초대형 (1.5kg)', 'min': 1.2, 'max': 2.0},
+    ]
+    
+    for tier in weight_tiers:
+        FishWeightTier.objects.get_or_create(
+            size_code=tier['code'],
+            defaults={
+                'size_name_kr': tier['name'],
+                'min_weight_kg': tier['min'],
+                'max_weight_kg': tier['max']
+            }
+        )
+    
+    # 3. WholesaleMarket 생성 (노량진)
+    WholesaleMarket.objects.get_or_create(
+        market_api_code='NORYANGJIN',
+        defaults={
+            'market_name_kr': '노량진수산시장',
+            'location': 'SEOUL'
+        }
+    )
+    
+    # 4. Auction Prediction 데이터 생성
+    create_auction_prediction_data()
+    
+    print("✅ 모든 초기 데이터 생성 완료!")
+    print("이제 데이터 수집을 다시 실행할 수 있습니다.")

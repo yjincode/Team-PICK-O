@@ -47,10 +47,7 @@ export const menuItems: MenuItem[] = [
   {
     title: "주문 관리",
     icon: ShoppingCart,
-    items: [
-      { title: "주문 내역", url: "/orders" },
-      { title: "AI 분석 로그", url: "/orders/ai-logs" },
-    ],
+    url: "/orders"
   },
   {
     title: "재고 관리",

@@ -116,3 +116,103 @@ def transcribe_audio(request):
             {"error": f"Failed to process request: {str(e)}"},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+
+@api_view(['POST'])
+def parse_text_to_order(request):
+    """텍스트를 주문 데이터로 파싱하는 API"""
+    if 'text' not in request.data:
+        return Response(
+            {"error": "No text provided"},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    text = request.data.get('text', '').strip()
+    if not text:
+        return Response(
+            {"error": "Empty text provided"},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    try:
+        # 헤더에서 직접 인증 정보 추출 (미들웨어 우회)
+        auth_header = request.headers.get('Authorization')
+        user_id = None
+        
+        if auth_header and auth_header.startswith('Bearer '):
+            try:
+                import jwt
+                from django.conf import settings
+                token = auth_header.split(' ')[1]
+                
+                # JWT 토큰 직접 검증 (jwt_utils import 문제 회피)
+                payload = jwt.decode(
+                    token, 
+                    getattr(settings, 'JWT_SECRET_KEY', 'your-super-secret-key-change-in-production'), 
+                    algorithms=['HS256']
+                )
+                
+                if payload and payload.get('token_type') == 'access':
+                    user_id = payload.get('user_id')
+                    logger.info(f"🔑 토큰에서 user_id 추출: {user_id}")
+            except Exception as e:
+                logger.warning(f"토큰 검증 실패: {e}")
+        
+        # user_id가 없어도 계속 진행 (AI 서버는 공개 API로 동작)
+        
+        # AI Server로 직접 요청 전송 (프록시 역할)
+        try:
+            import requests
+            import os
+            
+            # 환경에 따른 AI 서버 URL 설정
+            ai_server_url = os.getenv('AI_SERVER_URL', 'http://localhost:8001')
+            ai_server_url = f"{ai_server_url}/api/v1/text/parse-text"
+            
+            # 인증 헤더 준비
+            headers = {}
+            auth_header = request.headers.get('Authorization')
+            if auth_header:
+                headers['Authorization'] = auth_header
+            
+            ai_response = requests.post(
+                ai_server_url,
+                json={
+                    "text": text,
+                    "user_id": user_id
+                },
+                headers=headers,
+                timeout=90
+            )
+            
+            if ai_response.status_code == 200:
+                # AI Server 응답을 그대로 프론트엔드에 전달
+                return Response(ai_response.json(), status=status.HTTP_200_OK)
+            else:
+                # AI Server 실패 시 한글 오류 메시지 반환
+                logger.error(f"AI Server 응답 오류: {ai_response.status_code}")
+                return Response(
+                    {
+                        "success": False,
+                        "message": f"AI 서버 텍스트 파싱에 실패했습니다 (오류 코드: {ai_response.status_code})"
+                    },
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+                
+        except Exception as ai_error:
+            logger.error(f"AI Server 요청 실패: {ai_error}")
+            
+            # AI Server 연결 실패 시 한글 오류 메시지 반환 (정규식 fallback 제거)
+            return Response(
+                {
+                    "success": False,
+                    "message": f"AI 서버에 연결할 수 없습니다: {str(ai_error)}"
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        
+    except Exception as e:
+        logger.error(f"Text parsing error: {str(e)}")
+        return Response(
+            {"error": f"텍스트 파싱 처리 중 오류가 발생했습니다: {str(e)}"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )

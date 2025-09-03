@@ -10,6 +10,7 @@ import { Label } from "../../../components/ui/label"
 import { Camera, Upload, Trash2, Eye, AlertCircle, X } from "lucide-react"
 import { businessApi, exebaseApi } from "../../../lib/api"
 import type { Business } from "../../../types"
+
 import toast from "react-hot-toast"
 
 
@@ -109,28 +110,55 @@ const ImageUploadTab: React.FC<ImageUploadTabProps> = ({
     fetchBusinesses();
   }, []);
 
-  // 어종 목록 로드
-  // useEffect(() => {
-  //   const fetchFishTypes = async () => {
-  //     try {
-  //       const response = await fishTypeApi.getAll()
-  //       let fishData: FishType[] = []
-        
-  //       if (response && Array.isArray(response)) {
-  //         fishData = response
-  //       } else if (response && response.data && Array.isArray(response.data)) {
-  //         fishData = response.data
-  //       }
-        
-  //       setFishTypes(fishData)
-  //     } catch (error) {
-  //       // 어종 목록 가져오기 실패
-  //       setFishTypes([])
-  //     }
-  //   }
 
-  //   fetchFishTypes()
-  // }, [])
+const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const file = event.target.files?.[0]
+  if (!file) return
+
+  // 파일 크기 검증 (5MB 이하)
+  if (file.size > 5 * 1024 * 1024) {
+    const errorMsg = '이미지 파일 크기는 5MB를 초과할 수 없습니다.'
+    setError(errorMsg)
+    onError?.(errorMsg)
+    return
+  }
+
+  // 파일 타입 검증 (이미지 파일만 허용)
+  if (!file.type.startsWith('image/')) {
+    const errorMsg = '이미지 파일만 업로드 가능합니다.'
+    setError(errorMsg)
+    onError?.(errorMsg)
+    return
+  }
+
+  setLocalUploadedFile(file)
+  setError('')
+  setLocalIsProcessing(true)
+
+  try {
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('type', 'image')
+
+    if (selectedBusinessId) {
+      formData.append('business_id', selectedBusinessId.toString())
+    }
+
+    if (deliveryDate) {
+      formData.append('delivery_date', deliveryDate)
+    }
+
+    // API 응답 타입 정의
+    interface ApiOrderResponse {
+      business_name?: string;
+      phone_number?: string;
+      transcribed_text: string;
+      delivery_datetime?: string;
+      items: any[];  // 또는 더 구체적인 타입이 있다면 사용하세요
+      memo?: string;
+      [key: string]: any;
+    }
+
 
 
 //   // 이미지 파일 처리 핸들러
@@ -258,11 +286,13 @@ const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
       [key: string]: any;
     }
 
+
     // exebaseApi를 사용하여 주문 처리
     const result = await exebaseApi.processOrder(formData) as { 
       success: boolean; 
       message: ApiOrderResponse | string 
     };
+
 
     // ✅ message 안에 데이터가 존재할 경우 처리
     if (result.success && result.message) {
@@ -334,6 +364,7 @@ const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     updatedItems[index] = { ...updatedItems[index], [key]: value }
     setParsedOrder({ ...parsedOrder, items: updatedItems })
   }
+
 
   // 항목 삭제 핸들러
   const handleRemoveItem = (index: number) => {

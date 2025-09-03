@@ -26,7 +26,7 @@ interface StepInfo {
 
 export default function LoginPage(): JSX.Element {
   const navigate = useNavigate()
-  const { user, loading: authLoading, sendSMSCode, verifySMSCode, registerUser, superAccountDirectLogin, superAccountDirectRegister } = useAuth()
+  const { user, loading: authLoading, sendSMSCode, verifySMSCode, registerUser } = useAuth()
   
   // 상태 관리 (sessionStorage에서 복원)
   const [currentStep, setCurrentStep] = useState<LoginStep>(() => {
@@ -68,23 +68,6 @@ export default function LoginPage(): JSX.Element {
     }
   }, [user, authLoading, navigate, currentStep])
 
-  // reCAPTCHA 초기화 (슈퍼계정이 아닐 때만)
-  useEffect(() => {
-    // 슈퍼계정인 경우 reCAPTCHA 초기화 건너뛰기
-    const isSuperAccount = phoneNumber === '010-7777-7777' || phoneNumber === '01077777777'
-    
-    if (!isSuperAccount) {
-      const timer = setTimeout(() => {
-        try {
-          setupRecaptcha('recaptcha-container')
-        } catch (error) {
-          setError('reCAPTCHA 초기화에 실패했습니다.')
-        }
-      }, 100);
-      
-      return () => clearTimeout(timer)
-    }
-  }, [phoneNumber])
 
   // 쿨다운 타이머
   const startCooldown = (seconds: number) => {
@@ -100,33 +83,6 @@ export default function LoginPage(): JSX.Element {
     }, 1000)
   }
 
-  // 슈퍼계정 직접 로그인 처리 (Firebase 완전 우회)
-  const handleSuperAccountDirectLogin = async (): Promise<void> => {
-    setLoading(true)
-    setError('')
-    
-    try {      
-      const result = await superAccountDirectLogin(phoneNumber)
-      
-      if (result.isNewUser) {
-        // 신규 슈퍼계정 - 회원가입 단계로
-        setCurrentStep('register')
-        
-        // sessionStorage에 상태 저장 (새로고침 시 복원용)
-        sessionStorage.setItem('forced_step', 'register')
-        sessionStorage.setItem('phone_number_for_register', phoneNumber)
-        sessionStorage.setItem('is_super_account', 'true')
-        
-      } else {
-        // 기존 슈퍼계정 - 대시보드로
-        navigate('/dashboard')
-      }
-    } catch (error: any) {
-      setError(error.message || '슈퍼계정 로그인에 실패했습니다.')
-    } finally {
-      setLoading(false)
-    }
-  }
 
   // 1단계: SMS 인증번호 전송
   const handleSendCode = async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {
@@ -134,21 +90,18 @@ export default function LoginPage(): JSX.Element {
     setLoading(true)
     setError('')
     
-    // 슈퍼계정 전화번호 체크 (Firebase 완전 우회)
-    if (phoneNumber === '010-7777-7777' || phoneNumber === '01077777777') {
-      await handleSuperAccountDirectLogin()
-      return
-    }
     
     try {
       const result = await sendSMSCode(phoneNumber)
       setConfirmationResult(result)
       setCurrentStep('code')
-      startCooldown(60)
+      // 쿨다운 제거 - 사용자 경험 개선
+      // startCooldown(60)
     } catch (error: any) {
       setError(error.message || 'SMS 전송에 실패했습니다.')
+      // rate limit 에러 시에만 짧은 쿨다운 적용
       if (error.message?.includes('too-many-requests')) {
-        startCooldown(300) // 5분 쿨다운
+        startCooldown(30) // 30초로 단축
       }
     } finally {
       setLoading(false)
@@ -198,24 +151,16 @@ export default function LoginPage(): JSX.Element {
     setError('')
     
     try {
-      const isSuperAccount = sessionStorage.getItem('is_super_account') === 'true'
-      
-      if (isSuperAccount) {
-        // 슈퍼계정 직접 회원가입 (Firebase 완전 우회)
-        await superAccountDirectRegister(userInfo)
-      } else {
-        // 일반 Firebase 회원가입
-        if (!firebaseToken) {
-          throw new Error('인증 정보가 없습니다. 다시 로그인해주세요.')
-        }
-        await registerUser(userInfo, firebaseToken)
+      // Firebase 회원가입
+      if (!firebaseToken) {
+        throw new Error('인증 정보가 없습니다. 다시 로그인해주세요.')
       }
+      await registerUser(userInfo, firebaseToken)
       
       // 회원가입 완료 후 sessionStorage 정리
       sessionStorage.removeItem('forced_step')
       sessionStorage.removeItem('firebase_token_for_register')
       sessionStorage.removeItem('phone_number_for_register')
-      sessionStorage.removeItem('is_super_account')
       
       // 대시보드로 이동 (AuthContext에서 user 상태가 설정됨)
       navigate('/dashboard')
@@ -439,7 +384,7 @@ export default function LoginPage(): JSX.Element {
               {currentStep === 'pending' && renderPendingStep()}
 
               {/* reCAPTCHA container */}
-              <div id="recaptcha-container" className="flex justify-center mt-4" style={{ minHeight: '78px' }}></div>
+              <div id="recaptcha-container"></div>
               
             </div>
           </CardContent>
