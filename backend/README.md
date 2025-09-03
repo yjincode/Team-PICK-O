@@ -132,7 +132,7 @@ source venv/bin/activate
 
 
 # 또는 특정 포트로 실행
-python manage.py runserver 8000
+며에 8000
 
 # 백그라운드 실행
 nohup python manage.py runserver &

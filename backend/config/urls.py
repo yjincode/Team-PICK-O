@@ -82,7 +82,7 @@ urlpatterns = [
     path('api/v1/analysis/', include(('fish_analysis.urls', 'fish_analysis'), namespace='analysis')),  # AI 서버 프록시 (별칭)
     path('api/v1/transcription/', include('transcription.urls')),
     path('api/v1/sales/', include('sales.urls')),
-    
+    path('api/v1/prediction/', include('prediction.urls')),
 
     
     # API Documentation

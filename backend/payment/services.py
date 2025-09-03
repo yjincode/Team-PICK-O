@@ -501,6 +501,61 @@ class PaymentService:
         except Exception as e:
             logger.error(f"토스페이먼츠 환불 중 예상치 못한 오류: {e}")
             raise PaymentError("환불 처리 중 오류가 발생했습니다.")
+    
+    @staticmethod
+    def process_payment_rollback(order_id, rollback_reason):
+        """결제 상태 롤백 (실제 환불 없이 DB 상태만 변경)"""
+        try:
+            logger.info(f"결제 상태 롤백 시작: 주문 {order_id}")
+            
+            # 1. 주문 정보 조회
+            try:
+                order = Order.objects.get(id=order_id)
+            except Order.DoesNotExist:
+                logger.error(f"존재하지 않는 주문: {order_id}")
+                raise PaymentError("존재하지 않는 주문입니다.", code=404)
+            
+            # 2. 결제 완료 상태 확인
+            if order.order_status != 'ready':
+                logger.error(f"주문 {order_id}이 결제 완료 상태가 아닙니다: {order.order_status}")
+                raise PaymentError("결제 완료된 주문만 롤백할 수 있습니다.", code=400)
+            
+            # 3. 관련 결제 정보 조회
+            try:
+                payment = Payment.objects.get(order_id=order_id, payment_status='paid')
+            except Payment.DoesNotExist:
+                logger.error(f"주문 {order_id}에 대한 결제 정보를 찾을 수 없습니다")
+                raise PaymentError("결제 정보를 찾을 수 없습니다.", code=404)
+            
+            # 4. 실제 환불 없이 DB 상태만 변경
+            with transaction.atomic():
+                # 결제 상태를 pending으로 변경
+                payment.payment_status = 'pending'
+                payment.paid_at = None
+                payment.save()
+                
+                # 주문 상태를 placed로 변경 (다시 결제 가능한 상태)
+                order.order_status = 'placed'
+                order.save()
+                
+                logger.info(f"결제 상태 롤백 완료: 주문 {order_id}")
+                logger.info(f"롤백 사유: {rollback_reason}")
+            
+            return {
+                "order_id": order_id,
+                "previous_status": "ready",
+                "current_status": "placed",
+                "payment_status": "pending",
+                "rollback_reason": rollback_reason,
+                "message": "결제 상태가 롤백되었습니다. 다시 결제할 수 있습니다."
+            }
+            
+        except PaymentError as e:
+            # PaymentError는 그대로 전달
+            raise e
+        except Exception as e:
+            logger.error(f"결제 롤백 중 예외 발생: {e}", exc_info=True)
+            raise PaymentError(f"결제 롤백 중 오류가 발생했습니다: {str(e)}")
 
 
 class PaymentError(Exception):

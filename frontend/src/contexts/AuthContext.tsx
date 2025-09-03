@@ -19,14 +19,11 @@ interface AuthContextType {
   
   // SMS 인증 관련
   sendSMSCode: (phoneNumber: string) => Promise<ConfirmationResult>
-  verifySMSCode: (confirmationResult: ConfirmationResult | null, code: string, superToken?: string) => Promise<{ isNewUser: boolean; firebaseToken?: string }>
+  verifySMSCode: (confirmationResult: ConfirmationResult | null, code: string) => Promise<{ isNewUser: boolean; firebaseToken?: string }>
   
   // 회원가입
   registerUser: (userData: any, firebaseToken: string) => Promise<void>
   
-  // 슈퍼계정 직접 인증 (Firebase 완전 우회)
-  superAccountDirectLogin: (phoneNumber: string) => Promise<{ isNewUser: boolean }>
-  superAccountDirectRegister: (userData: any) => Promise<void>
   
   // 인증 관리
   logout: () => void
@@ -42,11 +39,10 @@ interface AuthProviderProps {
 export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
   const [user, setUser] = useState<UserData | null>(null)
   const [loading, setLoading] = useState<boolean>(true)
-
-  // 초기화: 저장된 토큰으로 자동 로그인 복원
   useEffect(() => {
     initializeAuth()
   }, [])
+  
 
   // 토큰 상태 변화 감지 (토큰이 제거되면 사용자 로그아웃)
   useEffect(() => {
@@ -103,39 +99,33 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
     }
   }
 
-  // Firebase 인증번호 확인 및 JWT 교환 (슈퍼계정 지원)
-  const verifySMSCode = async (confirmationResult: ConfirmationResult | null, code: string, superToken?: string): Promise<{ isNewUser: boolean; firebaseToken?: string }> => {
+  // Firebase 인증번호 확인 및 JWT 교환
+  const verifySMSCode = async (confirmationResult: ConfirmationResult | null, code: string): Promise<{ isNewUser: boolean; firebaseToken?: string }> => {
     try {
       setLoading(true)
       
-      let firebaseToken: string
-      
-      if (superToken) {
-        // 슈퍼계정 처리 - Firebase 인증 건너뛰기
-        firebaseToken = superToken
-      } else {
-        // 일반 Firebase 인증번호 확인
-        if (!confirmationResult) {
-          throw new Error('인증 세션이 만료되었습니다.')
-        }
-        
-        const authResult = await verifyPhoneCode(confirmationResult, code)
-        
-        if (authResult.success && authResult.user && authResult.idToken) {
-          firebaseToken = authResult.idToken
-        } else {
-          throw new Error(authResult.error || '인증 실패')
-        }
+      // Firebase 인증번호 확인
+      if (!confirmationResult) {
+        throw new Error('인증 세션이 만료되었습니다.')
       }
       
-      // Firebase ID 토큰(또는 슈퍼계정 토큰)을 JWT로 교환
+      const authResult = await verifyPhoneCode(confirmationResult, code)
+      
+      let firebaseToken: string
+      if (authResult.success && authResult.user && authResult.idToken) {
+        firebaseToken = authResult.idToken
+      } else {
+        throw new Error(authResult.error || '인증 실패')
+      }
+      
+      // Firebase ID 토큰을 JWT로 교환
       const response = await api.post('/business/auth/firebase-to-jwt/', {
         firebase_token: firebaseToken
       })
       
       if (response.data.is_new_user) {
         // 신규 사용자 - Firebase ID 토큰 반환하고 회원가입 단계로
-        return { isNewUser: true, firebaseToken: firebaseToken }
+        return { isNewUser: true, firebaseToken }
       } else {
         // 기존 사용자 - JWT 토큰 저장 및 로그인 처리
         const { access_token, refresh_token, user_id, business_name, status } = response.data
@@ -197,65 +187,16 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
     }
   }
 
-  // 슈퍼계정 직접 로그인 (Firebase 완전 우회)
-  const superAccountDirectLogin = async (phoneNumber: string): Promise<{ isNewUser: boolean }> => {
-    try {
-      setLoading(true)      
-      const response = await authApi.superAccountLogin(phoneNumber)
-      
-      if (response.is_new_user) {
-        // 신규 슈퍼계정 - 회원가입 필요
-        return { isNewUser: true }
-      } else {
-        // 기존 슈퍼계정 - JWT 토큰 저장 및 로그인 처리
-        const { access_token, refresh_token, user_id, business_name, status } = response
-        
-        TokenManager.setTokens(access_token, refresh_token)
-        
-        if (status === 'approved' && business_name) {
-          const userData: UserData = { user_id, business_name }
-          setUser(userData)
-        }
-        return { isNewUser: false }
-      }
-      
-    } catch (error: any) {
-      throw error
-    } finally {
-      setLoading(false)
-    }
-  }
 
-  // 슈퍼계정 직접 회원가입 (Firebase 완전 우회)
-  const superAccountDirectRegister = async (userData: any): Promise<void> => {
-    try {
-      setLoading(true)
-      
-      
-      const response = await authApi.superAccountRegister({
-        business_name: userData.business_name,
-        owner_name: userData.owner_name,
-        address: userData.address
-      })
-      
-      // 회원가입 완료 후 JWT 토큰 저장
-      if (response.access_token && response.refresh_token) {
-        TokenManager.setTokens(response.access_token, response.refresh_token)
-      }
-      
-      // 사용자 상태 업데이트
-      const newUserData: UserData = {
-        user_id: response.user.id,
-        business_name: response.user.business_name
-      }
-      setUser(newUserData)
-      
-    } catch (error: any) {
-      throw error
-    } finally {
-      setLoading(false)
-    }
+  const isDevMode = process.env.NODE_ENV === 'development'
+
+  const devLogin = () => {
+    if (!isDevMode) return
+  
+    TokenManager.setTokens('dev-access-token', 'dev-refresh-token')
+    setUser({ user_id: 1, business_name: '개발 테스트' })
   }
+  
 
   // 사용자 데이터 갱신 (토큰 페이로드에서 재추출)
   const refreshUserData = (): void => {
@@ -283,8 +224,6 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
     sendSMSCode,
     verifySMSCode,
     registerUser,
-    superAccountDirectLogin,
-    superAccountDirectRegister,
     logout,
     refreshUserData
   }
@@ -292,8 +231,6 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
   return (
     <AuthContext.Provider value={value}>
       {children}
-      {/* Firebase SMS 인증용 reCAPTCHA 컨테이너 */}
-      <div id="recaptcha-container" style={{ display: 'none' }}></div>
     </AuthContext.Provider>
   )
 }

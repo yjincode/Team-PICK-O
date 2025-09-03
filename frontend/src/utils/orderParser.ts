@@ -9,13 +9,17 @@ interface ParsedOrderData {
   phone_number?: string;
   transcribed_text: string;
   delivery_date?: string;
+  business_id?: number; // 백엔드에서 매칭된 업체 ID
   items: Array<{
-    fish_type_id: number;
+    fish_type_id: number | null;
     quantity: number;
-    unit_price?: number;
+    unit_price?: number | null;
     unit: string;
+    fish_name?: string; // 원본 어종명
   }>;
   memo?: string;
+  unmatched_items?: any[];
+  validation_warnings?: any[];
 }
 
 // 어종 매핑 (음성 인식 결과와 DB ID 매핑)
@@ -87,81 +91,53 @@ export async function findFishTypeFromAPI(fishName: string): Promise<FishType | 
 }
 
 /**
- * 음성 파싱 결과를 분석하여 주문 데이터를 추출 (API 연동)
+ * 음성 파싱 결과를 분석하여 주문 데이터를 추출 (백엔드 API 연동)
  */
 export async function parseVoiceOrderWithAPI(voiceText: string): Promise<ParsedOrderData> {
-  const result: ParsedOrderData = {
-    transcribed_text: voiceText,
-    items: [],
-    memo: ''
-  }
-
-  // 어종과 수량 추출
-  const fishPattern = /([가-힣]+)\s*(\d+)\s*(kg|킬로|마리|박스|개|통|팩)/g
-  let match
-
-  const extractedFish: Array<{name: string, quantity: number, unit: string}> = []
-  
-  while ((match = fishPattern.exec(voiceText)) !== null) {
-    const fishName = match[1]
-    const quantity = parseInt(match[2])
-    const unit = unitMapping[match[3]] || match[3]
+  try {
+    // sttApi의 parseText 사용 (백엔드가 AI Server로 프록시)
+    const { sttApi } = await import('../lib/api');
     
-    extractedFish.push({ name: fishName, quantity, unit })
-  }
-
-  // 각 추출된 어종을 API에서 찾아서 매칭
-  for (const fish of extractedFish) {
-    const matchedFish = await findFishTypeFromAPI(fish.name)
+    const data = await sttApi.parseText(voiceText);
     
-    if (matchedFish) {
-      result.items.push({
-        fish_type_id: matchedFish.id,
-        quantity: fish.quantity,
-        unit_price: fishTypeMapping[matchedFish.name]?.default_price || 0, // 기본 가격 사용
-        unit: fish.unit
-      })
+    console.log('🔍 백엔드에서 받은 파싱 응답:', JSON.stringify(data, null, 2));
+    
+    // AI Server 응답 형식 확인
+    if (data.success && data.data) {
+      const parsedData = data.data;
+      
+      console.log('🔍 파싱된 데이터 상세:', {
+        business_name: parsedData.business_name,
+        business_id: parsedData.business_id,
+        items: parsedData.items,
+        memo: parsedData.memo,
+        delivery_date: parsedData.delivery_date
+      });
+      
+      // AI Server 응답을 프론트엔드 형식으로 변환
+      const result: ParsedOrderData = {
+        transcribed_text: voiceText,
+        items: parsedData.items || [],
+        memo: parsedData.memo || '',
+        delivery_date: parsedData.delivery_date,
+        business_name: parsedData.business_name,
+        business_id: parsedData.business_id,
+        unmatched_items: parsedData.unmatched_items || [],
+        validation_warnings: parsedData.validation_warnings || []
+      };
+
+      console.log('🔍 최종 변환된 결과:', result);
+      return result;
     } else {
-      // 매칭되지 않은 어종도 임시로 추가 (나중에 신규 등록 기능으로 처리)
+      console.error('❌ AI Server 파싱 실패:', data);
+      throw new Error(data.message || "AI Server 파싱 실패");
     }
+  } catch (error) {
+    console.error('❌ 백엔드 API 파싱 실패:', error);
+    
+    // AI 서버 파싱 실패 시 오류 전파 (로컬 fallback 제거)
+    throw new Error(`AI 서버 파싱 실패: ${error instanceof Error ? error.message : '알 수 없는 오류'}`);
   }
-
-  // 날짜 추출
-  for (const pattern of datePatterns) {
-    const dateMatch = pattern.exec(voiceText)
-    if (dateMatch) {
-      const month = parseInt(dateMatch[1])
-      const day = parseInt(dateMatch[2])
-      const currentYear = new Date().getFullYear()
-      
-      const currentDate = new Date()
-      const orderDate = new Date(currentYear, month - 1, day)
-      
-      if (orderDate < currentDate) {
-        orderDate.setFullYear(currentDate.getFullYear() + 1)
-      }
-      
-      result.delivery_date = orderDate.toISOString().split('T')[0]
-      break
-    }
-  }
-
-  // 메모 추출
-  const memoPatterns = [
-    /(급한|긴급|빠른|신속).*?(주문|납품|배송)/,
-    /(오전|오후|저녁|밤).*?(중|까지|전)/,
-    /(특별|특이|주의).*?(사항|요청)/,
-  ]
-
-  for (const pattern of memoPatterns) {
-    const memoMatch = pattern.exec(voiceText)
-    if (memoMatch) {
-      result.memo = memoMatch[0]
-      break
-    }
-  }
-
-  return result
 }
 
 /**
@@ -184,14 +160,14 @@ export function parseVoiceOrder(voiceText: string): ParsedOrderData {
     const unit = unitMapping[match[3]] || match[3]
 
     const fishType = fishTypeMapping[fishName]
-    if (fishType) {
-      result.items.push({
-        fish_type_id: fishType.id,
-        quantity: quantity,
-        unit_price: fishType.default_price,
-        unit: unit
-      })
-    }
+    // 매칭되지 않는 어종도 포함하되, null 값으로 설정
+    result.items.push({
+      fish_type_id: fishType ? fishType.id : null,
+      quantity: quantity,
+      unit_price: fishType ? fishType.default_price : null,
+      unit: unit,
+      fish_name: fishName // 원본 어종명 추가
+    })
   }
 
   // 날짜 추출
@@ -336,8 +312,30 @@ export async function findBusinessFromVoice(voiceText: string): Promise<Business
  * 음성 파싱 결과를 분석하여 주문 데이터를 추출 (거래처 포함, API 연동)
  */
 export async function parseVoiceOrderWithBusiness(voiceText: string): Promise<ParsedOrderData & { business?: Business }> {
-  const basicOrderData = await parseVoiceOrderWithAPI(voiceText)  // API 연동 버전 사용
-  const matchedBusiness = await findBusinessFromVoice(voiceText)
+  // 항상 AI 서버를 통한 파싱 사용
+  const basicOrderData = await parseVoiceOrderWithAPI(voiceText)  // 백엔드 API에서 업체 정보도 함께 받음
+  
+  let matchedBusiness: Business | null = null;
+  
+  // 백엔드에서 business_id를 받은 경우, 해당 업체 정보를 가져옴
+  if (basicOrderData.business_id) {
+    try {
+      const response = await businessApi.getAll({ page: 1, page_size: 100 })
+      console.log('🔍 업체 목록 조회 응답:', response);
+      const businesses = response.results || []
+      console.log('🔍 파싱된 business_id:', basicOrderData.business_id);
+      console.log('🔍 조회된 업체 목록:', businesses.map(b => ({ id: b.id, name: b.business_name })));
+      matchedBusiness = businesses.find((b: Business) => b.id === basicOrderData.business_id) || null
+      console.log('🔍 매칭된 업체:', matchedBusiness);
+    } catch (error) {
+      console.error('❌ 업체 정보 조회 실패:', error)
+    }
+  }
+  
+  // 백엔드에서 매칭하지 못한 경우 프론트엔드에서 추가 시도
+  if (!matchedBusiness) {
+    matchedBusiness = await findBusinessFromVoice(voiceText)
+  }
   
   return {
     ...basicOrderData,
@@ -347,43 +345,33 @@ export async function parseVoiceOrderWithBusiness(voiceText: string): Promise<Pa
 } 
 
 
-export async function fetchParsedOrder(input: string | File) {
+// 음성 파일 전용: STT만 수행하고 텍스트 반환
+export async function transcribeAudio(audioFile: File): Promise<string> {
   const formData = new FormData();
+  formData.append("audio", audioFile);
 
-  if (typeof input === "string") {
-    // 텍스트 입력
-    formData.append("text", input);
-  } else if (input instanceof File) {
-    const fileType = input.type;
-
-    if (fileType.startsWith("audio/")) {
-      // 오디오 파일
-      formData.append("file", input);
-    } else if (fileType.startsWith("image/")) {
-      // 이미지 파일 (추후 서버에서 처리 가능하도록 대비)
-      formData.append("image", input);
-    } else {
-      throw new Error("지원하지 않는 파일 형식입니다.");
-    }
-  } else {
-    throw new Error("입력값이 string 또는 File이 아닙니다.");
-  }
-
-  const res = await fetch("/ai/order", {
+  const response = await fetch("/api/v1/transcription/transcribe/", {
     method: "POST",
     body: formData,
     headers: {
-      "ngrok-skip-browser-warning": "true"  // 필요 시 유지
+      "ngrok-skip-browser-warning": "true"
     }
   });
 
-  if (!res.ok) throw new Error(`서버 에러: ${res.statusText}`);
+  if (!response.ok) {
+    throw new Error(`음성 변환 실패: ${response.statusText}`);
+  }
 
-  const data = await res.json();
+  const data = await response.json();
+  if (!data.transcription) {
+    throw new Error("음성 변환 결과가 없습니다");
+  }
 
-  if (!data.success) throw new Error("파싱 실패");
-
-  return data.message;
+  return data.transcription;
 }
+
+// 기존 fetchParsedOrder는 제거하고, 각 탭에서 적절한 함수 사용
+// - 텍스트: parseVoiceOrderWithBusiness(text)
+// - 음성: transcribeAudio(file) → parseVoiceOrderWithBusiness(text)
 
   

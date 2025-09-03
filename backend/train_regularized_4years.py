@@ -376,7 +376,7 @@ def main():
         xgb_result = train_xgboost_regularized(species_data, species, regularization_level=2)
         
         # XGBoost 모델 저장
-        xgb_filename = f'regularized_models_4years/xgboost_reg2_{species_key}.json'
+        xgb_filename = f'regularized_models_4years/xgboost_reg2_{species_key}.model'
         xgb_result['model'].save_model(xgb_filename)
         print(f"   ✅ XGBoost 모델 저장: {xgb_filename}")
         
@@ -459,7 +459,7 @@ def main():
     for species in species_list:
         species_key = species_mapping[species]
         print(f"  - regularized_models_4years/lightgbm_reg2_{species_key}.txt")
-        print(f"  - regularized_models_4years/xgboost_reg2_{species_key}.json")
+        print(f"  - regularized_models_4years/xgboost_reg2_{species_key}.model")
 
 if __name__ == "__main__":
     main()

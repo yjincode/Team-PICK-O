@@ -34,6 +34,8 @@ class OrderCreationService:
             'delivery_date': datetime.now().date() + timedelta(days=1),  # Default to tomorrow
             'memo': f"자동 주문 생성 - {datetime.now().strftime('%Y-%m-%d %H:%M')}",
             'source_type': 'voice',
+            'business_name': None,
+            'business_id': None,
         }
         
         # Extract fish items with quantities
@@ -65,6 +67,15 @@ class OrderCreationService:
             if phrase in text:
                 order_data['delivery_date'] = datetime.now().date() + timedelta(days=days)
                 break
+        
+        # AI Server 파싱 로직 제거됨
+        
+        # 업체명이 없는 경우 기존 로직으로 추출
+        if not order_data.get('business_name'):
+            matched_business = self._extract_business_from_text(text)
+            if matched_business:
+                order_data['business_name'] = matched_business.business_name
+                order_data['business_id'] = matched_business.id
         
         return order_data
     
@@ -133,3 +144,65 @@ class OrderCreationService:
             order.save()
             
             return order, order_items
+    
+    def _extract_business_from_text(self, text: str) -> Optional[Business]:
+        """
+        Extract business name from text and find matching business in database.
+        
+        Expected patterns:
+        - "바다수산에 주문합니다"
+        - "동해마트로 배송해주세요"
+        - "해양식품한테 연락드립니다"
+        """
+        import re
+        from difflib import SequenceMatcher
+        
+        # Business name extraction patterns
+        business_patterns = [
+            r'([가-힣]+(?:수산|마트|식품|어장|회사|상회|업체|점))[에게로한테으로]',
+            r'([가-힣]+(?:수산|마트|식품|어장|회사|상회|업체|점))',
+            r'([가-힣]{2,8})[에게로한테으로]\s*(?:주문|배송|연락|문의)',
+            r'([가-힣]{2,8})\s*(?:업체|거래처|매장|상호)',
+        ]
+        
+        extracted_names = set()
+        
+        for pattern in business_patterns:
+            matches = re.finditer(pattern, text)
+            for match in matches:
+                business_name = match.group(1).strip()
+                if 2 <= len(business_name) <= 10:  # Reasonable business name length
+                    extracted_names.add(business_name)
+        
+        if not extracted_names:
+            return None
+        
+        # Get all businesses from database
+        try:
+            all_businesses = Business.objects.all()
+            
+            best_match = None
+            best_similarity = 0.0
+            
+            for extracted_name in extracted_names:
+                for business in all_businesses:
+                    # Exact match
+                    if extracted_name == business.business_name:
+                        return business
+                    
+                    # Partial match (contains)
+                    if extracted_name in business.business_name or business.business_name in extracted_name:
+                        return business
+                    
+                    # Similarity match
+                    similarity = SequenceMatcher(None, extracted_name, business.business_name).ratio()
+                    if similarity > best_similarity and similarity > 0.6:  # 60% similarity threshold
+                        best_similarity = similarity
+                        best_match = business
+            
+            return best_match
+            
+        except Exception as e:
+            print(f"Error in business extraction: {e}")
+            return None
+    

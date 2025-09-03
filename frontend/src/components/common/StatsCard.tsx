@@ -13,6 +13,7 @@ interface StatsCardProps {
   iconColor?: string;      // 아이콘 색상 (기본값: text-accent-blue)
   valueColor?: string;     // 값 색상 (기본값: text-gray-900)
   subtitleColor?: string;  // 부제목 색상 (기본값: text-gray-600)
+  onClick?: () => void;    // 클릭 핸들러 (선택사항)
 }
 
 export const StatsCard: React.FC<StatsCardProps> = ({
@@ -23,9 +24,13 @@ export const StatsCard: React.FC<StatsCardProps> = ({
   iconColor = "text-accent-blue",
   valueColor = "text-gray-900",
   subtitleColor = "text-gray-600",
+  onClick,
 }) => {
   return (
-    <Card className="shadow-sm hover:shadow-md transition-shadow">
+    <Card 
+      className={`shadow-sm hover:shadow-md transition-shadow ${onClick ? 'cursor-pointer hover:bg-gray-50' : ''}`}
+      onClick={onClick}
+    >
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="text-sm sm:text-base font-medium text-gray-700">{title}</CardTitle>
         <Icon className={`h-4 w-4 sm:h-5 sm:w-5 ${iconColor}`} />

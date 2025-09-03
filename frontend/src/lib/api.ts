@@ -39,104 +39,58 @@ const api = axios.create({
     'Content-Type': 'application/json',
   },
 })
-
-
-
-// Request interceptor (JWT 토큰 전용, 매우 간단하고 빠름)
-
 import { TokenManager } from './tokenManager'
 
-// 토큰 갱신 중인지 추적
+// 토큰 갱신 중인지 추적 (중복 요청 방지)
 let isRefreshing = false
 let refreshPromise: Promise<string | null> | null = null
 
-// 액세스 토큰 자동 갱신 함수
+// 토큰 갱신 함수 (TokenManager에 위임)
 const refreshAccessToken = async (): Promise<string | null> => {
   if (isRefreshing && refreshPromise) {
     return await refreshPromise
   }
 
   isRefreshing = true
-  refreshPromise = new Promise(async (resolve) => {
-    try {
-      const refreshToken = TokenManager.getRefreshToken()
+  refreshPromise = TokenManager.refreshToken()
 
-      if (!refreshToken) {
-        resolve(null)
-        return
-      }
-          
-      const response = await fetch(`${API_BASE_URL}/business/auth/refresh/`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          refresh_token: refreshToken
-        })
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        const newAccessToken = data.access_token
-
-        TokenManager.setAccessToken(newAccessToken)
-        resolve(newAccessToken)
-      } else {
-        TokenManager.removeTokens()
-        resolve(null)
-      }
-    } catch (error) {
-      TokenManager.removeTokens()
-      resolve(null)
-    }
-  })
-
-  const result = await refreshPromise
-  isRefreshing = false
-  refreshPromise = null
-
-  return result
+  try {
+    const result = await refreshPromise
+    return result
+  } finally {
+    isRefreshing = false
+    refreshPromise = null
+  }
 }
 
+// Request 인터셉터: 토큰 자동 추가
 api.interceptors.request.use(
   async (config) => {
-    // 🔥 토큰이 필요하지 않은 엔드포인트들
+    // 토큰이 필요하지 않은 공개 엔드포인트
     const publicEndpoints = [
       '/business/auth/firebase-to-jwt/',
       '/business/auth/register/',
       '/business/auth/refresh/',
-      '/business/auth/super-login/',
-      '/business/auth/super-register/'
+      '/transcription/transcribe/',
+      '/transcription/parse-text/'
     ]
 
     const isPublicEndpoint = publicEndpoints.some(endpoint => config.url?.includes(endpoint))
-
+    
     if (isPublicEndpoint) {
       return config
     }
 
     // 일반 엔드포인트는 토큰 필요
-    let accessToken = TokenManager.getAccessToken()
+    const accessToken = TokenManager.getAccessToken()
 
-    // 액세스 토큰이 없거나 5분 이내 만료 예정인 경우 갱신 시도
-    const timeUntilExpiry = TokenManager.getAccessTokenTimeUntilExpiry()
-    if (!accessToken || !TokenManager.isAccessTokenValid() || timeUntilExpiry < 300) {  // 5분(300초) 이내 만료 시 갱신
-      accessToken = await refreshAccessToken()
-
-      // 갱신에 실패한 경우 토큰 제거만 하고 조용히 처리
-      if (!accessToken) {
-        return Promise.reject({ 
-          name: 'AuthenticationError',
-          message: '인증이 필요합니다',
-          config: config
-        })
-      }
-    }
-
-    // Authorization 헤더에 액세스 토큰 추가
-    if (accessToken) {
+    if (accessToken && TokenManager.isAccessTokenValid()) {
       config.headers.Authorization = `Bearer ${accessToken}`
+      // defaults에도 설정하여 로깅 시 확인 가능하도록
+      api.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`
+    } else {
+      // 토큰이 없거나 유효하지 않으면 defaults에서도 제거
+      delete api.defaults.headers.common['Authorization']
     }
 
     return config
@@ -146,31 +100,94 @@ api.interceptors.request.use(
   }
 )
 
-// 응답 인터셉터: 401 오류 시 토큰 갱신 재시도
+// Response 인터셉터: 401 에러 시 토큰 갱신 (1회만)
 api.interceptors.response.use(
   (response) => {
-    return response;
+    return response
   },
   async (error) => {
-    // 401 오류 시 토큰 갱신 후 재시도
-    if (error.response?.status === 401 && !error.config._retry) {
-      error.config._retry = true;
-      
-      const newAccessToken = await refreshAccessToken();
+    const originalRequest = error.config
 
-      if (newAccessToken) {
-        // 새로운 액세스 토큰으로 원래 요청 재시도
-        error.config.headers.Authorization = `Bearer ${newAccessToken}`;
-        return api(error.config);
-      } else {
-        // 토큰 갱신 실패 시 토큰 제거만 하고 리다이렉트는 AuthContext에 맡김
-        TokenManager.removeTokens();
+    // 401 에러이고 아직 재시도하지 않은 경우
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      originalRequest._retry = true
+
+      try {
+        const newAccessToken = await refreshAccessToken()
+        
+        if (newAccessToken) {
+          // 새 토큰으로 원래 요청 재시도
+          originalRequest.headers.Authorization = `Bearer ${newAccessToken}`
+          return api(originalRequest)
+        } else {
+          // 토큰 갱신 실패 - 로그아웃 처리
+          TokenManager.removeTokens()
+          return Promise.reject({
+            ...error,
+            message: '인증이 만료되었습니다. 다시 로그인해주세요.'
+          })
+        }
+      } catch (refreshError) {
+        TokenManager.removeTokens()
+        return Promise.reject({
+          ...error,
+          message: '인증이 만료되었습니다. 다시 로그인해주세요.'
+        })
       }
     }
 
     return Promise.reject(error)
   }
 )
+
+// 경매가 예측 API 함수들
+export const auctionApi = {
+  // 실제 경매가 데이터 조회
+  getActualAuctionData: async (species?: string, days: number = 7, timestamp?: number) => {
+    const params = new URLSearchParams()
+    if (species) params.append('species', species)
+    params.append('days', days.toString())
+    
+    // 캐시 방지를 위한 타임스탬프 추가
+    if (timestamp) {
+      params.append('_t', timestamp.toString())
+    }
+    
+    const response = await api.get(`/prediction/actual/?${params}`)
+    return response.data
+  },
+
+  // 모든 어종 예측
+  predictAllSpecies: async (targetDate: string, environmentalData: any) => {
+    const response = await api.post('/prediction/all/', {
+      target_date: targetDate,
+      environmental_data: environmentalData
+    })
+    return response.data
+  },
+
+  // 단일 어종 예측
+  predictSingleSpecies: async (species: string, targetDate: string, environmentalData: any) => {
+    const response = await api.post('/prediction/single/', {
+      species,
+      target_date: targetDate,
+      environmental_data: environmentalData
+    })
+    return response.data
+  },
+
+  // 지원하는 어종 목록
+  getSupportedSpecies: async () => {
+    const response = await api.get('/prediction/species/')
+    return response.data
+  },
+
+  // 헬스 체크
+  healthCheck: async () => {
+    const response = await api.get('/prediction/health/')
+    return response.data
+  }
+}
 
 // 거래처 관리 API
 export const businessApi = {
@@ -187,10 +204,17 @@ export const businessApi = {
   },
 
   // 새 거래처 생성
+  // create: async (business: Omit<Business, 'id'>): Promise<ApiResponse<Business>> => {
+  //   const response = await api.post('/business/customers/create/', business)
+  //   return response.data
+  // },
   create: async (business: Omit<Business, 'id'>): Promise<ApiResponse<Business>> => {
-    const response = await api.post('/business/customers/create/', business)
+    const response = await api.post('/business/customers/create/', business, {
+      timeout: 30000,  // 30초로 타임아웃 연장
+    })
     return response.data
   },
+  
 
   // 거래처 정보 수정
   update: async (id: number, business: Partial<Business>): Promise<ApiResponse<Business>> => {
@@ -200,6 +224,17 @@ export const businessApi = {
 
   // 거래처 삭제
   delete: async (id: number): Promise<ApiResponse<void>> => {
+    console.log('🗑️ 거래처 삭제 API 호출:', id);
+    
+    const accessToken = TokenManager.getAccessToken()
+    console.log('🔑 Access token exists:', !!accessToken);
+    console.log('🔑 Access token valid:', TokenManager.isAccessTokenValid());
+    console.log('🔑 Authorization header:', api.defaults.headers.common['Authorization']);
+    
+    if (!accessToken || !TokenManager.isAccessTokenValid()) {
+      throw new Error('로그인이 필요합니다. 다시 로그인해주세요.');
+    }
+    
     const response = await api.delete(`/business/customers/${id}/`)
     return response.data
   },
@@ -451,23 +486,6 @@ export const authApi = {
     }
   },
 
-  // 슈퍼계정 직접 로그인 (Firebase 완전 우회)
-  superAccountLogin: async (phoneNumber: string): Promise<any> => {
-    const response = await api.post('/business/auth/super-login/', {
-      phone_number: phoneNumber
-    })
-    return response.data
-  },
-
-  // 슈퍼계정 직접 회원가입 (Firebase 완전 우회)
-  superAccountRegister: async (userData: {
-    business_name: string;
-    owner_name: string;
-    address: string;
-  }): Promise<any> => {
-    const response = await api.post('/business/auth/super-register/', userData)
-    return response.data
-  },
 }
 
 // Sales API
@@ -607,6 +625,34 @@ export const aiApi = {
   },
 }
 
+export const exebaseApi = {
+  // Process order with different input types
+  async processOrder(data: FormData): Promise<{
+    success: boolean;
+    message: string;
+    order?: any;
+    error?: string;
+  }> {
+    try {
+      const response = await fetch('/ai/order', {
+        method: 'POST',
+        body: data,
+        // Don't set Content-Type header, let the browser set it with the correct boundary
+      });
+      console.log(response)
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || '주문 처리 중 오류가 발생했습니다.');
+      }
+      
+      return await response.json();
+    } catch (error) {
+      console.error('주문 처리 오류:', error);
+      throw error;
+    }
+  },
+}
+
 // STT (Speech-to-Text) API
 export const sttApi = {
   // 음성 파일을 텍스트로 변환
@@ -631,6 +677,41 @@ export const sttApi = {
     }
 
     return await response.json()
+  },
+
+  // 텍스트 파싱 (LLM 기반)
+  parseText: async (text: string): Promise<{
+    success: boolean;
+    data?: {
+      items: Array<{
+        fish_type_id: number | null;
+        quantity: number;
+        unit_price?: number | null;
+        unit: string;
+        fish_name?: string;
+      }>;
+      memo: string;
+      delivery_date?: string;
+      business_name?: string;
+      business_id?: number;
+      unmatched_items?: Array<{
+        fish_name: string;
+        quantity: number;
+        unit: string;
+        suggested_matches: Array<{
+          fish_name: string;
+          similarity: number;
+        }>;
+      }>;
+      validation_warnings?: string[];
+    };
+    message?: string;
+  }> => {
+    const response = await api.post('/transcription/parse-text/', 
+      { text },
+      { timeout: 90000 } // 90초 timeout (LLM 처리 대기)
+    );
+    return response.data;
   },
 }
 
@@ -765,6 +846,12 @@ export const paymentApi = {
     const response = await api.post('/payments/cancel-order/', data)
     return response.data
   },
+
+  // 결제 상태 롤백 (실제 환불 없이 상태만 변경)
+  rollback: async (data: { orderId: number; rollbackReason: string }): Promise<ApiResponse<any>> => {
+    const response = await api.post('/payments/rollback/', data)
+    return response.data
+  },
 }
 
 // 주문 취소
@@ -831,5 +918,90 @@ export const getUserInfoFromToken = (): { user_id?: number; business_name?: stri
     }
   } catch (error) {
     return null
+  }
+}
+
+
+
+
+export async function findOrCreateFishType(name: string | undefined, unit: string = "박스", existingFishTypes: FishType[]): Promise<FishType | null> {
+  if (!name || typeof name !== "string") return null;
+
+  const trimmedName = name.trim();
+  if (!trimmedName) return null;
+
+  let fish = existingFishTypes.find(f => f.name === trimmedName);
+
+  if (!fish) {
+    try {
+      const created = await fishTypeApi.create({ name: trimmedName, unit });
+      fish = created.data;
+      existingFishTypes.push(fish);
+      console.log(`[어종 등록 완료] ${trimmedName}`);
+    } catch (error) {
+      console.warn(`[어종 등록 실패] ${trimmedName}`, error);
+      return null;
+    }
+  }
+
+  return fish;
+}
+
+export async function findOrCreateBusiness(
+  businessName: string,
+  phoneNumber: string,
+  businesses: Business[]
+): Promise<number | null> {
+  if (!businessName) return null;
+
+  // 1. 기존 거래처 확인
+  const existingBusiness = businesses.find(
+    (b) => b.business_name.trim() === businessName.trim()
+  );
+  if (existingBusiness) {
+    console.log(`[기존 거래처 사용] ${businessName} (ID: ${existingBusiness.id})`);
+    return existingBusiness.id;
+  }
+
+  // 2. 전화번호 정제
+  const cleanPhoneNumber = (input?: string): string => {
+    const digits = (input || '').replace(/\D/g, '');
+    return /^\d{9,12}$/.test(digits) ? digits : '0000000000';
+  };
+
+  // 3. 새 거래처 생성
+  try {
+    const created = await businessApi.create({
+      business_name: businessName,
+      phone_number: cleanPhoneNumber(phoneNumber),
+      address: "주소 미입력",
+      memo: "(자동 생성)",
+    });
+
+    const createdData = created?.data;
+    if (!createdData || typeof createdData.id !== 'number') {
+      console.error("[거래처 생성 응답 이상]", created);
+      throw new Error("응답 구조가 올바르지 않음 (created.data.id 없음)");
+    }
+
+    console.log(`[거래처 등록 완료] ${businessName} (ID: ${createdData.id})`);
+
+    // 4. 생성 후 전체 거래처 목록 다시 조회하여 정확한 정보 확인
+    const refreshed = await businessApi.getAll();
+    const matched = refreshed.results.find(
+      (b) => b.business_name.trim() === businessName.trim()
+    );
+
+    if (matched) {
+      console.log(`[재조회로 확인된 거래처] ${businessName} (ID: ${matched.id})`);
+      return matched.id;
+    }
+
+    // fallback: 생성된 ID라도 반환
+    console.warn(`[거래처 확인 실패, 생성된 ID 사용] ${businessName} (ID: ${createdData.id})`);
+    return createdData.id;
+  } catch (error) {
+    console.error(`[거래처 등록 실패] ${businessName}`, error);
+    return null;
   }
 }

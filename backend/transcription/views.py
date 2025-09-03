@@ -116,3 +116,61 @@ def transcribe_audio(request):
             {"error": f"Failed to process request: {str(e)}"},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+
+@api_view(['POST'])
+def parse_text_to_order(request):
+    """텍스트를 주문 데이터로 파싱하는 API"""
+    if 'text' not in request.data:
+        return Response(
+            {"error": "No text provided"},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    text = request.data.get('text', '').strip()
+    if not text:
+        return Response(
+            {"error": "Empty text provided"},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    try:
+        # 헤더에서 직접 인증 정보 추출 (미들웨어 우회)
+        auth_header = request.headers.get('Authorization')
+        user_id = None
+        
+        if auth_header and auth_header.startswith('Bearer '):
+            try:
+                import jwt
+                from django.conf import settings
+                token = auth_header.split(' ')[1]
+                
+                # JWT 토큰 직접 검증 (jwt_utils import 문제 회피)
+                payload = jwt.decode(
+                    token, 
+                    getattr(settings, 'JWT_SECRET_KEY', 'your-super-secret-key-change-in-production'), 
+                    algorithms=['HS256']
+                )
+                
+                if payload and payload.get('token_type') == 'access':
+                    user_id = payload.get('user_id')
+                    logger.info(f"🔑 토큰에서 user_id 추출: {user_id}")
+            except Exception as e:
+                logger.warning(f"토큰 검증 실패: {e}")
+        
+        # user_id가 없어도 계속 진행 (AI 서버는 공개 API로 동작)
+        
+        # 텍스트 파싱 기능 비활성화 - AI 서버 의존성 제거
+        return Response(
+            {
+                "success": False,
+                "message": "텍스트 파싱 기능은 현재 비활성화되었습니다."
+            },
+            status=status.HTTP_501_NOT_IMPLEMENTED
+        )
+        
+    except Exception as e:
+        logger.error(f"Text parsing error: {str(e)}")
+        return Response(
+            {"error": f"텍스트 파싱 처리 중 오류가 발생했습니다: {str(e)}"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )

@@ -19,7 +19,7 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
 django.setup()
 
 from prediction.models import ExternalEnvironmentalData
-from prediction.views import load_models, get_environmental_data_from_db, predict_price
+from prediction.views import predict_price, predict_single_species, load_models, get_environmental_data_from_db
 from auction_prediction.collect_noryangjin_daily_quantity import collect_noryangjin_daily_quantity
 from prediction.management.commands.collect_water_temp_new import Command as WaterTempCommand
 from prediction.management.commands.populate_weather_data import Command as WeatherCommand
@@ -95,13 +95,13 @@ class Command(BaseCommand):
         self.stdout.write("-" * 40)
         
         try:
-            # 노량진 데이터 수집 (기존 스크립트 활용)
-            start_date = target_date.strftime('%Y%m%d')
-            end_date = target_date.strftime('%Y%m%d')
+            # 노량진 데이터 수집 (수정된 스크립트 활용)
+            start_date = target_date.strftime('%Y-%m-%d')
+            end_date = target_date.strftime('%Y-%m-%d')
             
             self.stdout.write(f"🔍 {start_date} 경매 데이터 수집 중...")
             
-            # collect_noryangjin_daily_quantity.py의 함수 호출
+            # collect_noryangjin_daily_quantity.py의 함수 호출 (규격 매핑 포함)
             result = collect_noryangjin_daily_quantity(start_date, end_date)
             
             if result:
@@ -160,19 +160,19 @@ class Command(BaseCommand):
             
             # 어종별 예측 실행
             species_mapping = {
-                'rockfish': '우럭',
-                'flounder': '넙치', 
-                'mullet': '숭어',
-                'red_sea_bream': '참돔',
-                'sea_bass': '광어'
+                '우럭': '우럭',
+                '넙치': '넙치', 
+                '숭어': '숭어',
+                '참돔': '참돔',
+                '농어': '농어'
             }
             
             predictions = {}
             
-            for species_name, korean_name in species_mapping.items():
+            for korean_name in species_mapping.values():
                 self.stdout.write(f"\n🐟 {korean_name} 예측 중...")
                 
-                result = predict_price(species_name, target_date_str, environmental_data, models)
+                result = predict_single_species(korean_name, target_date_str, environmental_data, models)
                 
                 if result and 'error' not in result:
                     predictions[korean_name] = {
@@ -181,7 +181,7 @@ class Command(BaseCommand):
                         'xgboost': result['xgboost_prediction'],
                         'confidence': result['confidence']
                     }
-                    self.stdout.write(f"  ✅ {korean_name}: {result['predicted_price']:,.0f}원")
+                    self.stdout.write(f"  ✅ {korean_name}: {result['predicted_price']:,.0f}원 (신뢰도: {result['confidence']})")
                 else:
                     self.stdout.write(f"  ❌ {korean_name}: {result.get('error', 'Unknown error')}")
             

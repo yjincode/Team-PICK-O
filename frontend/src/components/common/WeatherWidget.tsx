@@ -176,80 +176,79 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({ className = '', us
   };
 
   return (
-    <div className={`bg-gradient-to-br from-white to-gray-50 rounded-xl border border-gray-200 shadow-sm overflow-hidden ${className}`}>
-      <div className="p-1.5">
+    <div className={`bg-gradient-to-br from-white to-gray-50 rounded-xl border border-gray-200 shadow-sm overflow-hidden ${className} flex flex-col`}>
+      <div className="p-4 flex-1 flex flex-col justify-between">
         {/* Location and action buttons */}
-        <div className="flex items-center justify-between mb-1">
+        <div className="flex items-center justify-between">
           <div className="flex items-center">
-            <MapPin size={14} className="text-gray-600 mr-1.5" />
+            <MapPin size={16} className="text-gray-600 mr-2" />
             <button
               onClick={() => setShowAddressInput(!showAddressInput)}
-              className="text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors"
+              className="text-base font-medium text-gray-800 hover:text-blue-600 transition-colors"
             >
               {currentLocation.name}
             </button>
           </div>
-          <div className="flex items-center space-x-1">
+          <div className="flex items-center space-x-2">
             <button
               onClick={handleCurrentLocation}
-              className="text-gray-600 hover:text-blue-600 transition-all duration-200 p-1 rounded-full hover:bg-blue-50"
+              className="text-gray-600 hover:text-blue-600 transition-all duration-200 p-1.5 rounded-full hover:bg-blue-50"
               title="현재 위치"
             >
-              <Navigation size={12} />
+              <Navigation size={14} />
             </button>
             <button
               onClick={handleRefresh}
-              className="text-gray-600 hover:text-blue-600 transition-all duration-200 p-1 rounded-full hover:bg-blue-50"
+              className="text-gray-600 hover:text-blue-600 transition-all duration-200 p-1.5 rounded-full hover:bg-blue-50"
               title="새로고침"
             >
-              <RefreshCw size={12} />
+              <RefreshCw size={14} />
             </button>
           </div>
         </div>
 
         {/* Simple address input */}
         {showAddressInput && (
-          <form onSubmit={handleAddressSubmit} className="mb-1">
-            <div className="flex items-center space-x-1">
-              <Search size={12} className="text-gray-400" />
+          <form onSubmit={handleAddressSubmit} className="mt-3">
+            <div className="flex items-center space-x-2">
+              <Search size={14} className="text-gray-400" />
               <input
                 type="text"
                 value={addressInput}
                 onChange={(e) => setAddressInput(e.target.value)}
                 placeholder="주소 입력 후 Enter"
-                className="flex-1 text-xs border border-gray-200 rounded px-2 py-1 focus:outline-none focus:border-blue-300"
+                className="flex-1 text-sm border border-gray-200 rounded px-3 py-2 focus:outline-none focus:border-blue-300"
                 autoFocus
               />
             </div>
           </form>
         )}
+
+        {/* Special warning banner - inside widget */}
+        {weatherWarning && (
+          <div className={`my-2 p-2 rounded-lg ${getWarningStyle(weatherWarning).className}`}>
+            <div className="flex items-center justify-center space-x-2">
+              <span className="text-base">{getWarningStyle(weatherWarning).icon}</span>
+              <span className="text-sm font-medium">{weatherWarning.message}</span>
+            </div>
+          </div>
+        )}
             
-        {/* Temperature and details in one row */}
-        <div className="flex items-center justify-between mb-1">
-          <div className="flex items-center space-x-2">
-            <div className="text-3xl">{weatherData.current.weatherIcon}</div>
-            <div className="text-xl font-bold text-gray-800 ml-1">
+        {/* Temperature and details - center area */}
+        <div className="flex items-center justify-between flex-1 min-h-0">
+          <div className="flex items-center space-x-3">
+            <div className="text-5xl">{weatherData.current.weatherIcon}</div>
+            <div className="text-3xl font-bold text-gray-800">
               {weatherData.current.temperature}°C
             </div>
           </div>
 
-          <div className="text-right text-xs text-gray-600">
-            <div>강수확률 {weatherData.current.precipitationProb}%</div>
-            <div>{weatherData.daily.minTemp}° / {weatherData.daily.maxTemp}°</div>
+          <div className="text-right text-base text-gray-700">
+            <div className="mb-2 font-medium">강수확률 {weatherData.current.precipitationProb}%</div>
+            <div className="text-lg font-semibold">{weatherData.daily.minTemp}° / {weatherData.daily.maxTemp}°</div>
           </div>
         </div>
       </div>
-
-      {/* Special warning banner - compact */}
-      {weatherWarning && (
-        <div className={`w-full p-2 ${getWarningStyle(weatherWarning).className}`}>
-          <div className="flex items-center justify-center space-x-1.5">
-            <span className="text-sm">{getWarningStyle(weatherWarning).icon}</span>
-            <span className="text-xs font-medium">{weatherWarning.message}</span>
-            <span className="text-xs opacity-90">({weatherWarning.area})</span>
-          </div>
-        </div>
-      )}
     </div>
   );
 }; 

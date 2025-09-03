@@ -392,15 +392,7 @@ jobs:
         
         # Deploy on EC2
         ssh -i ec2_key.pem -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST << EOF
-          # Emergency Docker cleanup first
-          echo "🚨 긴급 Docker 정리 시작..."
-          docker stop $(docker ps -aq) 2>/dev/null || true
-          docker rm $(docker ps -aq) 2>/dev/null || true
-          docker rmi $(docker images -q) 2>/dev/null || true
-          docker system prune -af --volumes 2>/dev/null || true
-          docker builder prune -af 2>/dev/null || true
-          
-          echo "🔍 정리 후 디스크 공간:"
+          echo "🔍 현재 디스크 공간:"
           df -h
           
           # Configure AWS credentials on EC2

@@ -8,17 +8,14 @@ app_name = 'prediction'
 
 urlpatterns = [
     # 단일 어종 예측
-    path('single/', views.predict_single_species, name='predict_single'),
+    path('single/', views.predict_price, name='predict_single'),
     
-    # 모든 어종 예측
-    path('all/', views.predict_all_species, name='predict_all'),
+    # 실제 경매가 데이터 조회
+    path('actual/', views.get_actual_auction_data, name='actual_auction_data'),
     
-    # 지원하는 어종 목록
-    path('species/', views.get_supported_species, name='supported_species'),
-    
-    # 헬스 체크
-    path('health/', views.health_check, name='health_check'),
+    # 모델 캐시 상태 확인
+    path('cache-status/', views.get_model_cache_status, name='cache_status'),
     
     # 대시보드
-    path('dashboard/', views.dashboard_view, name='dashboard'),
+    path('dashboard/', views.prediction_dashboard, name='dashboard'),
 ]

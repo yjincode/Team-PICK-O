@@ -4,86 +4,16 @@
  */
 "use client"
 
-import { useState, useRef, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Link, useLocation } from "react-router-dom"
-import { Home, Users, ShoppingCart, Package, TrendingUp, ChevronDown, ChevronRight, ChevronLeft } from "lucide-react"
+import { ChevronDown, ChevronRight } from "lucide-react"
 import { SharkMascot } from "../common/SharkMascot"
-import { useNavigate } from "react-router-dom";
-import { sub } from "date-fns"
-
-// 메뉴 아이템 타입 정의
-interface MenuItem {
-  title: string;
-  url?: string;
-  icon: React.ComponentType<{ className?: string }>;
-  items?: Array<{
-    title: string;
-    url: string;
-  }>;
-}
-
-// 네비게이션 메뉴 구성
-const menuItems: MenuItem[] = [
-  {
-    title: "메인 화면",
-    url: "/dashboard",
-    icon: Home,
-  },
-  {
-    title: "고객 관리",
-    icon: Users,
-    url: "/business"
-  },
-  {
-    title: "주문 관리",
-    icon: ShoppingCart,
-    items: [
-      { title: "주문 내역", url: "/orders" },
-      { title: "AI 분석 로그", url: "/orders/ai-logs" },
-    ],
-  },
-  {
-    title: "재고 관리",
-    icon: Package,
-    items: [
-      { title: "어종 재고", url: "/inventory" },
-      { title: "어종 관리", url: "/inventory/fish-form" },
-      { title: "AI 질병분석", url: "/inventory/disease-analysis" },
-    ],
-  },
-  {
-    title: "매출 관리",
-    icon: TrendingUp,
-    items: [
-      { title: "매출 통계", url: "/sales/chart" },
-      { title: "경매 시세 예측", url: "/sales/prediction" },
-    ],
-  },
-]
-
-interface SidebarProps {
-  collapsed?: boolean;
-  onToggle?: () => void;
-}
+import { menuItems, MenuItem, SidebarProps } from "../../types/navigation"
 
 const Sidebar: React.FC<SidebarProps> = ({ collapsed = false, onToggle }) => {
   const location = useLocation()
   // 열린 메뉴 아이템 상태 관리
   const [openItems, setOpenItems] = useState<string[]>([])
-
-  // 활성 페이지가 있는 메뉴를 자동으로 열기
-  useEffect(() => {
-    const activeMenus = menuItems.filter(item => hasActiveChild(item)).map(item => item.title)
-    setOpenItems(prev => {
-      const newItems = [...prev]
-      activeMenus.forEach(title => {
-        if (!newItems.includes(title)) {
-          newItems.push(title)
-        }
-      })
-      return newItems
-    })
-  }, [location.pathname])
   // 사이드 드롭다운 상태
   const [sideDropdown, setSideDropdown] = useState<{
     isOpen: boolean;
@@ -92,13 +22,14 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed = false, onToggle }) => {
   }>({ isOpen: false })
   const dropdownRef = useRef<HTMLDivElement>(null)
 
-  // // 메뉴 토글 함수
+
+
+  // 메뉴 토글 함수
   const toggleItem = (title: string) => {
     // 하나만 열리도록 토글 (클릭 시 다른 메뉴는 닫힘)
     setOpenItems(prev => (prev.includes(title) ? [] : [title]))
   }
 
-  
   // 사이드 드롭다운 열기
   const openSideDropdown = (menu: MenuItem, buttonElement: HTMLElement) => {
     const rect = buttonElement.getBoundingClientRect()
@@ -113,14 +44,6 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed = false, onToggle }) => {
   const closeSideDropdown = () => {
     setSideDropdown({ isOpen: false })
   }
-
-  // 대시보드로 이동 시 모든 메뉴 닫기
-  useEffect(() => {
-    if (location.pathname === '/dashboard') {
-      setOpenItems([])
-      setSideDropdown({ isOpen: false })
-    }
-  }, [location.pathname])
 
   // 클릭 외부 영역 감지
   useEffect(() => {
@@ -144,7 +67,12 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed = false, onToggle }) => {
   // 부모 메뉴의 하위 항목이 활성화되어 있는지 확인
   const hasActiveChild = (menuItem: MenuItem) => {
     if (!menuItem.items) return false
-    return menuItem.items.some(subItem => isActive(subItem.url))
+    // 정확한 URL 매치와 경로 기반 매치 둘 다 확인
+    return menuItem.items.some(subItem => {
+      const exactMatch = isActive(subItem.url)
+      const pathMatch = location.pathname.startsWith(subItem.url)
+      return exactMatch || pathMatch
+    })
   }
 
   // 모바일 사이드바 닫기
@@ -220,7 +148,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed = false, onToggle }) => {
                     collapsed ? 'p-2 justify-center' : 'p-3 justify-between'
                   } ${
                     (!collapsed && openItems.includes(item.title)) || hasActiveChild(item)
-                      ? "bg-white/15 text-white"
+                      ? (collapsed ? "text-white border-l-2 border-white" : "bg-white/15 text-white")
                       : "text-white/80 hover:text-white hover:bg-white/5"
                   }`}
                   title={collapsed ? item.title : undefined}
@@ -271,7 +199,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed = false, onToggle }) => {
                 className={`flex items-center rounded-lg transition-colors touch-target ${
                   collapsed ? 'p-2 justify-center' : 'space-x-3 p-3'
                 } ${
-                  isActive(item.url!)
+                  isActive(item.url!) && openItems.length === 0
                     ? (collapsed ? "text-white border-l-2 border-white" : "bg-white/15 text-white")
                     : "text-white/80 hover:text-white hover:bg-white/5"
                 }`}
@@ -320,6 +248,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed = false, onToggle }) => {
           </div>
         </div>
       )}
+
     </aside>
   )
 }

@@ -30,4 +30,6 @@ urlpatterns = [
     path('checklist/', views.InventoryChecklistView.as_view(), name='inventory-checklist'),
     path('check-records/', views.InventoryCheckRecordsView.as_view(), name='inventory-check-records'),
     path('anomalies-list/', views.InventoryAnomaliesView.as_view(), name='anomalies-list'),
+    
+
 ]

@@ -8,10 +8,10 @@ import { useParams, useNavigate } from "react-router-dom"
 import { Button } from "../../components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card"
 import { Badge } from "../../components/ui/badge"
-import { ArrowLeft } from "lucide-react"
+import { ArrowLeft, RotateCcw } from "lucide-react"
 import { format } from "date-fns"
 import { formatPhoneNumber } from "../../utils/phoneFormatter"
-import { orderApi, requestDocument, getDocumentRequests } from "../../lib/api"
+import { orderApi, paymentApi, requestDocument, getDocumentRequests } from "../../lib/api"
 import { getBadgeClass, getLabel } from "../../lib/labels"
 import StockShortageModal from "../../components/modals/StockShortageModal"
 import toast from 'react-hot-toast'
@@ -47,6 +47,9 @@ const OrderDetail: React.FC = () => {
   
   // 출고 처리 확인 모달 상태
   const [showShipOutModal, setShowShipOutModal] = useState(false)
+  
+  // 환불 처리 상태
+  const [processingRefund, setProcessingRefund] = useState(false)
   
   // 주문 항목 수정 모달 상태
   const [showItemEditModal, setShowItemEditModal] = useState(false)
@@ -275,6 +278,52 @@ const OrderDetail: React.FC = () => {
     }
   }
 
+  // 결제 롤백(취소) 처리
+  const handlePaymentRollback = async () => {
+    if (!order) return
+    
+    // 사용자 확인
+    const confirmRollback = confirm(
+      `주문 #${order.id}의 결제를 취소하시겠습니까?\n\n` +
+      `• 결제 금액: ₩${order.total_price.toLocaleString()}\n` +
+      `• 주문 상태: 출고준비 → 주문완료 (결제 대기)\n\n` +
+      `⚠️ 실수로 결제한 경우에만 사용해주세요.\n` +
+      `이 작업은 되돌릴 수 없습니다.`
+    )
+    
+    if (!confirmRollback) return
+    
+    // 취소 사유 입력
+    const cancelReason = prompt('결제 취소 사유를 입력해주세요:', '실수로 결제함')
+    if (!cancelReason || cancelReason.trim() === '') {
+      toast.error('취소 사유를 입력해주세요.')
+      return
+    }
+    
+    try {
+      setProcessingRefund(true)
+      
+      const response = await paymentApi.rollback({
+        orderId: order.id,
+        rollbackReason: cancelReason.trim()
+      })
+      
+      if (response.data) {
+        toast.success('결제가 성공적으로 취소되었습니다. 주문 상태가 결제 대기로 변경되었습니다.')
+        // 주문 정보 새로고침
+        const updatedOrder = await orderApi.getById(parseInt(id!))
+        setOrder(updatedOrder)
+      }
+      
+    } catch (error: any) {
+      console.error('결제 취소 오류:', error)
+      const errorMessage = error.response?.data?.error || '결제 취소 중 오류가 발생했습니다.'
+      toast.error(errorMessage)
+    } finally {
+      setProcessingRefund(false)
+    }
+  }
+
   const handleEditOrder = () => {
     // 날짜 데이터 안전하게 처리
     const formatDateForInput = (dateString?: string | null): string => {
@@ -436,7 +485,7 @@ const OrderDetail: React.FC = () => {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle className="text-2xl font-bold">
-            주문 상세 정보 #{order.id}
+            주문 상세 정보
           </CardTitle>
           <Button
             variant="ghost"
@@ -454,14 +503,14 @@ const OrderDetail: React.FC = () => {
               <CardHeader>
                 <CardTitle className="text-lg">거래처 정보</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-2">
+              <CardContent className="space-y-3">
                 <div>
-                  <span className="font-medium">거래처명:</span>
-                  <span className="ml-2">{order.business_name || "정보 없음"}</span>
+                  <span className="text-sm font-medium text-gray-600">거래처명</span>
+                  <div className="text-lg font-semibold text-gray-900">{order.business_name || "정보 없음"}</div>
                 </div>
                 <div>
-                  <span className="font-medium">연락처:</span>
-                  <span className="ml-2">{order.business_phone ? formatPhoneNumber(order.business_phone) : "정보 없음"}</span>
+                  <span className="text-sm font-medium text-gray-600">연락처</span>
+                  <div className="text-base font-medium text-gray-800">{order.business_phone ? formatPhoneNumber(order.business_phone) : "정보 없음"}</div>
                 </div>
                 <div>
                   <span className="font-medium">주소:</span>
@@ -470,111 +519,37 @@ const OrderDetail: React.FC = () => {
               </CardContent>
             </Card>
 
-                         <Card>
-               <CardHeader>
-                 <CardTitle className="text-lg">주문 정보</CardTitle>
-               </CardHeader>
-               <CardContent className="space-y-2">
-                 {isEditing ? (
-                   <div className="space-y-4">
-                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                       <div>
-                         <label className="block text-sm font-medium text-gray-700 mb-1">납기일 *</label>
-                         <input
-                           type="date"
-                           value={editingData?.delivery_datetime || ''}
-                           onChange={(e) => {
-                             const value = e.target.value
-                             // 빈 값이거나 유효한 날짜인지 확인
-                             if (value === '' || /^\d{4}-\d{2}-\d{2}$/.test(value)) {
-                               setEditingData({ ...editingData!, delivery_datetime: value })
-                             }
-                           }}
-                           className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                           required
-                         />
-                       </div>
-                       <div>
-                         <label className="block text-sm font-medium text-gray-700 mb-1">출고일</label>
-                         <input
-                           type="datetime-local"
-                           value={editingData?.ship_out_datetime ? editingData.ship_out_datetime.slice(0, 16) : ''}
-                           onChange={(e) => {
-                             const value = e.target.value
-                             // 빈 값이거나 유효한 datetime-local 형식인지 확인
-                             if (value === '' || /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)) {
-                               setEditingData({ ...editingData!, ship_out_datetime: value })
-                             }
-                           }}
-                           className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                         />
-                       </div>
-                     </div>
-                     
-                     <div>
-                       <label className="block text-sm font-medium text-gray-700 mb-1">주문 출처</label>
-                                                <select
-                           value={editingData?.source_type || ''}
-                           onChange={(e) => setEditingData({ ...editingData!, source_type: e.target.value as "manual" | "voice" | "text" })}
-                           className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                         >
-                         <option value="manual">수동</option>
-                         <option value="text">문자</option>
-                         <option value="voice">음성</option>
-                       </select>
-                     </div>
-                   </div>
-                 ) : (
-                   <div className="space-y-2">
-                 <div>
-                   <span className="font-medium">주문일시:</span>
-                   <span className="ml-2">
-                     {format(new Date(order.order_datetime), "yyyy-MM-dd HH:mm")}
-                   </span>
-                 </div>
-                 <div>
-                       <span className="font-medium">납기일:</span>
-                   <span className="ml-2">
-                     {order.delivery_datetime ? format(new Date(order.delivery_datetime), "yyyy-MM-dd") : "미정"}
-                   </span>
-                 </div>
-                     <div>
-                       <span className="font-medium">출고일:</span>
-                       <span className="ml-2">
-                         {order.ship_out_datetime ? format(new Date(order.ship_out_datetime), "yyyy-MM-dd HH:mm") : "미출고"}
-                       </span>
-                     </div>
-                     <div>
-                       <span className="font-medium">주문 출처:</span>
-                       <span className="ml-2">
-                         {order.source_type === 'manual' && '수동'}
-                         {order.source_type === 'voice' && '음성'}
-                         {order.source_type === 'text' && '문자'}
-                         {!order.source_type && '정보 없음'}
-                       </span>
-                     </div>
-                 <div>
-                   <span className="font-medium">주문 상태:</span>
-                   <Badge className={`ml-2 ${getStatusColor(order.order_status)}`}>
-                     {getStatusText(order.order_status)}
-                   </Badge>
-                 </div>
-                     
-                     {/* 출고 완료 상태 표시 - delivered 상태일 때 */}
-                     {order.order_status === 'delivered' && (
-                       <div className="pt-2">
-                         <Badge className="bg-green-100 text-green-800">
-                           ✅ 출고 완료
-                         </Badge>
-                         <span className="ml-2 text-sm text-gray-600">
-                           {order.ship_out_datetime && `출고일: ${format(new Date(order.ship_out_datetime), "yyyy-MM-dd HH:mm")}`}
-                         </span>
-                       </div>
-                     )}
-                   </div>
-                 )}
-               </CardContent>
-             </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">주문 정보</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <div>
+                  <span className="font-medium">주문일시:</span>
+                  <span className="ml-2">
+                    {format(new Date(order.order_datetime), "yyyy-MM-dd HH:mm")}
+                  </span>
+                </div>
+                <div>
+                  <span className="font-medium">주문 상태:</span>
+                  <Badge className={`ml-2 ${getStatusColor(order.order_status)}`}>
+                    {getStatusText(order.order_status)}
+                  </Badge>
+                </div>
+                
+                {/* 출고 완료 상태 표시 - delivered 상태일 때 */}
+                {order.order_status === 'delivered' && (
+                  <div className="pt-2">
+                    <Badge className="bg-green-100 text-green-800">
+                      ✅ 출고 완료
+                    </Badge>
+                    <span className="ml-2 text-sm text-gray-600">
+                      {order.ship_out_datetime && `출고일: ${format(new Date(order.ship_out_datetime), "yyyy-MM-dd HH:mm")}`}
+                    </span>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </div>
 
           {/* 결제 정보 */}
@@ -595,9 +570,12 @@ const OrderDetail: React.FC = () => {
                 </div>
                 <div>
                   <span className="font-medium">결제 상태:</span>
-                  <Badge className={`ml-2 ${getBadgeClass('paymentStatus', order.payment_status)}`}>
-                    {getLabel('paymentStatus', order.payment_status, '미결제')}
-                  </Badge>
+                  <span className="ml-2">
+                    {order.payment_status === 'paid' && '결제완료'}
+                    {order.payment_status === 'pending' && '미결제'}
+                    {order.payment_status === 'refunded' && '환불완료'}
+                    {!order.payment_status && '미정'}
+                  </span>
                 </div>
                 <div>
                   <span className="font-medium">결제 금액:</span>
@@ -729,145 +707,62 @@ const OrderDetail: React.FC = () => {
               <CardTitle className="text-lg">주문 항목</CardTitle>
             </CardHeader>
             <CardContent>
-              {isEditing ? (
-                <div className="space-y-4">
-                  <div className="flex justify-end">
-                    <Button onClick={() => setShowItemEditModal(true)} size="sm">
-                      항목 추가/수정
-                    </Button>
-                  </div>
-                  
-                  <div className="space-y-3">
-                    {editingData?.order_items.map((item, index) => (
-                      <div key={index} className="flex items-center gap-3 p-3 border rounded-lg">
-                        <div className="flex-1 grid grid-cols-5 gap-2">
-                          <input
-                            type="text"
-                            value={item.fish_type_name || ''}
-                            onChange={(e) => {
-                              const newItems = [...editingData.order_items];
-                              newItems[index].fish_type_name = e.target.value;
-                              setEditingData({ ...editingData, order_items: newItems });
-                            }}
-                            placeholder="어종명"
-                            className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          />
-                          <input
-                            type="number"
-                            value={item.quantity}
-                            onChange={(e) => {
-                              const newItems = [...editingData.order_items];
-                              newItems[index].quantity = Number(e.target.value);
-                              setEditingData({ ...editingData, order_items: newItems });
-                            }}
-                            placeholder="수량"
-                            className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent text-right"
-                          />
-                          <input
-                            type="number"
-                            value={item.unit_price}
-                            onChange={(e) => {
-                              const newItems = [...editingData.order_items];
-                              newItems[index].unit_price = Number(e.target.value);
-                              setEditingData({ ...editingData, order_items: newItems });
-                            }}
-                            placeholder="단가"
-                            className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent text-right"
-                          />
-                          <select
-                            value={item.unit}
-                            onChange={(e) => {
-                              const newItems = [...editingData.order_items];
-                              newItems[index].unit = e.target.value;
-                              setEditingData({ ...editingData, order_items: newItems });
-                            }}
-                            className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          >
-                            <option value="kg">kg</option>
-                            <option value="g">g</option>
-                            <option value="마리">마리</option>
-                            <option value="박스">박스</option>
-                          </select>
-                          <input
-                            type="text"
-                            value={item.remarks || ''}
-                            onChange={(e) => {
-                              const newItems = [...editingData.order_items];
-                              newItems[index].remarks = e.target.value;
-                              setEditingData({ ...editingData, order_items: newItems });
-                            }}
-                            placeholder="비고"
-                            className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          />
-                        </div>
-                        <div className="flex gap-2">
-                          <Button
-                            onClick={() => {
-                              const newItems = editingData.order_items.filter((_, i) => i !== index);
-                              setEditingData({ ...editingData, order_items: newItems });
-                            }}
-                            size="sm"
-                            variant="destructive"
-                          >
-                            삭제
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  
-
-                  
-                  <div className="text-right">
-                    <span className="font-medium">총 금액: </span>
-                    <span className="text-lg font-bold">
-                      {editingData?.order_items.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0).toLocaleString()}원
-                    </span>
-                  </div>
-                </div>
-              ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full border-collapse">
-                  <thead>
-                    <tr className="border-b">
-                      <th className="text-left p-2">품목</th>
-                      <th className="text-right p-2">수량</th>
-                      <th className="text-right p-2">단가</th>
-                      <th className="text-right p-2">금액</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {order.items?.map((item: any, index: number) => (
-                      <tr key={index} className="border-b">
-                        <td className="p-2">
-                          {item.fish_type_name || item.item_name_snapshot || "어종명 없음"}
-                          {item.remarks && (
-                            <div className="text-sm text-gray-500">비고: {item.remarks}</div>
-                          )}
-                        </td>
-                        <td className="text-right p-2">
-                          {item.quantity} {item.unit}
-                        </td>
-                        <td className="text-right p-2">
-                          {item.unit_price?.toLocaleString()}원
-                        </td>
-                        <td className="text-right p-2 font-medium">
-                          {(item.quantity * item.unit_price).toLocaleString()}원
+              <div className="space-y-4">
+                <div className="overflow-x-auto">
+                  <table className="w-full border-collapse">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="text-left p-2">품목</th>
+                        <th className="text-right p-2">수량</th>
+                        <th className="text-right p-2">단가</th>
+                        <th className="text-right p-2">금액</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {order.items?.map((item: any, index: number) => (
+                        <tr key={index} className="border-b">
+                          <td className="p-2">
+                            {item.fish_type_name || item.item_name_snapshot || "어종명 없음"}
+                            {item.remarks && (
+                              <div className="text-sm text-gray-500">비고: {item.remarks}</div>
+                            )}
+                          </td>
+                          <td className="text-right p-2">
+                            {item.quantity} {item.unit}
+                          </td>
+                          <td className="text-right p-2">
+                            {item.unit_price?.toLocaleString()}원
+                          </td>
+                          <td className="text-right p-2 font-medium">
+                            {(item.quantity * item.unit_price).toLocaleString()}원
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="border-t-2">
+                        <td colSpan={3} className="p-2 font-bold text-right">총 금액:</td>
+                        <td className="p-2 font-bold text-right text-blue-600">
+                          {totalAmount.toLocaleString()}원
                         </td>
                       </tr>
-                    ))}
-                  </tbody>
-                  <tfoot>
-                    <tr className="border-t-2">
-                      <td colSpan={3} className="p-2 font-bold text-right">총 금액:</td>
-                      <td className="p-2 font-bold text-right text-blue-600">
-                        {totalAmount.toLocaleString()}원
-                      </td>
-                    </tr>
-                  </tfoot>
-                </table>
+                    </tfoot>
+                  </table>
+                </div>
+                
+                {/* 항목 추가/수정 버튼 */}
+                <div className="flex justify-center">
+                  <Button 
+                    onClick={() => setShowItemEditModal(true)} 
+                    size="sm"
+                    variant="outline"
+                    className="border-blue-600 text-blue-600 hover:bg-blue-50"
+                  >
+                    + 항목 추가/수정
+                  </Button>
+                </div>
               </div>
-              )}
+            
             </CardContent>
           </Card>
 
@@ -901,55 +796,6 @@ const OrderDetail: React.FC = () => {
               </Card>
             ) : null}
 
-          {/* 긴급 주문 표시 - 주문 정보 카드에서 제거하고 여기로 이동 */}
-          {order.is_urgent ? (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg flex items-center">
-                  🚨 긴급 주문
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-red-700 font-medium">이 주문은 긴급 주문으로 처리됩니다.</p>
-                {isEditing && (
-                  <div className="mt-3">
-                    <label className="flex items-center space-x-2">
-                      <input
-                        type="checkbox"
-                        checked={editingData?.is_urgent || false}
-                        onChange={(e) => setEditingData({
-                          ...editingData,
-                          is_urgent: e.target.checked
-                        })}
-                        className="rounded border-gray-300 text-red-600 focus:ring-red-500"
-                      />
-                      <span className="text-sm text-gray-700">긴급 주문 해제</span>
-                    </label>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          ) : isEditing ? (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">긴급 주문 설정</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <label className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    checked={editingData?.is_urgent || false}
-                    onChange={(e) => setEditingData({
-                      ...editingData,
-                      is_urgent: e.target.checked
-                    })}
-                    className="rounded border-gray-300 text-red-600 focus:ring-red-500"
-                  />
-                  <span className="text-sm text-gray-700">긴급 주문으로 설정</span>
-                </label>
-              </CardContent>
-            </Card>
-          ) : null}
 
           {/* 원본 텍스트 */}
           {order.transcribed_text && (
@@ -1059,14 +905,26 @@ const OrderDetail: React.FC = () => {
                 </Button>
               )}
               
-              {/* 환불 - paid 상태에서만 */}
+              {/* 결제 취소 - paid 상태에서만 */}
               {order.payment_status === 'paid' && order.order_status !== 'cancelled' && (
                 <Button 
+                  onClick={handlePaymentRollback}
                   variant="outline"
-                  className="border-red-600 text-red-600 hover:bg-red-50"
+                  className="border-orange-600 text-orange-600 hover:bg-orange-50"
                   size="sm"
+                  disabled={processingRefund}
                 >
-                  환불
+                  {processingRefund ? (
+                    <>
+                      <div className="animate-spin h-4 w-4 mr-1 border-2 border-orange-600 border-t-transparent rounded-full" />
+                      처리중...
+                    </>
+                  ) : (
+                    <>
+                      <RotateCcw className="h-4 w-4 mr-1" />
+                      결제 취소
+                    </>
+                  )}
                 </Button>
               )}
             </div>
@@ -1277,6 +1135,27 @@ const OrderDetail: React.FC = () => {
                      ))}
                    </tbody>
                  </table>
+               </div>
+               
+               {/* 항목 추가 버튼 */}
+               <div className="flex justify-center py-4">
+                 <Button
+                   onClick={() => {
+                     const newItem = {
+                       fish_type_name: '',
+                       quantity: 1,
+                       unit_price: 0,
+                       unit: 'kg',
+                       remarks: ''
+                     }
+                     setEditingItems([...editingItems, newItem])
+                   }}
+                   variant="outline"
+                   size="sm"
+                   className="border-green-600 text-green-600 hover:bg-green-50"
+                 >
+                   + 항목 추가
+                 </Button>
                </div>
                
                <div className="flex justify-end space-x-3">

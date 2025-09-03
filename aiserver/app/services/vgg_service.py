@@ -439,7 +439,7 @@ class VGG16Service:
                 del batch_array
                 del predictions
                 
-                # TensorFlow 메모리 정리
+                # TensorFlow 메모리 정리 _무거움
                 try:
                     import tensorflow as tf
                     tf.keras.backend.clear_session()

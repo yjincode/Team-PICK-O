@@ -4,7 +4,7 @@
  */
 import React, { useState, useEffect, useRef } from "react"
 import { useParams, useNavigate, useSearchParams } from "react-router-dom"
-import { ArrowLeft, CreditCard, Banknote, Building2 } from "lucide-react"
+import { ArrowLeft, CreditCard, Banknote, Building2, RotateCcw } from "lucide-react"
 import { format } from "date-fns"
 import { ko } from "date-fns/locale"
 
@@ -356,6 +356,51 @@ const PaymentPage: React.FC = () => {
     }
   }
 
+  // 결제 롤백(환불) 처리
+  const handleRefund = async () => {
+    if (!order) return
+    
+    // 사용자 확인
+    const confirmRollback = confirm(
+      `주문 #${order.id}의 결제를 취소하시겠습니까?\n\n` +
+      `• 결제 금액: ₩${order.total_price.toLocaleString()}\n` +
+      `• 주문 상태: 출고준비 → 결제 대기\n\n` +
+      `⚠️ 실수로 결제한 경우에만 사용해주세요.\n` +
+      `이 작업은 되돌릴 수 없습니다.`
+    )
+    
+    if (!confirmRollback) return
+    
+    // 취소 사유 입력
+    const cancelReason = prompt('결제 취소 사유를 입력해주세요:', '실수로 결제함')
+    if (!cancelReason || cancelReason.trim() === '') {
+      toast.error('취소 사유를 입력해주세요.')
+      return
+    }
+    
+    try {
+      setProcessingPayment(true)
+      
+      const response = await paymentApi.rollback({
+        orderId: order.id,
+        rollbackReason: cancelReason.trim()
+      })
+      
+      if (response.data) {
+        toast.success('결제가 성공적으로 취소되었습니다. 주문 상태가 결제 대기로 변경되었습니다.')
+        // 페이지 새로고침하여 최신 상태 반영
+        window.location.reload()
+      }
+      
+    } catch (error: any) {
+      console.error('결제 취소 오류:', error)
+      const errorMessage = error.response?.data?.error || '결제 취소 중 오류가 발생했습니다.'
+      toast.error(errorMessage)
+    } finally {
+      setProcessingPayment(false)
+    }
+  }
+
   // 컴포넌트 언마운트 시 위젯 정리
   useEffect(() => {
     return () => {
@@ -397,9 +442,9 @@ const PaymentPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="flex-1 space-y-4 sm:space-y-6 p-4 sm:p-6 bg-gray-50 min-h-screen">
       {/* 헤더 */}
-      <header className="px-6 py-4 bg-white border-b border-gray-200">
+      <header className="bg-white border-b border-gray-200 -mx-4 sm:-mx-6 px-6 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <Button
@@ -413,17 +458,17 @@ const PaymentPage: React.FC = () => {
             <div>
               <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">결제 처리</h1>
               <p className="text-sm sm:text-base text-gray-600 mt-1">
-                주문 #{order.id} - 거래처 ID: {order.business_id}
+                주문 #{order.id} - {order.business_name || `거래처 ID: ${order.business_id}`}
               </p>
             </div>
           </div>
         </div>
       </header>
 
-      <div className="p-6">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="max-w-7xl mx-auto">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 -mx-4 sm:-mx-6">
           {/* 주문 정보 */}
-          <Card>
+          <Card className="px-6">
             <CardHeader>
               <CardTitle className="text-lg">주문 정보</CardTitle>
             </CardHeader>
@@ -434,7 +479,7 @@ const PaymentPage: React.FC = () => {
               </div>
               <div className="flex items-center justify-between">
                 <span className="font-medium">거래처:</span>
-                <span className="font-semibold">거래처 ID: {order.business_id}</span>
+                <span className="font-semibold">{order.business_name || `거래처 ID: ${order.business_id}`}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="font-medium">주문일:</span>
@@ -471,7 +516,7 @@ const PaymentPage: React.FC = () => {
           </Card>
 
           {/* 결제 정보 */}
-          <Card>
+          <Card className="px-6">
             <CardHeader>
               <CardTitle className="text-lg">결제 정보</CardTitle>
             </CardHeader>
@@ -491,6 +536,30 @@ const PaymentPage: React.FC = () => {
                     </span>
                   )}
                 </div>
+                
+                {/* 결제 완료 시 롤백 버튼 표시 */}
+                {order.order_status === 'ready' && (
+                  <div className="pt-3 border-t">
+                    <Button
+                      variant="outline"
+                      onClick={() => handleRefund()}
+                      disabled={processingPayment}
+                      className="w-full text-red-600 hover:text-red-700 hover:bg-red-50 border-red-300 hover:border-red-400"
+                    >
+                      {processingPayment ? (
+                        <>
+                          <div className="animate-spin h-4 w-4 mr-2 border-2 border-red-600 border-t-transparent rounded-full" />
+                          처리중...
+                        </>
+                      ) : (
+                        <>
+                          <RotateCcw className="h-4 w-4 mr-2" />
+                          결제 취소
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                )}
               </div>
 
               {/* 결제 방법 선택 */}

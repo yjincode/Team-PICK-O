@@ -50,20 +50,24 @@ declare global {
   }
 }
 
-// Firebase 설정 (직접 하드코딩)
+// Firebase 설정 (새 웹앱)
 const firebaseConfig: FirebaseConfig = {
-  apiKey: "AIzaSyChBnuJCAKe-TxcvGT0eCV5AUNA_4btZPo",
+  apiKey: "AIzaSyDFHCiz67HaARszNj3WNdRs7Bqyr0cmsR0",
   authDomain: "pick-o-main.firebaseapp.com",
   projectId: "pick-o-main",
   storageBucket: "pick-o-main.firebasestorage.app",
   messagingSenderId: "237171811665",
-  appId: "1:237171811665:web:445df31d49b637afb69f70",
-  measurementId: "G-0MZ40REVBH"
+  appId: "1:237171811665:web:13f50a4865b4ea74b69f70",
+  measurementId: "G-8F8GCQ8EV2"
 };
 
 // Firebase 초기화
 const app: FirebaseApp = initializeApp(firebaseConfig);
 const auth: Auth = getAuth(app);
+
+// reCAPTCHA 설정은 Firebase가 자동 처리
+// 언어 설정
+auth.languageCode = 'ko';
 
 // Analytics 초기화 (개발 환경에서는 선택적)
 let analytics: Analytics;
@@ -71,58 +75,45 @@ try {
   analytics = getAnalytics(app);
 } catch (error) {
 }
-
-// reCAPTCHA verifier 설정
-export const setupRecaptcha = (containerId: string): RecaptchaVerifier => {  
-  // 기존 verifier가 있다면 정리
-  if (window.recaptchaVerifier) {
-    try {
-      window.recaptchaVerifier.clear();
-    } catch (error) {
+// reCAPTCHA 설정
+const setupRecaptcha = (): void => {
+  try {
+    // 기존 reCAPTCHA 정리
+    if (window.recaptchaVerifier) {
+      try {
+        window.recaptchaVerifier.clear();
+      } catch (error) {
+        console.log('기존 reCAPTCHA 정리 중 오류:', error);
+      }
+      window.recaptchaVerifier = undefined;
     }
-    window.recaptchaVerifier = undefined;
-  }
-  
-  // DOM 요소 확인
-  const container = document.getElementById(containerId);
-  if (!container) {
-    throw new Error(`reCAPTCHA 컨테이너를 찾을 수 없습니다: ${containerId}`);
-  }
-  
-  // 새로운 RecaptchaVerifier 생성 (테스트 환경에서 더 관대한 설정)
-  const recaptchaVerifier = new RecaptchaVerifier(auth, containerId, {
-    'size': 'invisible',  // invisible로 변경하여 테스트 번호에서 덜 방해받도록
-    'callback': (response: string) => {
-    },
-    'expired-callback': () => {
-      // 테스트 환경에서는 자동으로 재시도
-      setTimeout(() => {
-        if (window.recaptchaVerifier) {
-          try {
-            window.recaptchaVerifier.clear();
-            window.recaptchaVerifier = undefined;
-          } catch (e) {
-          }
+    
+    window.recaptchaVerifier = new RecaptchaVerifier(
+      auth,
+      'recaptcha-container',
+      {
+        size: 'invisible',
+        callback: (response: string) => {
+          console.log('reCAPTCHA solved:', response);
+        },
+        'expired-callback': () => {
+          console.warn('reCAPTCHA expired, please retry.');
         }
-      }, 100);
-    },
-    'error-callback': (error: any) => {
-    }
-  });
-  
-  // window 객체에 저장
-  window.recaptchaVerifier = recaptchaVerifier;
-  
-  return recaptchaVerifier;
+      }
+    );
+    
+    console.log('reCAPTCHA 설정 완료');
+  } catch (error) {
+    console.error('reCAPTCHA 설정 실패:', error);
+    throw error;
+  }
 };
 
 // 테스트 전화번호 확인 함수
 const isTestPhoneNumber = (phoneNumber: string): boolean => {
   // Firebase Console에서 설정한 테스트 전화번호들
   const testNumbers = [
-    '+8201012341234',  // Firebase에서 설정한 테스트 번호
-    '+8201089358654',  // 실제 사용자 전화번호 (테스트용)
-    '+821089358654',   // 82로 시작하는 형식
+    '+8201012341234',  // Firebase에서 설정한 테스트 번호만 유지
   ];
   
   return testNumbers.includes(phoneNumber);
@@ -142,17 +133,38 @@ export const sendPhoneVerification = async (phoneNumber: string): Promise<AuthRe
       
     // 테스트 전화번호인지 확인
     const isTestNumber = isTestPhoneNumber(normalizedPhone);    
-    // reCAPTCHA verifier 설정
-    const recaptchaVerifier = setupRecaptcha('recaptcha-container');
+    
+    console.log('📱 Firebase 전화 인증 시도:', {
+      original: phoneNumber,
+      normalized: normalizedPhone,
+      isTest: isTestNumber
+    });
+    
+    // 공식 문서 방식: RecaptchaVerifier 생성
+    const appVerifier = new RecaptchaVerifier(
+      auth,
+      'recaptcha-container',
+      {
+        size: 'invisible',
+        callback: (response: string) => {
+          console.log('reCAPTCHA solved');
+        }
+      }
+    );
     
     const confirmationResult = await signInWithPhoneNumber(
       auth,
       normalizedPhone,
-      recaptchaVerifier
+      appVerifier
     );
+    
+    // 전역 저장
+    window.recaptchaVerifier = appVerifier;
     
     // window 객체에 저장
     window.confirmationResult = confirmationResult;
+    
+    console.log('SMS 전송 성공!');
     
     return {
       success: true,
@@ -161,6 +173,7 @@ export const sendPhoneVerification = async (phoneNumber: string): Promise<AuthRe
     };
     
   } catch (error: any) {
+    console.error('Firebase SMS 전송 실패:', error);
     
     const errorMessage = getErrorMessage(error.code);
     
@@ -173,24 +186,30 @@ export const sendPhoneVerification = async (phoneNumber: string): Promise<AuthRe
 
 // 전화번호 정규화 함수
 const normalizePhoneNumber = (phoneNumber: string): string | null => {
-  // 하이픈 제거
-  let cleaned = phoneNumber.replace(/[-]/g, '');
+  // 모든 공백, 하이픈, 괄호 제거
+  let cleaned = phoneNumber.replace(/[\s\-\(\)]/g, '');
   
-  // 한국 전화번호 형식 처리
-  if (cleaned.startsWith('0')) {
-    cleaned = '+82' + cleaned.substring(1);
-  } else if (cleaned.startsWith('82')) {
+  // 한국 전화번호 형식 처리 (010으로 시작하는 경우)
+  if (cleaned.startsWith('010')) {
+    // 010 → +8210으로 변환 (앞의 0만 제거)
+    cleaned = '+82' + cleaned.substring(1); // 01089358654 → +8210089358654
+  } else if (cleaned.startsWith('8210') && cleaned.length >= 12) {
     cleaned = '+' + cleaned;
-  } else if (!cleaned.startsWith('+')) {
-    cleaned = '+82' + cleaned;
-  }
-  
-  // 유효성 검사 (한국 전화번호: +82 10-1234-5678)
-  const phoneRegex = /^\+82[0-9]{9,10}$/;
-  if (!phoneRegex.test(cleaned)) {
+  } else if (cleaned.startsWith('+8210') && cleaned.length >= 13) {
+    return cleaned; // 이미 올바른 형식
+  } else {
+    console.error('지원하지 않는 전화번호 형식:', phoneNumber);
     return null;
   }
   
+  // 한국 휴대폰 번호 유효성 검사 (+82 10-XXXX-XXXX)
+  const phoneRegex = /^\+8210[0-9]{8}$/;
+  if (!phoneRegex.test(cleaned)) {
+    console.error('전화번호 형식이 올바르지 않습니다:', cleaned);
+    return null;
+  }
+  
+  console.log('정규화된 전화번호:', cleaned);
   return cleaned;
 };
 
@@ -252,11 +271,12 @@ export const signOut = async (): Promise<SignOutResult> => {
   try {
     await auth.signOut();
     
-    // window 객체 정리
+    // reCAPTCHA 정리
     if (window.recaptchaVerifier) {
       try {
         window.recaptchaVerifier.clear();
       } catch (error) {
+        console.log('reCAPTCHA 정리 중 오류:', error);
       }
       window.recaptchaVerifier = undefined;
     }
@@ -297,4 +317,4 @@ const getErrorMessage = (errorCode: string): string => {
   }
 };
 
-export { auth, app, analytics };
+export { auth, app, analytics, setupRecaptcha };

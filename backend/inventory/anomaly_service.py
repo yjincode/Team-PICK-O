@@ -4,6 +4,7 @@ import logging
 from datetime import datetime, timedelta
 
 from .models import Inventory, InventoryLog, InventoryAnomaly
+from .anomaly_detection.hybrid_scorer import HybridAnomalyScorer
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +41,7 @@ class InventoryAnomalyService:
     @classmethod
     def detect_anomaly(cls, inventory_log, inventory, fish_type):
         """
-        재고 이상탐지 메인 함수 (우선순위 기반)
+        재고 이상탐지 메인 함수 (하이브리드: 룰 기반 + PyOD)
         
         Args:
             inventory_log: InventoryLog 객체
@@ -51,6 +52,30 @@ class InventoryAnomalyService:
             dict: 스마트 그룹화된 이상탐지 결과 또는 None
         """
         try:
+            # 하이브리드 스코어러 사용
+            hybrid_scorer = HybridAnomalyScorer(alpha=0.7)  # 70% 룰 기반, 30% PyOD
+            
+            try:
+                # 하이브리드 이상탐지 실행
+                hybrid_result = hybrid_scorer.calculate_hybrid_score(inventory_log, inventory, fish_type)
+                
+                if hybrid_result and hybrid_result.get('anomalies'):
+                    # 하이브리드 결과가 있으면 저장
+                    anomalies = hybrid_result['anomalies']
+                    cls._save_hybrid_anomalies(anomalies, inventory_log, inventory, fish_type, hybrid_result.get('model_version', 'hybrid-v1.0'))
+                    
+                    # 스마트 그룹화
+                    grouped_anomalies = cls._smart_group_anomalies(anomalies)
+                    
+                    # Alert 생성
+                    cls._create_anomaly_alerts(anomalies, inventory_log, inventory, fish_type)
+                    
+                    return grouped_anomalies
+                    
+            except Exception as hybrid_error:
+                logger.warning(f"하이브리드 이상탐지 실패: {hybrid_error}, 룰 기반으로 fallback")
+            
+            # 하이브리드 실패 시 기존 룰 기반 시스템 사용
             all_anomalies = []
             
             # 1. 마이너스 재고 탐지 (최우선)
@@ -83,7 +108,12 @@ class InventoryAnomalyService:
                 cls._save_anomalies(all_anomalies, inventory_log, inventory, fish_type)
                 
                 # 스마트 그룹화: 우선순위 기반으로 정리
-                return cls._smart_group_anomalies(all_anomalies)
+                grouped_anomalies = cls._smart_group_anomalies(all_anomalies)
+                
+                # 이상탐지 시 Alert 자동 생성
+                cls._create_anomaly_alerts(all_anomalies, inventory_log, inventory, fish_type)
+                
+                return grouped_anomalies
             
             return None
             
@@ -313,6 +343,34 @@ class InventoryAnomalyService:
             logger.error(f"이상탐지 저장 실패: {e}")
     
     @classmethod
+    def _save_hybrid_anomalies(cls, anomalies, inventory_log, inventory, fish_type, model_version):
+        """하이브리드 이상탐지 결과 저장"""
+        try:
+            for anomaly_data in anomalies:
+                # InventoryLog 업데이트
+                inventory_log.is_anomaly = True
+                inventory_log.anomaly_type = anomaly_data['type']
+                inventory_log.anomaly_score = anomaly_data.get('anomaly_score', 0.5)
+                inventory_log.save()
+                
+                # InventoryAnomaly 생성
+                InventoryAnomaly.objects.create(
+                    log=inventory_log,
+                    inventory=inventory,
+                    anomaly_type=anomaly_data['type'],
+                    severity=anomaly_data['severity'],
+                    confidence_score=anomaly_data.get('anomaly_score', 0.5),
+                    description=anomaly_data['description'],
+                    recommended_action=anomaly_data['recommended_action'],
+                    ai_model_version=model_version  # 하이브리드 모델 버전
+                )
+                
+                logger.warning(f"하이브리드 이상탐지 저장됨: {anomaly_data['type']} - {anomaly_data['severity']} ({model_version})")
+                
+        except Exception as e:
+            logger.error(f"하이브리드 이상탐지 저장 실패: {e}")
+    
+    @classmethod
     def detect_inventory_check_anomaly(cls, inventory, actual_quantity, fish_type):
         """실사 차이 이상탐지"""
         try:
@@ -338,3 +396,102 @@ class InventoryAnomalyService:
         except Exception as e:
             logger.error(f"실사 차이 이상탐지 실패: {e}")
             return None
+
+    @classmethod
+    def _create_anomaly_alerts(cls, anomalies, inventory_log, inventory, fish_type):
+        """
+        이상탐지 결과를 기반으로 Alert 자동 생성
+        
+        Args:
+            anomalies: 이상탐지 결과 리스트
+            inventory_log: InventoryLog 객체
+            inventory: Inventory 객체
+            fish_type: FishType 객체
+        """
+        try:
+            for anomaly in anomalies:
+                # 심각도에 따른 Alert 생성
+                severity = anomaly.get('severity', 'MEDIUM')
+                anomaly_type = anomaly.get('type', '알 수 없는 이상')
+                
+                # Alert 제목 및 메시지 생성
+                title = f"{fish_type.name} {anomaly_type}"
+                message = cls._generate_anomaly_message(anomaly, inventory_log, fish_type)
+                
+                # 링크 생성 (재고 페이지의 이상탐지 탭으로 이동)
+                link = "/inventory?tab=anomalies"
+                
+                # 메타데이터 (이상탐지 상세 정보)
+                meta = {
+                    'anomaly_type': anomaly_type,
+                    'anomaly_score': getattr(inventory_log, 'anomaly_score', None),
+                    'quantity_change': inventory_log.change,
+                    'before_quantity': inventory_log.before_quantity,
+                    'after_quantity': inventory_log.after_quantity,
+                    'unit': inventory_log.unit,
+                    'source_type': inventory_log.source_type,
+                    'detection_method': 'AI_ANOMALY_DETECTION'
+                }
+                
+                # Alert 생성 (알림 기능 제거됨)
+                # Alert.objects.create(
+                #     event='anomaly_detected',
+                #     severity=severity,
+                #     title=title,
+                #     message=message,
+                #     fish_id=fish_type,
+                #     inventory_id=inventory,
+                #     link=link,
+                #     meta=meta,
+                #     created_by=inventory.user
+                # )
+                
+                logger.info(f"이상탐지 감지: {title} (심각도: {severity})")
+                
+        except Exception as e:
+            logger.error(f"이상탐지 처리 중 오류: {e}")
+    
+    @classmethod
+    def _generate_anomaly_message(cls, anomaly, inventory_log, fish_type):
+        """
+        이상탐지 결과를 기반으로 사용자 친화적인 메시지 생성
+        
+        Args:
+            anomaly: 이상탐지 결과
+            inventory_log: InventoryLog 객체
+            fish_type: FishType 객체
+            
+        Returns:
+            str: 사용자 친화적인 메시지
+        """
+        anomaly_type = anomaly.get('type', '알 수 없는 이상')
+        severity = anomaly.get('severity', 'MEDIUM')
+        
+        # 기본 메시지
+        base_message = f"{fish_type.name}에서 {anomaly_type}이 감지되었습니다."
+        
+        # 상세 정보 추가
+        if inventory_log:
+            change_info = f"수량 변화: {inventory_log.change:+g} {inventory_log.unit}"
+            quantity_info = f"재고: {inventory_log.before_quantity} → {inventory_log.after_quantity} {inventory_log.unit}"
+            
+            if inventory_log.source_type == 'AI':
+                source_info = "AI 이상탐지 시스템에 의해 자동 감지되었습니다."
+            else:
+                source_info = f"{inventory_log.get_source_type_display()} 방식으로 처리되었습니다."
+            
+            message = f"{base_message}\n{change_info}\n{quantity_info}\n{source_info}"
+        else:
+            message = base_message
+        
+        # 심각도에 따른 추가 안내
+        if severity == 'CRITICAL':
+            message += "\n\n⚠️ 즉시 확인이 필요한 긴급 상황입니다."
+        elif severity == 'HIGH':
+            message += "\n\n🔴 빠른 시일 내에 확인이 필요합니다."
+        elif severity == 'MEDIUM':
+            message += "\n\n🟡 적절한 시기에 확인해주세요."
+        else:
+            message += "\n\n🟢 참고사항입니다."
+        
+        return message

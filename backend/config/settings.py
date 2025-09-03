@@ -17,7 +17,7 @@ load_dotenv(BASE_DIR / '.env')
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
-# AI Server settings
+# AI Server settings (어류 질병 분석용)
 AI_SERVER_URL = os.getenv('AI_SERVER_URL', 'http://localhost:8001')
 
 # Tesseract OCR Configuration
@@ -100,7 +100,7 @@ MIDDLEWARE = [
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
-    'core.middleware.JWTAuthMiddleware',
+    'core.middleware.JWTAuthMiddleware',  # JWT 인증 미들웨어 활성화
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -150,6 +150,7 @@ def get_database_config():
             'PORT': os.getenv('DB_PORT', '5432'),
             'OPTIONS': {
                 'connect_timeout': 10,
+                'client_encoding': 'UTF8',
             },
         }
         print(f"🌐 배포 환경: EC2 데이터베이스 연결")
@@ -167,6 +168,7 @@ def get_database_config():
         'PORT': '5432',
         'OPTIONS': {
             'connect_timeout': 5,
+            'client_encoding': 'UTF8',
         },
     }
     
@@ -180,6 +182,7 @@ def get_database_config():
         'PORT': '5432',
         'OPTIONS': {
             'connect_timeout': 5,
+            'client_encoding': 'UTF8',
         },
     }
     
@@ -192,7 +195,8 @@ def get_database_config():
             user=team_server_config['USER'],
             password=team_server_config['PASSWORD'],
             database=team_server_config['NAME'],
-            connect_timeout=3
+            connect_timeout=3,
+            options='-c client_encoding=utf8'
         )
         conn.close()
         print("✅ 1차: 팀 공동 로컬서버 연결 성공!")
@@ -209,7 +213,8 @@ def get_database_config():
             user=docker_db_config['USER'],
             password=docker_db_config['PASSWORD'],
             database=docker_db_config['NAME'],
-            connect_timeout=3
+            connect_timeout=3,
+            options='-c client_encoding=utf8'
         )
         conn.close()
         print("✅ 2차: 개인 로컬 도커 데이터베이스 연결 성공!")
@@ -425,6 +430,11 @@ DATA_GO_KR_API_KEY = os.getenv('DATA_GO_KR_API_KEY')  # 공공데이터포털 AP
 # Create necessary directories
 os.makedirs(BASE_DIR / 'logs', exist_ok=True)
 os.makedirs(AI_MODELS['MODEL_CACHE_DIR'], exist_ok=True)
+
+# OpenMP 스레드 제한 (macOS LightGBM 호환성)
+os.environ['OMP_NUM_THREADS'] = '1'
+os.environ['MKL_NUM_THREADS'] = '1'
+os.environ['OPENBLAS_NUM_THREADS'] = '1'
 
 DISCORD_WEBHOOK_URL = os.getenv('DISCORD_WEBHOOK_URL', '')
 

@@ -14,6 +14,11 @@ export default defineConfig({
         target: 'http://127.0.0.1:8000',
         changeOrigin: true,
         secure: false,
+      },
+      '/ai': {
+        target: 'https://66a92e7ce493.ngrok-free.app',
+        changeOrigin: true,
+        secure: false,
       }
     }
   },

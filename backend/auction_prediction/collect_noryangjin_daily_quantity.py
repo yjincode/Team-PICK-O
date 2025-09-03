@@ -13,8 +13,41 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
 import django
 django.setup()
 
-from prediction.models import FishAuctionData
-from prediction.standard_mapping import map_standard_to_tier
+from prediction.models import ActualAuctionPrice, FishSpecies, WholesaleMarket, CommonCode
+
+def map_standard_to_tier(standard):
+    """규격을 표준 등급으로 매핑합니다."""
+    if not standard:
+        return 'FWT_M', 0.8, "기본값"
+    
+    # 미 규격 처리
+    if '미' in standard:
+        # 숫자 추출
+        import re
+        numbers = re.findall(r'(\d+(?:\.\d+)?)', standard)
+        if numbers:
+            mi_number = float(numbers[0])
+            if mi_number <= 1:
+                return 'FWT_L', 1.0, f"미 규격: {standard} -> FWT_L"
+            elif mi_number <= 2:
+                return 'FWT_M', 0.5, f"미 규격: {standard} -> FWT_M"
+            elif mi_number <= 5:
+                return 'FWT_S', 0.2, f"미 규격: {standard} -> FWT_S"
+            elif mi_number <= 10:
+                return 'FWT_XS', 0.1, f"미 규격: {standard} -> FWT_XS"
+            else:
+                return 'FWT_XS', 0.05, f"미 규격: {standard} -> FWT_XS"
+    
+    # 기존 규격 매핑
+    if standard in ['소', '특소']:
+        return 'FWT_S', 0.4, f"기존 규격: {standard} -> FWT_S"
+    elif standard in ['중']:
+        return 'FWT_M', 0.8, f"기존 규격: {standard} -> FWT_M"
+    elif standard in ['대', '특대']:
+        return 'FWT_L', 1.5, f"기존 규격: {standard} -> FWT_L"
+    
+    # 기본값
+    return 'FWT_M', 0.8, f"기본값: {standard} -> FWT_M"
 
 def collect_noryangjin_daily_quantity(start_date_str=None, end_date_str=None):
     """노량진수산시장에서 5종 활어를 일별로 수집합니다 (자동 규격 매핑 포함)."""
@@ -182,10 +215,9 @@ def process_daily_excel(filename, species_name):
         # 일별 통계 계산
         try:
             # 해당 날짜의 데이터가 이미 있는지 확인
-            existing_data = FishAuctionData.objects.filter(
-                auction_date=auction_date,
-                target_species=species_name,
-                data_source='노량진수산시장_일별_규격별'
+            existing_data = ActualAuctionPrice.objects.filter(
+                trade_date=auction_date,
+                fish_species__item_small_category_name_kr=species_name
             ).first()
             
             if existing_data:
@@ -202,86 +234,71 @@ def process_daily_excel(filename, species_name):
                         # 해당 규격의 통계 계산
                         stats = calculate_quantity_based_stats(group)
                         
-                        # 규격 자동 매핑
+                        print(f"    📊 {standard} 규격: {stats['avg_price']:,.0f}원, 수량: {stats['total_quantity']:,.0f}")
+                        
+                        # 규격 매핑 (fwt_m, fwt_s 등으로 변환)
                         tier_code, avg_weight_kg, mapping_logic = map_standard_to_tier(standard)
                         
-                        print(f"    📊 {standard} 규격: {stats['avg_price']:,.0f}원, 수량: {stats['total_quantity']:,.0f}")
-                        if tier_code:
-                            print(f"        🎯 매핑: {tier_code} ({avg_weight_kg}kg)")
-                        else:
-                            print(f"        ❌ 매핑 실패: {mapping_logic}")
+                        if tier_code is None:
+                            print(f"    ⚠️ 규격 매핑 실패: {standard} -> 기본값 사용")
+                            tier_code = 'FWT_M'  # 기본값
+                            avg_weight_kg = 0.8
                         
-                        # DB에 저장
-                        fish_data = FishAuctionData.objects.create(
-                            auction_date=auction_date,
-                            market_name='노량진수산시장',
-                            market_code='',
-                            corporation_name='',
-                            corporation_code='',
-                            product_name=species_name,
-                            product_code='',
-                            species_name=species_name,
-                            species_code='',
-                            trade_unit_quantity=0,
-                            standard=standard,
-                            standard_code='',
-                            grade='',
-                            grade_code='',
-                            origin_code='',
-                            origin_name=stats['origin'],
-                            min_price=stats['min_price'],
-                            avg_price=stats['avg_price'],
-                            max_price=stats['max_price'],
-                            trade_quantity=stats['total_quantity'],
-                            trade_count=len(group),
-                            is_valid=True,
-                            target_species=species_name,
-                            data_source='노량진수산시장_일별_규격별',
-                            collection_timestamp=datetime.now(),
-                            tier_code_id=tier_code,
-                            avg_weight_kg=avg_weight_kg
+                        print(f"    📊 규격 매핑: {standard} -> {tier_code} ({avg_weight_kg}kg)")
+                        
+                        # DB에 저장 (ActualAuctionPrice 모델 사용)
+                        # 어종 마스터 데이터 가져오기
+                        fish_species = FishSpecies.objects.get(item_small_category_name_kr=species_name)
+                        
+                        # 마스터 데이터 가져오기
+                        market = WholesaleMarket.objects.get(market_api_code='NORYANGJIN')
+                        unit_code = CommonCode.objects.get(code_type='UNIT', code_value='KG')
+                        package_code = CommonCode.objects.get(code_type='PKG', code_value='BOX')
+                        origin_code = CommonCode.objects.get(code_type='PLOR', code_value='KOREA')
+                        
+                        auction_data = ActualAuctionPrice.objects.create(
+                            auction_sequence_id=f"NORYANGJIN_{auction_date}_{species_name}_{tier_code}_{saved_count}",
+                            trade_date=auction_date,
+                            market=market,
+                            fish_species=fish_species,
+                            origin_place_code=origin_code,
+                            package_code=package_code,
+                            unit_code=unit_code,
+                            trade_volume=stats['total_quantity'],
+                            auction_price=stats['avg_price'],
+                            unit_weight_kg=avg_weight_kg  # 매핑된 실제 무게
                         )
                         saved_count += 1
             else:
                 # 규격 정보가 없는 경우 전체 데이터 저장
                 stats = calculate_quantity_based_stats(df_all_standards)
                 
-                # 기본 규격 매핑 (전체 → 중간 등급)
-                tier_code, avg_weight_kg, mapping_logic = map_standard_to_tier('전체')
-                if not tier_code:
-                    tier_code, avg_weight_kg = 'FWT_M', 0.8  # 기본값: 중간 등급
-                
                 print(f"    📊 전체 데이터: {stats['avg_price']:,.0f}원, 수량: {stats['total_quantity']:,.0f}")
-                print(f"        🎯 기본 매핑: {tier_code} ({avg_weight_kg}kg)")
                 
-                fish_data = FishAuctionData.objects.create(
-                    auction_date=auction_date,
-                    market_name='노량진수산시장',
-                    market_code='',
-                    corporation_name='',
-                    corporation_code='',
-                    product_name=species_name,
-                    product_code='',
-                    species_name=species_name,
-                    species_code='',
-                    trade_unit_quantity=0,
-                    standard='전체',
-                    standard_code='',
-                    grade='',
-                    grade_code='',
-                    origin_code='',
-                    origin_name=stats['origin'],
-                    min_price=stats['min_price'],
-                    avg_price=stats['avg_price'],
-                    max_price=stats['max_price'],
-                    trade_quantity=stats['total_quantity'],
-                    trade_count=len(df_all_standards),
-                    is_valid=True,
-                    target_species=species_name,
-                    data_source='노량진수산시장_일별_규격별',
-                    collection_timestamp=datetime.now(),
-                    tier_code_id=tier_code,
-                    avg_weight_kg=avg_weight_kg
+                # 규격 매핑 (전체 데이터의 경우 기본값 사용)
+                tier_code = 'FWT_M'  # 전체 데이터는 중간 크기로 설정
+                avg_weight_kg = 0.8
+                
+                print(f"    📊 전체 데이터 규격: {tier_code} ({avg_weight_kg}kg)")
+                
+                # DB에 저장 (ActualAuctionPrice 모델 사용)
+                fish_species = FishSpecies.objects.get(item_small_category_name_kr=species_name)
+                market = WholesaleMarket.objects.get(market_api_code='NORYANGJIN')
+                unit_code = CommonCode.objects.get(code_type='UNIT', code_value='KG')
+                package_code = CommonCode.objects.get(code_type='PKG', code_value='BOX')
+                origin_code = CommonCode.objects.get(code_type='PLOR', code_value='KOREA')
+                
+                auction_data = ActualAuctionPrice.objects.create(
+                    auction_sequence_id=f"NORYANGJIN_{auction_date}_{species_name}_{tier_code}_전체",
+                    trade_date=auction_date,
+                    market=market,
+                    fish_species=fish_species,
+                    origin_place_code=origin_code,
+                    package_code=package_code,
+                    unit_code=unit_code,
+                    trade_volume=stats['total_quantity'],
+                    auction_price=stats['avg_price'],
+                    unit_weight_kg=avg_weight_kg  # 매핑된 실제 무게
                 )
                 saved_count = 1
             
@@ -352,6 +369,65 @@ def calculate_quantity_based_stats(df):
     }
     
     return stats
+
+def collect_single_species_daily(species_name, target_date_str):
+    """단일 어종의 특정 날짜 데이터를 수집합니다."""
+    
+    print(f"🐟 {species_name} {target_date_str} 데이터 수집 중...")
+    
+    # API 설정
+    url = "https://www.susansijang.co.kr/nsis/miw/ko/info/excel/miw3130"
+    
+    cookies = {
+        "__smVisitorID": "g9mATaAcvHx",
+        "JSESSIONIDMIW": "zDQVT9tHza1NFPra0YvHoR1P41NV9EYF4CE3h1pos73T6LTklpFLN9CEq5i1wJEg.amV1c19kb21haW4vTUlXX1NFUlZFUjE="
+    }
+    
+    headers = {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+    }
+    
+    try:
+        # API 요청 데이터
+        data = {
+            "pageIndex": 1,
+            "pageUnit": 100,
+            "pageSize": 100,
+            "kdfshNm": species_name,
+            "kdfshCode": species_name,
+            "searchStartDe": target_date_str.replace('-', '.'),
+            "searchEndDe": target_date_str.replace('-', '.')
+        }
+        
+        print(f"  📥 {target_date_str} 데이터 다운로드 중...")
+        
+        response = requests.post(url, headers=headers, cookies=cookies, data=data, timeout=30)
+        
+        if response.status_code == 200 and len(response.content) > 0:
+            # 임시 파일로 저장
+            temp_filename = f"temp_{species_name}_{target_date_str}.xls"
+            
+            with open(temp_filename, "wb") as f:
+                f.write(response.content)
+            
+            print(f"  ✅ 임시 파일 저장 완료")
+            
+            # 엑셀 파일 처리 및 DB 저장
+            processed_count = process_daily_excel(temp_filename, species_name)
+            
+            # 임시 파일 삭제
+            os.remove(temp_filename)
+            print(f"  🗑️ 임시 파일 삭제 완료")
+            
+            return processed_count
+        else:
+            print(f"  ❌ {target_date_str} 다운로드 실패 또는 빈 데이터")
+            return 0
+            
+    except Exception as e:
+        print(f"  ❌ {target_date_str} 오류: {e}")
+        return 0
 
 if __name__ == "__main__":
     import sys

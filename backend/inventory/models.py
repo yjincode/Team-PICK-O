@@ -1,5 +1,6 @@
 from django.db import models
 from django.conf import settings
+from django.utils import timezone
 
 
 class Inventory(models.Model):
@@ -213,3 +214,5 @@ class StockTransaction(models.Model):
 
     def __str__(self):
         return f"{self.fish_type.name} {self.quantity_change:+g}{self.unit} ({self.get_transaction_type_display()})" 
+
+ 

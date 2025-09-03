@@ -158,6 +158,34 @@ class CancelOrderView(UserValidationMixin, APIView):
 
 
 @method_decorator(csrf_exempt, name='dispatch')
+class PaymentRollbackView(UserValidationMixin, APIView):
+    """결제 상태 롤백 API (실제 환불 없이 결제 상태만 되돌리기)"""
+    permission_classes = []
+    authentication_classes = []
+
+    def post(self, request):
+        try:
+            order_id = request.data.get('orderId')
+            rollback_reason = request.data.get('rollbackReason', '결제 실수')
+            
+            if not order_id:
+                return Response(
+                    {"error": "주문 ID가 필요합니다."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            result = PaymentService.process_payment_rollback(order_id, rollback_reason)
+            return Response({"message": "결제 상태가 성공적으로 롤백되었습니다.", "data": result})
+
+        except PaymentError as e:
+            return Response({"error": e.message}, status=e.code)
+        except Exception as e:
+            logger.error(f"결제 롤백 오류: {e}", exc_info=True)
+            return Response({"error": "결제 롤백 중 오류가 발생했습니다."},
+                            status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@method_decorator(csrf_exempt, name='dispatch')
 class TossRequestView(APIView):
     """
     토스 페이먼츠 결제 요청 API (결제창 방식용)

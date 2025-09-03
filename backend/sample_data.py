@@ -14,6 +14,7 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 import random
 from django.utils import timezone
+from django.db.models import F
 
 from business.models import Business, User
 from fish_registry.models import FishType
@@ -44,18 +45,18 @@ def create_sample_data():
     # 1. 거래처 생성 (12개로 축소, 상호명으로 변경)
     print("🏢 거래처 생성 중...")
     businesses_data = [
-        {'name': '대양수산', 'phone': '02-1234-5678', 'addr': '서울 노량진동 123'},
-        {'name': '해성상회', 'phone': '051-987-6543', 'addr': '부산 자갈치동 456'},
-        {'name': '제주바다마트', 'phone': '064-111-2222', 'addr': '제주시 건입동 789'},
-        {'name': '동해수산', 'phone': '032-555-6666', 'addr': '인천 연수구 101'},
-        {'name': '남도해산물', 'phone': '061-222-3333', 'addr': '목포시 용해동 202'},
-        {'name': '경남횟집', 'phone': '055-444-5555', 'addr': '통영시 중앙동 303'},
-        {'name': '강원바다', 'phone': '033-999-1111', 'addr': '강릉시 교동 404'},
-        {'name': '여수선어', 'phone': '061-888-7777', 'addr': '여수시 돌산읍 505'},
-        {'name': '포항수협', 'phone': '054-222-9999', 'addr': '포항시 북구 606'},
-        {'name': '울산활어', 'phone': '052-999-0000', 'addr': '울산 동구 707'},
-        {'name': '속초해물', 'phone': '033-666-7777', 'addr': '속초시 교동 808'},
-        {'name': '충청수산', 'phone': '042-333-4444', 'addr': '대전 중구 909'},
+        {'name': '대양수산', 'phone': '02-1234-5678', 'addr': '서울특별시 동작구 노량진로 148'},
+        {'name': '해성상회', 'phone': '051-987-6543', 'addr': '부산광역시 중구 자갈치해안로 52'},
+        {'name': '제주바다마트', 'phone': '064-111-2222', 'addr': '제주특별자치도 제주시 건입동 269'},
+        {'name': '동해수산', 'phone': '032-555-6666', 'addr': '인천광역시 연수구 센트럴로 123'},
+        {'name': '남도해산물', 'phone': '061-222-3333', 'addr': '전라남도 목포시 용해동 12-5'},
+        {'name': '경남횟집', 'phone': '055-444-5555', 'addr': '경상남도 통영시 중앙동 123-45'},
+        {'name': '강원바다', 'phone': '033-999-1111', 'addr': '강원도 강릉시 교동 78-9'},
+        {'name': '여수선어', 'phone': '061-888-7777', 'addr': '전라남도 여수시 돌산읍 돌산로 234'},
+        {'name': '포항수협', 'phone': '054-222-9999', 'addr': '경상북도 포항시 북구 중앙로 567'},
+        {'name': '울산활어', 'phone': '052-999-0000', 'addr': '울산광역시 동구 방어진순환도로 890'},
+        {'name': '속초해물', 'phone': '033-666-7777', 'addr': '강원도 속초시 교동 34-12'},
+        {'name': '충청수산', 'phone': '042-333-4444', 'addr': '대전광역시 중구 대종로 456'},
     ]
     
     business_objects = []
@@ -542,11 +543,213 @@ def create_sample_data():
     print(f"📋 주문: {Order.objects.filter(user=user).count()}개")
     print(f"💳 결제: {Payment.objects.count()}개")
     
-    print("🎉 새로운 재고 관리 로직의 샘플 데이터 생성 완료!")
+    # 6. 이상 탐지용 비정상 패턴 데이터 생성
+    print("\n🚨 이상 탐지용 비정상 패턴 생성 중...")
+    
+    # 최근 7일간 이상 패턴 생성
+    recent_days = [(timezone.now() - timedelta(days=i)).replace(hour=random.randint(9, 17)) for i in range(7)]
+    
+    anomaly_patterns = [
+        # 1. 급격한 대량 주문 (평소의 10배)
+        {'type': '대량주문', 'fish': '광어', 'multiplier': 10, 'count': 3},
+        # 2. 심야 시간대 주문 (새벽 2-4시)
+        {'type': '심야주문', 'fish': '우럭', 'hour_range': (2, 4), 'count': 2},
+        # 3. 동일 어종 연속 주문 (1일 내 5회 이상)
+        {'type': '연속주문', 'fish': '돔', 'frequency': 6, 'count': 1},
+        # 4. 비정상적 고가 단가 (시세의 3배)
+        {'type': '고가단가', 'fish': '농어', 'price_multiplier': 3, 'count': 2},
+        # 5. 소량 다품종 주문 (20개 이상 어종을 1-2개씩)
+        {'type': '다품종소량', 'fish_count': 15, 'quantity_range': (1, 2), 'count': 1}
+    ]
+    
+    anomaly_count = 0
+    
+    for pattern in anomaly_patterns:
+        try:
+            if pattern['type'] == '대량주문':
+                # 평소보다 10배 많은 주문
+                fish_type = FishType.objects.filter(name__contains=pattern['fish']).first()
+                if fish_type:
+                    for _ in range(pattern['count']):
+                        business = random.choice(business_objects)
+                        normal_quantity = random.randint(10, 30)
+                        anomaly_quantity = normal_quantity * pattern['multiplier']
+                        
+                        order = Order.objects.create(
+                            user=user,
+                            business=business,
+                            order_datetime=random.choice(recent_days),
+                            order_status='delivered',
+                            payment_status='paid',
+                            transcribed_text=f'[이상패턴-대량주문] {fish_type.name} {anomaly_quantity}{fish_type.unit} 주문',
+                            source_type='manual',
+                            total_amount=Decimal(anomaly_quantity * 15000)
+                        )
+                        
+                        OrderItem.objects.create(
+                            order=order,
+                            fish_type=fish_type,
+                            quantity=anomaly_quantity,
+                            unit_price=Decimal(15000),
+                            unit=fish_type.unit
+                        )
+                        anomaly_count += 1
+                        
+            elif pattern['type'] == '심야주문':
+                # 새벽 시간대 주문
+                fish_type = FishType.objects.filter(name__contains=pattern['fish']).first()
+                if fish_type:
+                    for _ in range(pattern['count']):
+                        business = random.choice(business_objects)
+                        night_hour = random.randint(pattern['hour_range'][0], pattern['hour_range'][1])
+                        night_datetime = (timezone.now() - timedelta(days=random.randint(1, 3))).replace(
+                            hour=night_hour, minute=random.randint(0, 59)
+                        )
+                        
+                        order = Order.objects.create(
+                            user=user,
+                            business=business,
+                            order_datetime=night_datetime,
+                            order_status='delivered',
+                            payment_status='paid',
+                            transcribed_text=f'[이상패턴-심야주문] {fish_type.name} 주문 (새벽 {night_hour}시)',
+                            source_type='voice',
+                            total_amount=Decimal(25000)
+                        )
+                        
+                        OrderItem.objects.create(
+                            order=order,
+                            fish_type=fish_type,
+                            quantity=20,
+                            unit_price=Decimal(12500),
+                            unit=fish_type.unit
+                        )
+                        anomaly_count += 1
+                        
+            elif pattern['type'] == '연속주문':
+                # 동일 어종 연속 주문
+                fish_type = FishType.objects.filter(name__contains=pattern['fish']).first()
+                if fish_type:
+                    business = random.choice(business_objects)
+                    base_datetime = timezone.now() - timedelta(days=1)
+                    
+                    for i in range(pattern['frequency']):
+                        order_datetime = base_datetime + timedelta(hours=i*2)  # 2시간 간격
+                        
+                        order = Order.objects.create(
+                            user=user,
+                            business=business,
+                            order_datetime=order_datetime,
+                            order_status='delivered',
+                            payment_status='paid',
+                            transcribed_text=f'[이상패턴-연속주문-{i+1}] {fish_type.name} 반복 주문',
+                            source_type='text',
+                            total_amount=Decimal(18000)
+                        )
+                        
+                        OrderItem.objects.create(
+                            order=order,
+                            fish_type=fish_type,
+                            quantity=15,
+                            unit_price=Decimal(12000),
+                            unit=fish_type.unit
+                        )
+                        anomaly_count += 1
+                        
+            elif pattern['type'] == '고가단가':
+                # 비정상적으로 높은 단가
+                fish_type = FishType.objects.filter(name__contains=pattern['fish']).first()
+                if fish_type:
+                    for _ in range(pattern['count']):
+                        business = random.choice(business_objects)
+                        normal_price = 12000
+                        anomaly_price = normal_price * pattern['price_multiplier']
+                        
+                        order = Order.objects.create(
+                            user=user,
+                            business=business,
+                            order_datetime=random.choice(recent_days),
+                            order_status='delivered',
+                            payment_status='paid',
+                            transcribed_text=f'[이상패턴-고가단가] {fish_type.name} 고가 주문',
+                            source_type='manual',
+                            total_amount=Decimal(anomaly_price * 10)
+                        )
+                        
+                        OrderItem.objects.create(
+                            order=order,
+                            fish_type=fish_type,
+                            quantity=10,
+                            unit_price=Decimal(anomaly_price),
+                            unit=fish_type.unit
+                        )
+                        anomaly_count += 1
+                        
+            elif pattern['type'] == '다품종소량':
+                # 많은 어종을 소량씩 주문
+                available_fish = list(FishType.objects.filter(user=user))[:pattern['fish_count']]
+                business = random.choice(business_objects)
+                
+                order = Order.objects.create(
+                    user=user,
+                    business=business,
+                    order_datetime=random.choice(recent_days),
+                    order_status='delivered',
+                    payment_status='paid',
+                    transcribed_text=f'[이상패턴-다품종소량] {len(available_fish)}개 어종 소량 주문',
+                    source_type='image',
+                    total_amount=Decimal(50000)
+                )
+                
+                for fish_type in available_fish:
+                    quantity = random.randint(pattern['quantity_range'][0], pattern['quantity_range'][1])
+                    OrderItem.objects.create(
+                        order=order,
+                        fish_type=fish_type,
+                        quantity=quantity,
+                        unit_price=Decimal(random.randint(8000, 15000)),
+                        unit=fish_type.unit
+                    )
+                anomaly_count += 1
+                
+        except Exception as e:
+            print(f"   ⚠️ 이상 패턴 생성 실패: {pattern['type']} - {e}")
+            continue
+    
+    print(f"✅ 이상 탐지용 패턴 생성 완료: {anomaly_count}개")
+    
+    # 추가: 재고 이상 패턴도 생성
+    print("\n📦 재고 이상 패턴 생성 중...")
+    
+    # 1. 급격한 재고 감소 패턴 (정상 출고 후 갑자기 대량 감소)
+    try:
+        target_fish = FishType.objects.filter(user=user).first()
+        if target_fish:
+            inventory = Inventory.objects.filter(fish_type=target_fish, user=user).first()
+            if inventory and inventory.stock_quantity > 100:
+                # 정상적인 거래 기록 후 갑작스러운 대량 감소
+                StockTransaction.objects.create(
+                    user=user,
+                    fish_type=target_fish,
+                    inventory=inventory,
+                    transaction_type='adjustment',
+                    quantity_change=-inventory.stock_quantity * 0.8,  # 재고의 80% 갑자기 출고 (음수)
+                    unit=target_fish.unit,
+                    notes='[이상패턴] 급격한 대량 출고'
+                )
+                
+                inventory.stock_quantity = int(inventory.stock_quantity * 0.2)
+                inventory.save()
+                print(f"   🚨 급격한 재고 감소 패턴 생성: {target_fish.name}")
+    except Exception as e:
+        print(f"   ⚠️ 재고 이상 패턴 생성 실패: {e}")
+    
+    print("🎉 이상 탐지 샘플 데이터 포함 생성 완료!")
     print("📌 특징:")
     print("   - 2개월 전 재고 입고")
     print("   - 3년치 주문 데이터 생성")
     print("   - 최근 2개월 주문만 재고에 영향 (주문수량 증가)")
+    print(f"   - 이상 탐지용 패턴 {anomaly_count}개 포함")
     print("   - 완료된 주문만 실제 재고 차감")
     print("   - 실제 수산시장 단가 반영 (1000원 단위)")
     print("   - 과거 주문들은 통계용으로만 사용")

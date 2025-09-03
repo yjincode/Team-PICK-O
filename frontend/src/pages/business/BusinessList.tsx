@@ -8,7 +8,7 @@ import React, { useState, useEffect } from "react"
 import { Card, CardContent } from "../../components/ui/card"
 import { Button } from "../../components/ui/button"
 import { Input } from "../../components/ui/input"
-import { Search, Plus, Phone, Eye, Edit, Loader2 } from "lucide-react"
+import { Search, Plus, Phone, Edit, Loader2, Trash2, ChevronLeft, ChevronRight } from "lucide-react"
 import { businessApi, orderApi } from "../../lib/api"
 import { useAuth } from "../../contexts/AuthContext"
 import toast, { Toaster } from 'react-hot-toast';
@@ -19,15 +19,7 @@ import { formatCurrency } from "@/lib/utils";
 import { useNavigate } from "react-router-dom"; // 추가
 
 
-import {
-  Pagination,
-  PaginationContent,
-  PaginationItem,
-  PaginationLink,
-  PaginationPrevious,
-  PaginationNext,
-  PaginationEllipsis,
-} from "../../components/ui/pagination";
+
 import { Business } from "../../types";
 
 interface BusinessSearchProps {
@@ -60,6 +52,8 @@ const BusinessList: React.FC = () => {
 
   const [showUnpaid, setShowUnpaid] = useState(false);
   const [selectedBusiness, setSelectedBusiness] = useState<Business | null>(null);
+  const [isDeleting, setIsDeleting] = useState<boolean>(false);
+  const [deletingBusinessId, setDeletingBusinessId] = useState<number | null>(null);
 
   // 거래처 목록을 가져오는 함수 (재사용 가능)
   const fetchBusinesses = async (pageNum = page) => {
@@ -360,6 +354,38 @@ const BusinessList: React.FC = () => {
 
   const totalPages = Math.max(1, Math.ceil(count / pageSize));
   
+  // 거래처 삭제 함수
+  const handleDeleteBusiness = async (businessId: number) => {
+    if (!window.confirm('정말로 이 거래처를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) {
+      return;
+    }
+
+    try {
+      setIsDeleting(true);
+      setDeletingBusinessId(businessId);
+      
+      await businessApi.delete(businessId);
+      
+      toast.success('거래처가 성공적으로 삭제되었습니다.');
+      
+      // 목록에서 삭제된 거래처 제거
+      setBusinesses(prev => prev.filter(b => b.id !== businessId));
+      setCount(prev => prev - 1);
+      
+      // 현재 페이지가 비어있으면 이전 페이지로 이동
+      if (businesses.length === 1 && page > 1) {
+        setPage(prev => prev - 1);
+      }
+      
+    } catch (error: any) {
+      console.error('거래처 삭제 실패:', error);
+      toast.error('거래처 삭제에 실패했습니다. 다시 시도해주세요.');
+    } finally {
+      setIsDeleting(false);
+      setDeletingBusinessId(null);
+    }
+  };
+
   return (
     <div className="flex-1 space-y-4 sm:space-y-6 p-4 sm:p-6 bg-light-blue-gray min-h-screen">
        {/* 모달 */}
@@ -400,7 +426,7 @@ const BusinessList: React.FC = () => {
               />
 
             </div>
-            <div>
+            <div className="flex flex-col space-y-2">
               <Input 
                 placeholder="주소" 
                 value={newAddress} 
@@ -484,7 +510,7 @@ const BusinessList: React.FC = () => {
                 disabled={isUpdating}
               />
             </div>
-            <div>
+            <div className="flex flex-col space-y-2">
               <Input 
                 placeholder="주소" 
                 value={editingBusiness.address} 
@@ -590,7 +616,11 @@ const BusinessList: React.FC = () => {
                 const overdueDays = calculateOverdueDays(oldestOrderDate);
                 
                return (
-                <Card key={business.id} className="shadow-sm hover:shadow-md transition-shadow">
+                <Card 
+                  key={business.id} 
+                  className="shadow-sm hover:shadow-md transition-shadow cursor-pointer"
+                  onClick={() => navigate(`/business/${business.id}`)}
+                >
                   <CardContent className="p-4 sm:p-6">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                       <div className="flex-1">
@@ -617,13 +647,28 @@ const BusinessList: React.FC = () => {
                           </p>
                         </div>
                         <div className="flex space-x-2">
-                          <Button variant="outline" size="sm" onClick={() => {
-                              navigate(`/business/${business.id}`); 
+                          <Button variant="outline" size="sm" onClick={(e) => {
+                              e.stopPropagation();
+                              handleEditClick(business);
                           }}>
-                            <Eye className="h-4 w-4 mr-2" />상세
-                          </Button>
-                          <Button variant="outline" size="sm" onClick={() => handleEditClick(business)}>
                             <Edit className="h-4 w-4 mr-2" />수정
+                          </Button>
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteBusiness(business.id);
+                            }}
+                            disabled={isDeleting && deletingBusinessId === business.id}
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-300 hover:border-red-400"
+                          >
+                            {isDeleting && deletingBusinessId === business.id ? (
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            ) : (
+                              <Trash2 className="h-4 w-4 mr-2" />
+                            )}
+                            {isDeleting && deletingBusinessId === business.id ? '삭제중...' : '삭제'}
                           </Button>
                         </div>
                       </div>
@@ -636,63 +681,64 @@ const BusinessList: React.FC = () => {
                 거래처가 없습니다.
               </div>
             )}
-            {/* Pagination UI */}
-            <Pagination className="mt-6">
-              <PaginationContent>
-                <PaginationItem>
-                  <PaginationPrevious
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                    aria-disabled={page === 1}
-                    tabIndex={page === 1 ? -1 : 0}
-                    style={{ pointerEvents: page === 1 ? "none" : "auto" }}
-                  />
-                </PaginationItem>
-                {/* 페이지 번호들 (최대 5개만 노출, ... 처리) */}
-                {page > 3 && totalPages > 5 && (
-                  <PaginationItem>
-                    <PaginationLink onClick={() => setPage(1)}>1</PaginationLink>
-                  </PaginationItem>
-                )}
-                {page > 4 && totalPages > 5 && (
-                  <PaginationItem>
-                    <PaginationEllipsis />
-                  </PaginationItem>
-                )}
-                {Array.from({ length: totalPages }, (_, i) => i + 1)
-                  .filter((p) =>
-                    totalPages <= 5 ||
-                    (p >= page - 2 && p <= page + 2)
-                  )
-                  .map((p) => (
-                    <PaginationItem key={p}>
-                      <PaginationLink
-                        isActive={page === p}
-                        onClick={() => setPage(p)}
+            {/* 페이지네이션 */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between mt-6">
+                <div className="text-sm text-gray-700">
+                  {(page - 1) * pageSize + 1} - {Math.min(page * pageSize, count)} / {count}건
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPage(prev => Math.max(prev - 1, 1))}
+                    disabled={page === 1}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                    이전
+                  </Button>
+                  
+                  {(() => {
+                    // 페이지 번호를 최대 15개까지만 표시
+                    const maxVisiblePages = 15
+                    let startPage = Math.max(1, page - Math.floor(maxVisiblePages / 2))
+                    let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1)
+                    
+                    // 끝에서부터 계산해서 시작 페이지 조정
+                    if (endPage - startPage + 1 < maxVisiblePages) {
+                      startPage = Math.max(1, endPage - maxVisiblePages + 1)
+                    }
+                    
+                    const pages = []
+                    for (let i = startPage; i <= endPage; i++) {
+                      pages.push(i)
+                    }
+                    
+                    return pages.map(pageNum => (
+                      <Button
+                        key={pageNum}
+                        variant={page === pageNum ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setPage(pageNum)}
+                        className="w-8 h-8 p-0"
                       >
-                        {p}
-                      </PaginationLink>
-                    </PaginationItem>
-                  ))}
-                {page < totalPages - 3 && totalPages > 5 && (
-                  <PaginationItem>
-                    <PaginationEllipsis />
-                  </PaginationItem>
-                )}
-                {page < totalPages - 2 && totalPages > 5 && (
-                  <PaginationItem>
-                    <PaginationLink onClick={() => setPage(totalPages)}>{totalPages}</PaginationLink>
-                  </PaginationItem>
-                )}
-                <PaginationItem>
-                  <PaginationNext
-                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                    aria-disabled={page === totalPages}
-                    tabIndex={page === totalPages ? -1 : 0}
-                    style={{ pointerEvents: page === totalPages ? "none" : "auto" }}
-                  />
-                </PaginationItem>
-              </PaginationContent>
-            </Pagination>
+                        {pageNum}
+                      </Button>
+                    ))
+                  })()}
+                  
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPage(prev => Math.min(prev + 1, totalPages))}
+                    disabled={page === totalPages}
+                  >
+                    다음
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
           </>
         )}
       </div>

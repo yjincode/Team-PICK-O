@@ -4,7 +4,7 @@
  */
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider } from './contexts/AuthContext';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { PrivateRoute, PublicRoute } from './components/auth/PrivateRoute';
 import MainLayout from './components/layout/MainLayout';
 import Dashboard from './pages/dashboard/Dashboard';
@@ -17,7 +17,6 @@ import PaymentPage from './pages/orders/PaymentPage';
 import TaxInvoicePage from './pages/orders/TaxInvoicePage';
 import CashReceiptPage from './pages/orders/CashReceiptPage';
 import OrderConfirmationPage from './pages/orders/OrderConfirmationPage';
-
 import AiLogList from './pages/orders/AiLogList';
 import FishStockList from './pages/inventory/FishStockList';
 import FishItemForm from './pages/inventory/FishItemForm';
@@ -27,11 +26,17 @@ import InventoryAnomaliesPage from './pages/inventory/InventoryAnomaliesPage';
 import AuctionPredictionChart from './pages/sales/AuctionPredictionChart';
 import LoginPage from './pages/login/LoginPage';
 import SalesChart from './pages/sales/SalesChart';
+import { useEffect } from 'react'
+import Chatbot from './components/Chatbot';
+
+
 
 const App: React.FC = () => {
-  return (
+  return (<>
     <AuthProvider>
-      <Router>
+
+      <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+
         <Routes>
           {/* 로그인 페이지는 레이아웃 없이 */}
           <Route 
@@ -237,14 +242,15 @@ const App: React.FC = () => {
             </PrivateRoute>
           } 
         />
-
-        
         {/* 404 페이지 - 대시보드로 리다이렉트 */}
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
       </Router>
-    </AuthProvider>
+
+      </AuthProvider>    </>
+
   );
 };
+
 
 export default App; 
