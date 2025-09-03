@@ -172,28 +172,48 @@ const AuctionPriceChart: React.FC<AuctionPriceChartProps> = ({
           // 날짜 포맷팅 (매우 간결하게)
           formattedDate: item.formattedDate || `${itemDate.getMonth() + 1}.${itemDate.getDate()}`,
           // 오늘 날짜인지 확인 (더 안전한 방법)
-          isToday
+          isToday,
+          isPrediction: false // 실제 데이터
         };
       });
       
-      // 예측가가 있으면 내일 날짜에 추가 (실제 데이터와 자연스럽게 연결)
+      // 예측가가 있으면 내일 날짜에 추가 (중복 체크 포함)
       if (predictedPrice) {
         const tomorrow = new Date();
         tomorrow.setDate(tomorrow.getDate() + 1);
+        const tomorrowDateStr = tomorrow.toISOString().split('T')[0];
         
-        // 마지막 실제 데이터의 가격을 기준으로 예측가 점을 자연스럽게 연결
-        const lastRealPrice = formattedData[formattedData.length - 1]?.price || 0;
+        // 이미 해당 날짜의 실제 데이터가 있는지 확인
+        const existingDataForTomorrow = formattedData.find(item => item.date === tomorrowDateStr);
         
-        formattedData.push({
-          date: tomorrow.toISOString().split('T')[0],
-          price: predictedPrice,
-          formattedDate: `${tomorrow.getMonth() + 1}.${tomorrow.getDate()}`,
-          isToday: false,
-          isPrediction: true // 예측 데이터임을 표시
-        });
+        if (!existingDataForTomorrow) {
+          // 실제 예측 데이터 추가
+          formattedData.push({
+            date: tomorrowDateStr,
+            price: predictedPrice,
+            formattedDate: `${tomorrow.getMonth() + 1}.${tomorrow.getDate()}`,
+            isToday: false,
+            isPrediction: true // 예측 데이터임을 표시
+          });
+        }
       }
       
-      setChartData(formattedData)
+      // 날짜별로 정렬
+      const sortedData = formattedData
+        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      
+      // 실제 데이터와 예측 데이터를 별도 필드로 분리
+      const chartDataWithSeparateFields = sortedData.map((item, index) => {
+        const isLastRealData = !item.isPrediction && index < sortedData.length - 1 && sortedData[index + 1]?.isPrediction;
+        
+        return {
+          ...item,
+          realPrice: !item.isPrediction ? item.price : null,
+          predictionPrice: item.isPrediction ? item.price : (isLastRealData ? item.price : null) // 연결점을 위해 마지막 실제 데이터도 예측 라인에 포함
+        };
+      });
+      
+      setChartData(chartDataWithSeparateFields)
     } else if (currentSpecies) {
       // 실제 데이터가 없으면 목업 데이터 사용
       const formattedData = currentSpecies.priceHistory.map((item, index) => {
@@ -212,24 +232,48 @@ const AuctionPriceChart: React.FC<AuctionPriceChartProps> = ({
         };
       });
       
-      // 예측가가 있으면 내일 날짜에 추가 (실제 데이터와 자연스럽게 연결)
+      // 예측가가 있으면 내일 날짜에 추가 (중복 체크 포함)
       if (predictedPrice) {
         const tomorrow = new Date();
         tomorrow.setDate(tomorrow.getDate() + 1);
+        const tomorrowDateStr = tomorrow.toISOString().split('T')[0];
         
-        // 마지막 실제 데이터의 가격을 기준으로 예측가 점을 자연스럽게 연결
-        const lastRealPrice = formattedData[formattedData.length - 1]?.price || 0;
+        // 이미 해당 날짜의 데이터가 있는지 확인 (목업 데이터에서)
+        const existingDataForTomorrow = formattedData.find(item => item.date === tomorrowDateStr);
         
-        formattedData.push({
-          date: tomorrow.toISOString().split('T')[0],
-          price: predictedPrice,
-          formattedDate: `${tomorrow.getMonth() + 1}.${tomorrow.getDate()}`,
-          isToday: false,
-          isPrediction: true // 예측 데이터임을 표시
-        });
+        if (!existingDataForTomorrow) {
+          // 중복되지 않는 경우만 예측 데이터 추가
+          formattedData.push({
+            date: tomorrowDateStr,
+            price: predictedPrice,
+            formattedDate: `${tomorrow.getMonth() + 1}.${tomorrow.getDate()}`,
+            isToday: false,
+            isPrediction: true // 예측 데이터임을 표시
+          });
+        }
       }
       
-      setChartData(formattedData)
+      // 날짜별로 정렬하고 최종 중복 제거 (목업 데이터도 동일하게 처리)
+      const sortedData = formattedData
+        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+        .filter((item, index, array) => {
+          // 같은 날짜의 첫 번째 항목만 유지 (실제 데이터 우선)
+          const firstIndex = array.findIndex(other => other.date === item.date);
+          return index === firstIndex;
+        });
+      
+      // 실제 데이터와 예측 데이터를 별도 필드로 분리 (목업 데이터도 동일하게)
+      const chartDataWithSeparateFields = sortedData.map((item, index) => {
+        const isLastRealData = !item.isPrediction && index < sortedData.length - 1 && sortedData[index + 1]?.isPrediction;
+        
+        return {
+          ...item,
+          realPrice: !item.isPrediction ? item.price : null,
+          predictionPrice: item.isPrediction ? item.price : (isLastRealData ? item.price : null) // 연결점을 위해 마지막 실제 데이터도 예측 라인에 포함
+        };
+      });
+      
+      setChartData(chartDataWithSeparateFields)
       
       // 외부 콜백 호출
       onSpeciesChange?.(currentSpecies.species.id)
@@ -379,11 +423,36 @@ const AuctionPriceChart: React.FC<AuctionPriceChartProps> = ({
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
                                                                                                {/* 왼쪽 패널 - 어종 정보 및 가격 */}
                                                                                                                        <div className="lg:col-span-1 flex flex-col justify-start">
-                                    {/* 어종명 */}
+                                    {/* 어종명 및 네비게이션 */}
                                        <div className="text-center lg:text-left lg:ml-4 mt-4">
-                    <h2 className="text-3xl font-bold text-gray-900 mb-2">
-                      {currentSpecies.species.koreanName}
-                    </h2>
+                    <div className="flex items-center justify-center lg:justify-start space-x-3 mb-2">
+                      {/* 왼쪽 화살표 */}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={goToPreviousSpecies}
+                        className="h-8 w-8 p-0 bg-white hover:bg-gray-50 border border-gray-300 hover:border-gray-400 rounded-full shadow-sm"
+                        title="이전 어종"
+                      >
+                        <ChevronLeft className="h-4 w-4 text-gray-700" />
+                      </Button>
+                      
+                      <h2 className="text-3xl font-bold text-gray-900">
+                        {currentSpecies.species.koreanName}
+                      </h2>
+                      
+                      {/* 오른쪽 화살표 */}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={goToNextSpecies}
+                        className="h-8 w-8 p-0 bg-white hover:bg-gray-50 border border-gray-300 hover:border-gray-400 rounded-full shadow-sm"
+                        title="다음 어종"
+                      >
+                        <ChevronRight className="h-4 w-4 text-gray-700" />
+                      </Button>
+                    </div>
+                    
                     <p className="text-lg text-gray-600">
                       {new Date().toLocaleDateString('ko-KR', { 
                         year: 'numeric', 
@@ -488,7 +557,7 @@ const AuctionPriceChart: React.FC<AuctionPriceChartProps> = ({
                                  <p className="text-sm text-gray-600 mt-1">(실제 경매가 7일) + 내일 예측가</p>
                                </div>
                                
-                                                               {/* 차트 상단 네비게이션 컨트롤 */}
+                                                               {/* 차트 상단 컨트롤 (새로고침, 인디케이터, 자동슬라이드만) */}
                                 <div className="flex items-center space-x-3 bg-white/90 backdrop-blur-sm px-4 py-3 rounded-lg mr-5">
                                  {/* 수동 새로고침 컨트롤 */}
                                  <div className="flex items-center justify-end space-x-6 mr-4 min-w-0" style={{ flexWrap: 'nowrap' }}>
@@ -516,17 +585,6 @@ const AuctionPriceChart: React.FC<AuctionPriceChartProps> = ({
                                      </svg>
                                    </button>
                                  </div>
-                                 
-                                 {/* 왼쪽 화살표 버튼 */}
-                                 <Button
-                                   variant="outline"
-                                   size="sm"
-                                   onClick={goToPreviousSpecies}
-                                   className="h-9 w-9 p-0 bg-white hover:bg-gray-50 border border-gray-300 hover:border-gray-400 rounded-full shadow-sm"
-                                   title="이전 어종"
-                                 >
-                                   <ChevronLeft className="h-4 w-4 text-gray-700" />
-                                 </Button>
                                  
                                  {/* 어종 선택 인디케이터 */}
                                  <div className="flex space-x-1.5">
@@ -558,123 +616,110 @@ const AuctionPriceChart: React.FC<AuctionPriceChartProps> = ({
                                      <Play className="h-4 w-4 text-gray-700" />
                                    )}
                                  </Button>
-                                 
-                                 {/* 오른쪽 화살표 버튼 */}
-                                 <Button
-                                   variant="outline"
-                                   size="sm"
-                                   onClick={goToNextSpecies}
-                                   className="h-9 w-9 p-0 bg-white hover:bg-gray-50 border border-gray-300 hover:border-gray-400 rounded-full shadow-sm"
-                                   title="다음 어종"
-                                 >
-                                   <ChevronRight className="h-4 w-4 text-gray-700" />
-                                 </Button>
                                </div>
                             </div>
               
                             <div className="relative">
                  <div className="h-64">
-                   <ResponsiveContainer width="100%" height="100%">
-                     <LineChart data={chartData} margin={{ top: 5, right: 40, left: 40, bottom: 30 }}>
-                       <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                       <XAxis 
-                         dataKey="formattedDate" 
-                         tick={(props) => {
-                           const isToday = chartData[props.payload.index]?.isToday;
-                           return (
-                             <text
-                               x={props.x}
-                               y={props.y + 10}
-                               textAnchor="middle"
-                               fill={isToday ? "#1f2937" : "#666"}
-                               fontSize={isToday ? 13 : 11}
-                               fontWeight={isToday ? "bold" : "normal"}
-                             >
-                               {props.payload.value}
-                             </text>
-                           );
+                                     <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={chartData} margin={{ top: 5, right: 40, left: 40, bottom: 30 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                      <XAxis 
+                        dataKey="formattedDate" 
+                        tick={(props) => {
+                          const isToday = chartData[props.payload.index]?.isToday;
+                          return (
+                            <text
+                              x={props.x}
+                              y={props.y + 10}
+                              textAnchor="middle"
+                              fill={isToday ? "#1f2937" : "#666"}
+                              fontSize={isToday ? 13 : 11}
+                              fontWeight={isToday ? "bold" : "normal"}
+                            >
+                              {props.payload.value}
+                            </text>
+                          );
+                        }}
+                        stroke="#666"
+                        interval={0}
+                        allowDuplicatedCategory={false}
+                      />
+                                             <YAxis 
+                         domain={['dataMin - 1000', 'dataMax + 1000']}
+                         tickFormatter={(value) => {
+                           return Math.floor(value / 1000) + ',000'
                          }}
+                         tick={{ fontSize: 14 }}
                          stroke="#666"
-                         interval={0}
-                         allowDuplicatedCategory={false}
                        />
-                                              <YAxis 
-                          domain={['dataMin - 1000', 'dataMax + 1000']}
-                          tickFormatter={(value) => {
-                            return Math.floor(value / 1000) + ',000'
-                          }}
-                          tick={{ fontSize: 14 }}
-                          stroke="#666"
-                        />
-                       <Tooltip
-                         formatter={(value: number, name: string) => [
-                           formatCurrency(value), 
-                           name === 'price' ? '경매가' : '가격'
-                         ]}
-                         labelFormatter={(label) => `${label}일`}
-                         contentStyle={{
-                           backgroundColor: 'white',
-                           border: '1px solid #e2e8f0',
-                           borderRadius: '8px',
-                           fontSize: '12px'
-                         }}
-                       />
-                       
-                       {/* 실제 경매가 라인 (파란색 실선) */}
-                       <Line
-                         type="monotone"
-                         dataKey="price"
-                         stroke="#3b82f6"
-                         strokeWidth={3}
-                         dot={(props) => {
-                           const isPrediction = chartData[props.index]?.isPrediction;
-                           const isLastRealPoint = props.index === chartData.length - 2; // 예측가 점 제외한 마지막 실제 데이터
-                           
-                           // 예측가 점이면 더 크고 눈에 띄게
-                           if (isPrediction) {
-                             return (
-                               <circle
-                                 cx={props.cx}
-                                 cy={props.cy}
-                                 r={6}
-                                 fill="#ef4444"
-                                 stroke="#dc2626"
-                                 strokeWidth={3}
-                                 opacity={0.9}
-                               />
-                             );
-                           }
-                           
-                           // 마지막 실제 데이터 점이면 연결점 강조
-                           if (isLastRealPoint && !isPrediction) {
-                             return (
-                               <circle
-                                 cx={props.cx}
-                                 cy={props.cy}
-                                 r={5}
-                                 fill="#3b82f6"
-                                 stroke="#1d4ed8"
-                                 strokeWidth={2}
-                               />
-                             );
-                           }
-                           
-                           // 일반 데이터 점
-                           return (
-                             <circle
-                               cx={props.cx}
-                               cy={props.cy}
-                               r={4}
-                               fill="#3b82f6"
-                               stroke="#3b82f6"
-                               strokeWidth={1}
-                             />
-                           );
-                         }}
-                         activeDot={{ r: 6, fill: '#1d4ed8' }}
-                       />
-                     </LineChart>
-                   </ResponsiveContainer>
+                      <Tooltip
+                        formatter={(value: number, name: string) => [
+                          formatCurrency(value), 
+                          name === 'price' ? (chartData[0]?.isPrediction ? '예측가' : '경매가') : '가격'
+                        ]}
+                        labelFormatter={(label) => `${label}일`}
+                        contentStyle={{
+                          backgroundColor: 'white',
+                          border: '1px solid #e2e8f0',
+                          borderRadius: '8px',
+                          fontSize: '12px'
+                        }}
+                      />
+                      
+                      {/* 실제 데이터 라인 (파란색 실선) */}
+                      <Line
+                        type="monotone"
+                        dataKey="realPrice"
+                        stroke="#3b82f6"
+                        strokeWidth={3}
+                        dot={(props) => {
+                          const currentData = chartData[props.index];
+                          if (currentData?.realPrice == null) return null;
+                          
+                          return (
+                            <circle
+                              cx={props.cx}
+                              cy={props.cy}
+                              r={4}
+                              fill="#3b82f6"
+                              stroke="#3b82f6"
+                              strokeWidth={1}
+                            />
+                          );
+                        }}
+                        activeDot={{ r: 6, fill: '#1d4ed8' }}
+                        connectNulls={false}
+                      />
+                      
+                      {/* 예측 데이터 라인 (빨간색 점선) */}
+                      <Line
+                        type="monotone"
+                        dataKey="predictionPrice"
+                        stroke="#ef4444"
+                        strokeWidth={3}
+                        strokeDasharray="8 4"
+                        dot={(props) => {
+                          const currentData = chartData[props.index];
+                          if (currentData?.predictionPrice == null) return null;
+                          
+                          return (
+                            <circle
+                              cx={props.cx}
+                              cy={props.cy}
+                              r={6}
+                              fill="#ef4444"
+                              stroke="#dc2626"
+                              strokeWidth={2}
+                              opacity={0.9}
+                            />
+                          );
+                        }}
+                        activeDot={{ r: 7, fill: '#dc2626' }}
+                        connectNulls={true}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
                  </div>
                </div>
            </div>

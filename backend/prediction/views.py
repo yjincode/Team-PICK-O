@@ -512,28 +512,30 @@ def get_actual_auction_data(request):
         auction_fish_obj = get_or_create_auction_fish_species(fish_species_name)
         print(f"✅ Auction 어종 확인: {fish_species_name} (ID: {auction_fish_obj.id})")
         
-        # AuctionPriceData에서 특정 어종의 데이터 조회 (auction prediction 전용)
-        species_auction_data = AuctionPriceData.objects.filter(fish_species=auction_fish_obj).order_by('-trade_date')
+        # ActualAuctionPrice에서 특정 어종의 데이터 조회 (실제 수집된 데이터)
+        species_auction_data = ActualAuctionPrice.objects.filter(
+            fish_species__item_small_category_name_kr=fish_species_name
+        ).order_by('-trade_date')
         
         if species_auction_data.exists():
             latest_date = species_auction_data.first().trade_date
             end_date = latest_date
             start_date = end_date - timedelta(days=days-1)
-            print(f"📅 {species} Auction 데이터베이스 기준: {start_date} ~ {end_date}")
+            print(f"📅 {species} 실제 데이터베이스 기준: {start_date} ~ {end_date}")
         else:
             # 해당 어종의 데이터가 없으면 실제 데이터 수집 실행
             today = date.today()
             end_date = today
             start_date = today - timedelta(days=days-1)
-            print(f"⚠️ {species} 어종 Auction 데이터가 없음 - 실제 데이터 수집 실행")
+            print(f"⚠️ {species} 어종 실제 데이터가 없음 - 실제 데이터 수집 실행")
             return _collect_real_auction_data(species, auction_fish_obj, start_date, end_date, days)
         
         print(f"📅 날짜 범위: {start_date} ~ {end_date}")
         
-        # AuctionPriceData에서 쿼리 생성
-        base_query = AuctionPriceData.objects.filter(
+        # ActualAuctionPrice에서 쿼리 생성 (실제 수집된 데이터)
+        base_query = ActualAuctionPrice.objects.filter(
             trade_date__range=[start_date, end_date],
-            fish_species=auction_fish_obj
+            fish_species__item_small_category_name_kr=fish_species_name
         )
         
         print(f"🔍 Auction 어종 필터 적용: {fish_species_name} (ID: {auction_fish_obj.id})")
@@ -579,7 +581,7 @@ def get_actual_auction_data(request):
                 # 해당 규격의 데이터만 사용
                 filtered_query = base_query.filter(unit_weight_kg=selected_weight)
                 
-                # 일별 평균 계산 (AuctionPriceData 기준)
+                # 일별 평균 계산 (ActualAuctionPrice 기준)
                 daily_prices = filtered_query.values('trade_date').annotate(
                     avg_price=Avg('auction_price')
                 ).order_by('trade_date')
@@ -620,18 +622,24 @@ def get_actual_auction_data(request):
                 }
             })
         
-        # 결과 데이터 구성 (안전 처리)
+        # 결과 데이터 구성 (안전 처리 및 중복 제거)
         result_data = []
+        seen_dates = set()  # 중복 날짜 체크용
+        
         try:
             for item in daily_prices:
                 trade_date = item['trade_date'] 
                 avg_price = item.get('avg_price')
-                if avg_price is not None and avg_price > 0:
+                date_str = trade_date.strftime('%Y-%m-%d')
+                
+                # 중복 날짜 체크 및 유효한 가격 체크
+                if avg_price is not None and avg_price > 0 and date_str not in seen_dates:
                     result_data.append({
-                        'date': trade_date.strftime('%Y-%m-%d'),
+                        'date': date_str,
                         'price': float(avg_price),
                         'formattedDate': f"{trade_date.month}.{trade_date.day}"
                     })
+                    seen_dates.add(date_str)  # 처리된 날짜 기록
                     print(f"  ✅ {trade_date}: {avg_price:,}원")
         except Exception as e:
             print(f"❌ 데이터 처리 중 오류: {e}")

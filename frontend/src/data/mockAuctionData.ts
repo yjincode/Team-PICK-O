@@ -65,7 +65,7 @@ const generatePriceHistory = (
     });
   }
   
-  // 내일 예측 데이터
+  // 9월 4일 예측 데이터 (빨간 점선으로 표시)
   const tomorrow = new Date(today);
   tomorrow.setDate(tomorrow.getDate() + 1);
   const predictedPrice = Math.max(1000, Math.round(basePrice + basePrice * trend * 7 + basePrice * volatility * (Math.random() - 0.5)));
@@ -74,7 +74,8 @@ const generatePriceHistory = (
     date: tomorrow.toISOString().split('T')[0],
     price: predictedPrice,
     isPrediction: true,
-    confidence: Math.floor(Math.random() * 20) + 75 // 75-95% 신뢰도
+    confidence: Math.floor(Math.random() * 20) + 75, // 75-95% 신뢰도
+    isDashedLine: true // 빨간 점선으로 표시할 플래그
   });
   
   return history;
