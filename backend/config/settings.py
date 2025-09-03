@@ -431,5 +431,10 @@ DATA_GO_KR_API_KEY = os.getenv('DATA_GO_KR_API_KEY')  # 공공데이터포털 AP
 os.makedirs(BASE_DIR / 'logs', exist_ok=True)
 os.makedirs(AI_MODELS['MODEL_CACHE_DIR'], exist_ok=True)
 
+# OpenMP 스레드 제한 (macOS LightGBM 호환성)
+os.environ['OMP_NUM_THREADS'] = '1'
+os.environ['MKL_NUM_THREADS'] = '1'
+os.environ['OPENBLAS_NUM_THREADS'] = '1'
+
 DISCORD_WEBHOOK_URL = os.getenv('DISCORD_WEBHOOK_URL', '')
 

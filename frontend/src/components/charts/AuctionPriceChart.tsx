@@ -42,14 +42,55 @@ const AuctionPriceChart: React.FC<AuctionPriceChartProps> = ({
 
   const currentSpecies = data[currentSpeciesIndex]
 
-  // 실제 경매가 데이터 가져오기 (현재 선택된 어종 기준)
+  // 로컬 스토리지 키 생성
+  const getStorageKey = (species: string, type: 'real' | 'prediction') => 
+    `auction_${type}_${species}_${new Date().toISOString().split('T')[0]}`
+
+  // 로컬 스토리지에서 데이터 가져오기
+  const getFromLocalStorage = (species: string, type: 'real' | 'prediction') => {
+    try {
+      const key = getStorageKey(species, type)
+      const stored = localStorage.getItem(key)
+      if (stored) {
+        const data = JSON.parse(stored)
+        console.log(`📦 ${species} ${type} 데이터 로컬에서 사용`)
+        return data
+      }
+    } catch (error) {
+      console.warn('로컬 스토리지 읽기 실패:', error)
+    }
+    return null
+  }
+
+  // 로컬 스토리지에 데이터 저장
+  const saveToLocalStorage = (species: string, type: 'real' | 'prediction', data: any) => {
+    try {
+      const key = getStorageKey(species, type)
+      localStorage.setItem(key, JSON.stringify(data))
+      console.log(`💾 ${species} ${type} 데이터 로컬에 저장`)
+    } catch (error) {
+      console.warn('로컬 스토리지 저장 실패:', error)
+    }
+  }
+
+  // 실제 경매가 데이터 가져오기 (로컬 우선, API 백업)
   const fetchRealData = async (targetSpecies?: string) => {
+    const speciesToFetch = targetSpecies || currentSpecies?.species?.koreanName || ''
+    
+    // 먼저 로컬 스토리지에서 확인
+    const cached = getFromLocalStorage(speciesToFetch, 'real')
+    if (cached) {
+      setRealData(cached)
+      return
+    }
+
     setIsLoadingRealData(true)
     try {
-      const speciesToFetch = targetSpecies || currentSpecies?.species?.koreanName || ''
       const response = await auctionApi.getActualAuctionData(speciesToFetch, 7)
       if (response.success) {
         setRealData(response.data)
+        // 로컬 스토리지에 저장
+        saveToLocalStorage(speciesToFetch, 'real', response.data)
       }
     } catch (error) {
       console.error('실제 경매가 데이터 가져오기 실패:', error)
@@ -58,12 +99,19 @@ const AuctionPriceChart: React.FC<AuctionPriceChartProps> = ({
     }
   }
 
-  // 예측가 가져오기 (내일 예측)
+  // 예측가 가져오기 (내일 예측) - 로컬 스토리지 우선
   const fetchPrediction = async (targetSpecies?: string) => {
+    const speciesToFetch = targetSpecies || currentSpecies?.species?.koreanName || ''
+    
+    // 먼저 로컬 스토리지에서 확인
+    const cached = getFromLocalStorage(speciesToFetch, 'prediction')
+    if (cached) {
+      setPredictedPrice(cached.predicted_price)
+      return
+    }
+
     setIsLoadingPrediction(true)
     try {
-      const speciesToFetch = targetSpecies || currentSpecies?.species?.koreanName || ''
-      
       // 내일 날짜 계산
       const tomorrow = new Date()
       tomorrow.setDate(tomorrow.getDate() + 1)
@@ -82,6 +130,8 @@ const AuctionPriceChart: React.FC<AuctionPriceChartProps> = ({
       const response = await auctionApi.predictSingleSpecies(speciesToFetch, targetDate, environmentalData)
       if (response.success && response.prediction) {
         setPredictedPrice(response.prediction.predicted_price)
+        // 로컬 스토리지에 저장
+        saveToLocalStorage(speciesToFetch, 'prediction', response.prediction)
       }
     } catch (error) {
       console.error('예측가 가져오기 실패:', error)
@@ -620,7 +670,7 @@ const AuctionPriceChart: React.FC<AuctionPriceChartProps> = ({
                             </div>
               
                             <div className="relative">
-                 <div className="h-64">
+                 <div className="h-96">
                                      <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={chartData} margin={{ top: 5, right: 40, left: 40, bottom: 30 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
