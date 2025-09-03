@@ -1,6 +1,6 @@
-"""
-예측 API 뷰
-"""
+# """
+# 예측 API 뷰
+# """
 import os
 import pickle
 import json
@@ -10,7 +10,7 @@ from typing import Dict, Any, List
 import pandas as pd
 import numpy as np
 import lightgbm as lgb
-import xgboost as xgb
+# import xgboost as xgb
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
