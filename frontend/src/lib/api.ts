@@ -199,10 +199,17 @@ export const businessApi = {
   },
 
   // 새 거래처 생성
+  // create: async (business: Omit<Business, 'id'>): Promise<ApiResponse<Business>> => {
+  //   const response = await api.post('/business/customers/create/', business)
+  //   return response.data
+  // },
   create: async (business: Omit<Business, 'id'>): Promise<ApiResponse<Business>> => {
-    const response = await api.post('/business/customers/create/', business)
+    const response = await api.post('/business/customers/create/', business, {
+      timeout: 30000,  // 30초로 타임아웃 연장
+    })
     return response.data
   },
+  
 
   // 거래처 정보 수정
   update: async (id: number, business: Partial<Business>): Promise<ApiResponse<Business>> => {
@@ -889,5 +896,90 @@ export const getUserInfoFromToken = (): { user_id?: number; business_name?: stri
     }
   } catch (error) {
     return null
+  }
+}
+
+
+
+
+export async function findOrCreateFishType(name: string | undefined, unit: string = "박스", existingFishTypes: FishType[]): Promise<FishType | null> {
+  if (!name || typeof name !== "string") return null;
+
+  const trimmedName = name.trim();
+  if (!trimmedName) return null;
+
+  let fish = existingFishTypes.find(f => f.name === trimmedName);
+
+  if (!fish) {
+    try {
+      const created = await fishTypeApi.create({ name: trimmedName, unit });
+      fish = created.data;
+      existingFishTypes.push(fish);
+      console.log(`[어종 등록 완료] ${trimmedName}`);
+    } catch (error) {
+      console.warn(`[어종 등록 실패] ${trimmedName}`, error);
+      return null;
+    }
+  }
+
+  return fish;
+}
+
+export async function findOrCreateBusiness(
+  businessName: string,
+  phoneNumber: string,
+  businesses: Business[]
+): Promise<number | null> {
+  if (!businessName) return null;
+
+  // 1. 기존 거래처 확인
+  const existingBusiness = businesses.find(
+    (b) => b.business_name.trim() === businessName.trim()
+  );
+  if (existingBusiness) {
+    console.log(`[기존 거래처 사용] ${businessName} (ID: ${existingBusiness.id})`);
+    return existingBusiness.id;
+  }
+
+  // 2. 전화번호 정제
+  const cleanPhoneNumber = (input?: string): string => {
+    const digits = (input || '').replace(/\D/g, '');
+    return /^\d{9,12}$/.test(digits) ? digits : '0000000000';
+  };
+
+  // 3. 새 거래처 생성
+  try {
+    const created = await businessApi.create({
+      business_name: businessName,
+      phone_number: cleanPhoneNumber(phoneNumber),
+      address: "주소 미입력",
+      memo: "(자동 생성)",
+    });
+
+    const createdData = created?.data;
+    if (!createdData || typeof createdData.id !== 'number') {
+      console.error("[거래처 생성 응답 이상]", created);
+      throw new Error("응답 구조가 올바르지 않음 (created.data.id 없음)");
+    }
+
+    console.log(`[거래처 등록 완료] ${businessName} (ID: ${createdData.id})`);
+
+    // 4. 생성 후 전체 거래처 목록 다시 조회하여 정확한 정보 확인
+    const refreshed = await businessApi.getAll();
+    const matched = refreshed.results.find(
+      (b) => b.business_name.trim() === businessName.trim()
+    );
+
+    if (matched) {
+      console.log(`[재조회로 확인된 거래처] ${businessName} (ID: ${matched.id})`);
+      return matched.id;
+    }
+
+    // fallback: 생성된 ID라도 반환
+    console.warn(`[거래처 확인 실패, 생성된 ID 사용] ${businessName} (ID: ${createdData.id})`);
+    return createdData.id;
+  } catch (error) {
+    console.error(`[거래처 등록 실패] ${businessName}`, error);
+    return null;
   }
 }

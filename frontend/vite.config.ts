@@ -16,7 +16,7 @@ export default defineConfig({
         secure: false,
       },
       '/ai': {
-        target: 'https://6e0e1ee4400d.ngrok-free.app',
+        target: 'https://66a92e7ce493.ngrok-free.app',
         changeOrigin: true,
         secure: false,
       }

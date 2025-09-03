@@ -27,13 +27,19 @@ import AuctionPredictionChart from './pages/sales/AuctionPredictionChart';
 import LoginPage from './pages/login/LoginPage';
 import SalesChart from './pages/sales/SalesChart';
 import { useEffect } from 'react'
+import Chatbot from './components/Chatbot';
 
 
 
 const App: React.FC = () => {
   return (<>
     <AuthProvider>
+
+    
+      <Router>
+
       <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+
         <Routes>
           {/* 로그인 페이지는 레이아웃 없이 */}
           <Route 
@@ -243,7 +249,11 @@ const App: React.FC = () => {
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
       </Router>
+
+      <DevHelper /> </AuthProvider>    </>
+
       </AuthProvider>    </>
+
 
   );
 };

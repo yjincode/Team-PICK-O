@@ -110,28 +110,54 @@ const ImageUploadTab: React.FC<ImageUploadTabProps> = ({
     fetchBusinesses();
   }, []);
 
-  // 어종 목록 로드
-  // useEffect(() => {
-  //   const fetchFishTypes = async () => {
-  //     try {
-  //       const response = await fishTypeApi.getAll()
-  //       let fishData: FishType[] = []
-        
-  //       if (response && Array.isArray(response)) {
-  //         fishData = response
-  //       } else if (response && response.data && Array.isArray(response.data)) {
-  //         fishData = response.data
-  //       }
-        
-  //       setFishTypes(fishData)
-  //     } catch (error) {
-  //       // 어종 목록 가져오기 실패
-  //       setFishTypes([])
-  //     }
-  //   }
 
-  //   fetchFishTypes()
-  // }, [])
+const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const file = event.target.files?.[0]
+  if (!file) return
+
+  // 파일 크기 검증 (5MB 이하)
+  if (file.size > 5 * 1024 * 1024) {
+    const errorMsg = '이미지 파일 크기는 5MB를 초과할 수 없습니다.'
+    setError(errorMsg)
+    onError?.(errorMsg)
+    return
+  }
+
+  // 파일 타입 검증 (이미지 파일만 허용)
+  if (!file.type.startsWith('image/')) {
+    const errorMsg = '이미지 파일만 업로드 가능합니다.'
+    setError(errorMsg)
+    onError?.(errorMsg)
+    return
+  }
+
+  setLocalUploadedFile(file)
+  setError('')
+  setLocalIsProcessing(true)
+
+  try {
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('type', 'image')
+
+    if (selectedBusinessId) {
+      formData.append('business_id', selectedBusinessId.toString())
+    }
+
+    if (deliveryDate) {
+      formData.append('delivery_date', deliveryDate)
+    }
+
+    // API 응답 타입 정의
+    interface ApiOrderResponse {
+      business_name?: string;
+      phone_number?: string;
+      transcribed_text: string;
+      delivery_datetime?: string;
+      items: any[];  // 또는 더 구체적인 타입이 있다면 사용하세요
+      memo?: string;
+      [key: string]: any;
+    }
 
 
 
@@ -259,6 +285,7 @@ const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
       memo?: string;
       [key: string]: any;
     }
+
 
     // exebaseApi를 사용하여 주문 처리
     const result = await exebaseApi.processOrder(formData) as { 

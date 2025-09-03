@@ -1,13 +1,18 @@
-"""
-예측 API 뷰
-"""
+# """
+# 예측 API 뷰
+# """
 import os
 import json
 import pickle
 import numpy as np
+
+import lightgbm as lgb
+import xgboost as xgb
+
 import pandas as pd
 from datetime import datetime, date, timedelta
 from django.shortcuts import render
+
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
