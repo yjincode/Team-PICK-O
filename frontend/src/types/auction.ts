@@ -9,6 +9,7 @@ export interface AuctionPriceData {
   price: number;
   isPrediction: boolean; // 예측 데이터 여부
   confidence?: number; // 예측 신뢰도 (예측 데이터인 경우만)
+  isDashedLine?: boolean; // 점선으로 표시할지 여부 (예측 데이터 구분용)
 }
 
 // API 응답 타입
@@ -101,6 +102,7 @@ export interface SpeciesPrediction {
     price: number;
     isPrediction: boolean;
     confidence?: number;
+    isDashedLine?: boolean; // 점선으로 표시할지 여부
   }[];
   factors: string[];
 }
