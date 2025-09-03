@@ -27,6 +27,7 @@ const UnpaidList: React.FC = () => {
 	const [totalCount, setTotalCount] = useState(0)
 	const [totalPages, setTotalPages] = useState(0)
 	const [business, setBusiness] = useState<any>(null)
+	const [mapRetryCount, setMapRetryCount] = useState(0)
 
 	useEffect(() => {
 		const fetchOrders = async () => {
@@ -80,6 +81,9 @@ const UnpaidList: React.FC = () => {
 	useEffect(() => {
 		if (!business?.address) return;
 		if (typeof window === 'undefined') return;
+		
+		// 새로운 business가 로드되면 재시도 카운트 리셋
+		setMapRetryCount(0);
 	  
 		const loadKakaoMap = () => {
 		  if (!(window as any).kakao) {
@@ -88,12 +92,18 @@ const UnpaidList: React.FC = () => {
 			script.async = true;
 			script.onload = () => {
 				(window as any).kakao.maps.load(() => {
-					initMap();
+					// 약간의 지연을 주어 DOM이 완전히 렌더링되도록 함
+					setTimeout(() => {
+						initMap();
+					}, 100);
 				  });
 			};
 			document.head.appendChild(script);
 		  } else if ((window as any).kakao.maps) {
-			initMap();
+			// 이미 로드된 경우에도 약간의 지연을 줌
+			setTimeout(() => {
+				initMap();
+			}, 100);
 		  }
 		};
 	  
@@ -105,7 +115,16 @@ const UnpaidList: React.FC = () => {
 		if (!business?.address || !(window as any).kakao) return
 
 		const mapContainer = document.getElementById('map')
-		if (!mapContainer) return
+		if (!mapContainer) {
+			if (mapRetryCount < 5) {
+				console.log(`Map container not found, retrying... (${mapRetryCount + 1}/5)`)
+				setMapRetryCount(prev => prev + 1)
+				setTimeout(() => {
+					initMap()
+				}, 200)
+			}
+			return
+		}
 
 		const mapOption = {
 			center: new (window as any).kakao.maps.LatLng(37.5665, 126.9780), // 서울 시청 좌표 (기본값)
@@ -155,8 +174,8 @@ const UnpaidList: React.FC = () => {
 	const formatCurrency = (amount: number): string => `₩${amount.toLocaleString()}`
 
 	return (
-		<div className="min-h-screen bg-gray-50">
-			<header className="px-6 py-4 bg-white border-b border-gray-200">
+		<div className="flex-1 space-y-4 sm:space-y-6 p-4 sm:p-6 bg-gray-50 min-h-screen">
+			<header className="bg-white border-b border-gray-200 -mx-4 sm:-mx-6 px-6 py-4">
 				<div className="flex flex-row gap-2">
 					<h1 className="text-2xl sm:text-3xl font-bold text-gray-900">고객 상세 페이지</h1>
 					<Button 
@@ -169,64 +188,63 @@ const UnpaidList: React.FC = () => {
 				</div>
 			</header>
 
-			<div className="p-6">
+			<div className="max-w-7xl mx-auto">
 				{/* 거래처 프로필 카드 */}
 				{business && (
-					<Card className="mb-6 shadow-lg">
-						<CardContent className="p-6">
-							<div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-								{/* 거래처 정보 */}
-								<div className="lg:col-span-2 flex flex-col h-full space-y-4">
+					<Card className="mb-6 shadow-lg -mx-4 sm:-mx-6">
+						<CardContent className="px-6 py-6">
+							{/* 거래처 정보 */}
+							<div className="space-y-6">
+								<div className="flex items-center gap-3">
+									<div className="p-3 bg-blue-100 rounded-full">
+										<Building2 className="h-6 w-6 text-blue-600" />
+									</div>
+									<div>
+										<h2 className="text-2xl font-bold text-gray-900">{business.business_name}</h2>
+										<p className="text-sm text-gray-500">거래처 정보</p>
+									</div>
+								</div>
+								
+								<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 									<div className="flex items-center gap-3">
-										<div className="p-3 bg-blue-100 rounded-full">
-											<Building2 className="h-6 w-6 text-blue-600" />
-										</div>
-										<div>
-											<h2 className="text-2xl font-bold text-gray-900">{business.business_name}</h2>
-											<p className="text-sm text-gray-500">거래처 정보</p>
-										</div>
+										<Phone className="h-5 w-5 text-gray-400" />
+										<span className="text-gray-700">{business.phone_number || "전화번호 없음"}</span>
 									</div>
-									
-									<div className="space-y-3">
-										<div className="flex items-center gap-3">
-											<Phone className="h-5 w-5 text-gray-400" />
-											<span className="text-gray-700">{business.phone_number || "전화번호 없음"}</span>
-										</div>
-										<div className="flex items-start gap-3">
-											<MapPin className="h-5 w-5 text-gray-400 mt-0.5" />
-											<span className="text-gray-700">{business.address || "주소 없음"}</span>
-										</div>
-										</div>
-
-										<div className="flex items-baseline space-x-2 mt-8">
-										 <p className="text-sm text-gray-500">미수금</p>
-                       				 	 <p className="text-lg font-bold text-red-600">
-                        					    {formatCurrency(business.outstanding_balance ?? 0)}
-                         				 </p>
+									<div className="flex items-baseline space-x-2">
+										<p className="text-sm text-gray-500">미수금</p>
+										<p className="text-lg font-bold text-red-600">
+											{formatCurrency(business.outstanding_balance ?? 0)}
+										</p>
 									</div>
-									
 								</div>
 
-								{/* 지도 */}
-								<div className="lg:col-span-1">
-									<div className="bg-gray-100 rounded-lg overflow-hidden">
-										<div id="map" className="w-full h-48"></div>
-									</div>
-									<p className="text-xs text-gray-500 mt-2 text-center">위치 정보</p>
+								<div className="flex items-start gap-3">
+									<MapPin className="h-5 w-5 text-gray-400 mt-0.5" />
+									<span className="text-gray-700">{business.address || "주소 없음"}</span>
 								</div>
+
+								{/* 지도 - 전체 너비 */}
+								{business.address && (
+									<div className="w-full">
+										<div className="bg-gray-100 rounded-lg overflow-hidden">
+											<div id="map" className="w-full h-64"></div>
+										</div>
+										<p className="text-xs text-gray-500 mt-2 text-center">위치 정보</p>
+									</div>
+								)}
 							</div>
 						</CardContent>
 					</Card>
 				)}
 
 				{/* 주문 목록 */}
-				<Card>
-					<CardHeader>
+				<Card className="-mx-4 sm:-mx-6">
+					<CardHeader className="px-6">
 						<CardTitle className="flex items-center justify-between">
 							<span>미수금 목록 ({totalCount}건)</span>
 						</CardTitle>
 					</CardHeader>
-					<CardContent>
+					<CardContent className="px-6">
 						<div className="overflow-x-auto">
 							<Table>
 								<TableHeader>
@@ -359,7 +377,7 @@ const UnpaidList: React.FC = () => {
 										disabled={currentPage === totalPages}
 									>
 										다음
-										<ChevronLeft className="h-4 w-4" />
+										<ChevronRight className="h-4 w-4" />
 									</Button>
 								</div>
 							</div>

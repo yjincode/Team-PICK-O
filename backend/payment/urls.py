@@ -5,7 +5,7 @@ JWT 전용 API 엔드포인트
 from django.urls import path
 from .views import (
     TossConfirmView, TossRequestView, MarkPaidView, RefundView, CancelOrderView, 
-    UnpaidOrdersView, ARSummaryView
+    PaymentRollbackView, UnpaidOrdersView, ARSummaryView
 )
 
 urlpatterns = [
@@ -20,8 +20,11 @@ urlpatterns = [
     path('mark-paid/', MarkPaidView.as_view(), name='mark-paid'),
     
     # ==================== 환불/취소 처리 ====================
-    # POST /api/v1/payments/refund - 환불 처리
+    # POST /api/v1/payments/refund - 환불 처리 (실제 환불)
     path('refund/', RefundView.as_view(), name='refund'),
+    
+    # POST /api/v1/payments/rollback - 결제 상태 롤백 (실제 환불 없이 상태만 변경)
+    path('rollback/', PaymentRollbackView.as_view(), name='payment-rollback'),
     
     # POST /api/v1/payments/cancel-order - 주문 취소
     path('cancel-order/', CancelOrderView.as_view(), name='cancel-order'),

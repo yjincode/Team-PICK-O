@@ -8,10 +8,10 @@ import { useParams, useNavigate } from "react-router-dom"
 import { Button } from "../../components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card"
 import { Badge } from "../../components/ui/badge"
-import { ArrowLeft } from "lucide-react"
+import { ArrowLeft, RotateCcw } from "lucide-react"
 import { format } from "date-fns"
 import { formatPhoneNumber } from "../../utils/phoneFormatter"
-import { orderApi, requestDocument, getDocumentRequests } from "../../lib/api"
+import { orderApi, paymentApi, requestDocument, getDocumentRequests } from "../../lib/api"
 import { getBadgeClass, getLabel } from "../../lib/labels"
 import StockShortageModal from "../../components/modals/StockShortageModal"
 import toast from 'react-hot-toast'
@@ -47,6 +47,9 @@ const OrderDetail: React.FC = () => {
   
   // 출고 처리 확인 모달 상태
   const [showShipOutModal, setShowShipOutModal] = useState(false)
+  
+  // 환불 처리 상태
+  const [processingRefund, setProcessingRefund] = useState(false)
   
   // 주문 항목 수정 모달 상태
   const [showItemEditModal, setShowItemEditModal] = useState(false)
@@ -272,6 +275,52 @@ const OrderDetail: React.FC = () => {
       toast.error('주문 취소 중 오류가 발생했습니다.')
     } finally {
       setProcessingCancel(false)
+    }
+  }
+
+  // 결제 롤백(취소) 처리
+  const handlePaymentRollback = async () => {
+    if (!order) return
+    
+    // 사용자 확인
+    const confirmRollback = confirm(
+      `주문 #${order.id}의 결제를 취소하시겠습니까?\n\n` +
+      `• 결제 금액: ₩${order.total_price.toLocaleString()}\n` +
+      `• 주문 상태: 출고준비 → 주문완료 (결제 대기)\n\n` +
+      `⚠️ 실수로 결제한 경우에만 사용해주세요.\n` +
+      `이 작업은 되돌릴 수 없습니다.`
+    )
+    
+    if (!confirmRollback) return
+    
+    // 취소 사유 입력
+    const cancelReason = prompt('결제 취소 사유를 입력해주세요:', '실수로 결제함')
+    if (!cancelReason || cancelReason.trim() === '') {
+      toast.error('취소 사유를 입력해주세요.')
+      return
+    }
+    
+    try {
+      setProcessingRefund(true)
+      
+      const response = await paymentApi.rollback({
+        orderId: order.id,
+        rollbackReason: cancelReason.trim()
+      })
+      
+      if (response.data) {
+        toast.success('결제가 성공적으로 취소되었습니다. 주문 상태가 결제 대기로 변경되었습니다.')
+        // 주문 정보 새로고침
+        const updatedOrder = await orderApi.getById(parseInt(id!))
+        setOrder(updatedOrder)
+      }
+      
+    } catch (error: any) {
+      console.error('결제 취소 오류:', error)
+      const errorMessage = error.response?.data?.error || '결제 취소 중 오류가 발생했습니다.'
+      toast.error(errorMessage)
+    } finally {
+      setProcessingRefund(false)
     }
   }
 
@@ -856,14 +905,26 @@ const OrderDetail: React.FC = () => {
                 </Button>
               )}
               
-              {/* 환불 - paid 상태에서만 */}
+              {/* 결제 취소 - paid 상태에서만 */}
               {order.payment_status === 'paid' && order.order_status !== 'cancelled' && (
                 <Button 
+                  onClick={handlePaymentRollback}
                   variant="outline"
-                  className="border-red-600 text-red-600 hover:bg-red-50"
+                  className="border-orange-600 text-orange-600 hover:bg-orange-50"
                   size="sm"
+                  disabled={processingRefund}
                 >
-                  환불
+                  {processingRefund ? (
+                    <>
+                      <div className="animate-spin h-4 w-4 mr-1 border-2 border-orange-600 border-t-transparent rounded-full" />
+                      처리중...
+                    </>
+                  ) : (
+                    <>
+                      <RotateCcw className="h-4 w-4 mr-1" />
+                      결제 취소
+                    </>
+                  )}
                 </Button>
               )}
             </div>
