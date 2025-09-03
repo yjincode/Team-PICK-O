@@ -317,4 +317,4 @@ const getErrorMessage = (errorCode: string): string => {
   }
 };
 
-export { auth, app, analytics };
+export { auth, app, analytics, setupRecaptcha };

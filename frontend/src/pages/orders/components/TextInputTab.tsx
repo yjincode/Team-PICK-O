@@ -112,6 +112,7 @@ interface TextInputTabProps {
   deliveryDate?: string
   onDeliveryDateChange?: (date: string) => void
   onOrderParsed?: (orderData: ParsedOrderData) => void
+  onError?: (error: string) => void
 }
 
 const TextInputTab: React.FC<TextInputTabProps> = ({
@@ -125,6 +126,7 @@ const TextInputTab: React.FC<TextInputTabProps> = ({
   deliveryDate,
   onDeliveryDateChange,
   onOrderParsed,
+  onError,
 }) => {
   const [businesses, setBusinesses] = useState<Business[]>([])
   const [fishTypes, setFishTypes] = useState<FishType[]>([])

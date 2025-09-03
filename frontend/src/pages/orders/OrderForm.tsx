@@ -1001,6 +1001,8 @@ const OrderForm: React.FC<OrderFormProps> = ({ onClose, onSubmit, parsedOrderDat
               <Tabs value={formData.source_type} onValueChange={(value: string) => handleInputChange("source_type", value)}>
                 <TabsContent value="voice" className="mt-0">
                   <VoiceUploadTab
+                    businesses={businesses}
+                    fishTypes={fishTypes}
                     onTranscriptionComplete={(text: string) => {
                       setFormData((prev: FormData) => ({ ...prev, transcribed_text: text }))
                     }}
