@@ -4,24 +4,100 @@ import { Label } from "../../../components/ui/label"
 import { Textarea } from "../../../components/ui/textarea"
 import { Input } from "../../../components/ui/input"
 import { businessApi, fishTypeApi, exebaseApi } from "../../../lib/api"
-import type { Business, FishType } from "../../../types"
+import type { Business, FishType, OrderItem } from "../../../types"
 import { toast } from "react-hot-toast"
 
-interface OrderItem {
-  fish_type_id: number
-  quantity: number
-  unit_price?: number
-  unit: string
-  item_name_snapshot?: string
-  remarks?: string
+
+// ✅ 어종 조회 또는 생성
+async function findOrCreateFishType(
+  name: string | undefined,
+  unit: string = "박스",
+  existingFishTypes: FishType[]
+): Promise<FishType | null> {
+  if (!name || typeof name !== "string") return null;
+
+  const trimmedName = name.trim();
+  if (!trimmedName) return null;
+
+  let fish = existingFishTypes.find(f => f.name === trimmedName);
+
+  if (!fish) {
+    try {
+      const created = await fishTypeApi.create({ name: trimmedName, unit });
+      fish = created.data;
+      existingFishTypes.push(fish);
+      console.log(`[어종 등록 완료] ${trimmedName}`);
+    } catch (error) {
+      console.warn(`[어종 등록 실패] ${trimmedName}`, error);
+      return null;
+    }
+  }
+
+  return fish;
 }
+
+// ✅ 거래처 조회 또는 생성
+async function findOrCreateBusiness(
+  businessName: string,
+  phoneNumber: string,
+  businesses: Business[]
+): Promise<number | null> {
+  if (!businessName) return null;
+
+  const existingBusiness = businesses.find(
+    (b) => b.business_name.trim() === businessName.trim()
+  );
+  if (existingBusiness) {
+    console.log(`[기존 거래처 사용] ${businessName} (ID: ${existingBusiness.id})`);
+    return existingBusiness.id;
+  }
+
+  const cleanPhoneNumber = (input?: string): string => {
+    const digits = (input || '').replace(/\D/g, '');
+    return /^\d{9,12}$/.test(digits) ? digits : '01012311234';
+  };
+
+  try {
+    const created = await businessApi.create({
+      business_name: businessName,
+      phone_number: cleanPhoneNumber(phoneNumber),
+      address: "주소 미입력",
+      memo: "(자동 생성)",
+    });
+
+    const createdData = created?.data;
+    if (!createdData || typeof createdData.id !== 'number') {
+      console.error("[거래처 생성 응답 이상]", created);
+      throw new Error("응답 구조가 올바르지 않음 (created.data.id 없음)");
+    }
+
+    console.log(`[거래처 등록 완료] ${businessName} (ID: ${createdData.id})`);
+
+    const refreshed = await businessApi.getAll();
+    const matched = refreshed.results.find(
+      (b) => b.business_name.trim() === businessName.trim()
+    );
+
+    if (matched) {
+      console.log(`[재조회로 확인된 거래처] ${businessName} (ID: ${matched.id})`);
+      return matched.id;
+    }
+
+    console.warn(`[거래처 확인 실패, 생성된 ID 사용] ${businessName} (ID: ${createdData.id})`);
+    return createdData.id;
+  } catch (error) {
+    console.error(`[거래처 등록 실패] ${businessName}`, error);
+    return null;
+  }
+}
+
 
 interface ParsedOrderData {
   business_name?: string
   phone_number?: string
   transcribed_text: string
   delivery_date?: string
-  items: OrderItem[]
+  items: any[]
   memo?: string
 }
 
@@ -54,6 +130,7 @@ const TextInputTab: React.FC<TextInputTabProps> = ({
   const [fishTypes, setFishTypes] = useState<FishType[]>([])
   const [parsedOrder, setParsedOrder] = useState<ParsedOrderData | null>(null)
   const [isLocalProcessing, setIsLocalProcessing] = useState<boolean>(false)
+  const [newFishUnits, setNewFishUnits] = useState<Record<number, string>>({})
 
   // 거래처 목록 불러오기
   useEffect(() => {
@@ -193,6 +270,70 @@ const TextInputTab: React.FC<TextInputTabProps> = ({
     setParsedOrder({ ...parsedOrder, items: updatedItems })
   }
 
+// // ✅ 거래처 등록 처리 함수
+// const handleRegisterNewBusiness = async () => {
+//   const name = parsedOrder?.business_name?.trim()
+//   const phone = (parsedOrder?.phone_number || "010-1231-1234").replace(/-/g, "")
+
+//   if (!name) return toast.error("거래처명을 입력해주세요.")
+
+//   try {
+//     const result = await businessApi.create({ business_name: name, phone_number: phone })
+//     const newBusiness = result.data
+
+//     setBusinesses((prev) => [...prev, newBusiness])
+//     onBusinessChange?.(newBusiness.id)
+//     toast.success("거래처가 등록되었습니다.")
+//   } catch (error) {
+//     console.error(error)
+//     toast.error("거래처 등록에 실패했습니다.")
+//   }
+// }
+const handleRegisterNewBusiness = async () => {
+  const name = parsedOrder?.business_name?.trim()
+  const phone = parsedOrder?.phone_number || "01012311234"
+
+  if (!name) return toast.error("거래처명을 입력해주세요.")
+
+  const businessId = await findOrCreateBusiness(name, phone, businesses)
+
+  if (businessId) {
+    onBusinessChange?.(businessId)
+    toast.success("거래처가 등록되었습니다.")
+  } else {
+    toast.error("거래처 등록에 실패했습니다.")
+  }
+}
+
+// ✅ 어종 등록 처리 함수
+const handleRegisterNewFishType = async (name: string, index: number) => {
+  const trimmedName = name.trim()
+  if (!trimmedName) return toast.error("어종명을 입력해주세요.")
+
+  const selectedUnit = newFishUnits[index] || "박스" // 기본값 "박스"
+
+  try {
+    const result = await fishTypeApi.create({ name: trimmedName, unit: selectedUnit })
+    const newFishType = result.data
+
+    setFishTypes((prev) => [...prev, newFishType])
+    handleItemChange(index, "fish_type_id", newFishType.id)
+
+    // 등록 후 해당 항목 초기화
+    setNewFishUnits((prev) => {
+      const newState = { ...prev }
+      delete newState[index]
+      return newState
+    })
+
+    toast.success(`어종 "${newFishType.name}" 등록되었습니다.`)
+  } catch (error) {
+    console.error(error)
+    toast.error("어종 등록에 실패했습니다.")
+  }
+}
+
+
   return (
     <div className="space-y-4">
       <div className="space-y-2">
@@ -232,16 +373,13 @@ const TextInputTab: React.FC<TextInputTabProps> = ({
                   className="bg-white border-green-300"
                 />
                 <Button
-                  variant="outline"
-                  size="sm"
-                  className="mt-1"
-                  onClick={() => {
-                    toast("신규 거래처 등록 기능은 구현 필요합니다.")
-                    // TODO: 신규 거래처 등록 API 연결
-                  }}
-                >
-                  신규 거래처 등록
-                </Button>
+  variant="outline"
+  size="sm"
+  className="mt-1"
+  onClick={handleRegisterNewBusiness}
+>
+  신규 거래처 등록
+</Button>
               </div>
 
               {/* 배송일 */}
@@ -267,29 +405,38 @@ const TextInputTab: React.FC<TextInputTabProps> = ({
                       <div className="space-y-1">
                         <label className="text-xs text-gray-500 font-medium">어종</label>
                         {item.fish_type_id && item.fish_type_id !== 0 ? (
-                          <select
-                            className="w-full text-sm border border-gray-300 rounded"
-                            value={item.fish_type_id}
-                            onChange={(e) =>
-                              handleItemChange(index, "fish_type_id", parseInt(e.target.value))
-                            }
-                          >
-                            {fishTypes.map((fish) => (
-                              <option key={fish.id} value={fish.id}>
-                                {fish.name}
-                              </option>
-                            ))}
-                          </select>
-                        ) : (
-                          <Input
-                            type="text"
-                            value={item.item_name_snapshot || ""}
-                            onChange={(e) =>
-                              handleItemChange(index, "item_name_snapshot", e.target.value)
-                            }
-                            placeholder="어종명을 입력하세요"
-                          />
-                        )}
+  <select
+    className="w-full text-sm border border-gray-300 rounded"
+    value={item.fish_type_id}
+    onChange={(e) =>
+      handleItemChange(index, "fish_type_id", parseInt(e.target.value))
+    }
+  >
+    {fishTypes.map((fish) => (
+      <option key={fish.id} value={fish.id}>
+        {fish.name}
+      </option>
+    ))}
+  </select>
+) : (
+  <div className="flex gap-2">
+    <Input
+      type="text"
+      value={item.item_name_snapshot || ""}
+      onChange={(e) =>
+        handleItemChange(index, "item_name_snapshot", e.target.value)
+      }
+      placeholder="어종명을 입력하세요"
+    />
+    <Button
+      size="sm"
+      variant="secondary"
+      onClick={() => handleRegisterNewFishType(item.item_name_snapshot || "", index)}
+    >
+      등록
+    </Button>
+  </div>
+)}
                       </div>
 
                       <div className="space-y-1">
