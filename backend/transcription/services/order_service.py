@@ -68,18 +68,7 @@ class OrderCreationService:
                 order_data['delivery_date'] = datetime.now().date() + timedelta(days=days)
                 break
         
-        # AI Server를 사용한 고급 파싱 시도
-        ai_parsed_data = self._parse_with_ai_server(text)
-        if ai_parsed_data:
-            # AI Server 결과를 우선 사용
-            if ai_parsed_data.get('items'):
-                order_data['items'] = ai_parsed_data['items']
-            if ai_parsed_data.get('business_name'):
-                order_data['business_name'] = ai_parsed_data['business_name']
-            if ai_parsed_data.get('delivery_date'):
-                order_data['delivery_date'] = ai_parsed_data['delivery_date']
-            if ai_parsed_data.get('memo'):
-                order_data['memo'] = ai_parsed_data['memo']
+        # AI Server 파싱 로직 제거됨
         
         # 업체명이 없는 경우 기존 로직으로 추출
         if not order_data.get('business_name'):
@@ -217,32 +206,3 @@ class OrderCreationService:
             print(f"Error in business extraction: {e}")
             return None
     
-    def _parse_with_ai_server(self, text: str) -> Optional[Dict]:
-        """
-        AI Server의 LLM을 사용하여 텍스트 파싱
-        """
-        try:
-            import requests
-            import os
-            
-            ai_server_url = os.getenv('AI_SERVER_URL', 'http://localhost:8001')
-            ai_server_url = f"{ai_server_url}/api/v1/text/parse-text"
-            
-            response = requests.post(
-                ai_server_url,
-                json={"text": text},
-                timeout=90  # AI Server LLM 처리를 위한 긴 timeout
-            )
-            
-            if response.status_code == 200:
-                result = response.json()
-                if result.get('success') and result.get('data'):
-                    print(f"✅ AI Server 파싱 성공: {len(result['data'].get('items', []))}개 품목")
-                    return result['data']
-            else:
-                print(f"⚠️ AI Server 파싱 실패: {response.status_code}")
-                
-        except Exception as e:
-            print(f"⚠️ AI Server 연결 실패: {e}")
-        
-        return None
