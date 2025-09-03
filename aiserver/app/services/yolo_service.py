@@ -17,7 +17,10 @@ class YOLO11Service:
     
     def __init__(self):
         self.model = None
-        self.model_path = os.getenv("YOLO_MODEL_PATH", "/app/models/yolo/best.pt")
+        # 현재 디렉토리 기준으로 상대 경로 설정
+        self.model_path = os.getenv("YOLO_MODEL_PATH", 
+                                  "/app/models/yolo/best.pt" if os.path.exists("/app/models/yolo/best.pt") 
+                                  else "./app/models/yolo11/best.pt")
         self.confidence_threshold = 0.25  # 더 낮은 threshold로 더 많은 탐지 허용
         self.iou_threshold = 0.45
         

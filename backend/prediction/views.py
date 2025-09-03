@@ -53,6 +53,7 @@ SPECIES_MODELS = {
 
 # 글로벌 모델 캐시 (메모리 최적화)
 _cached_models = None
+_single_species_cache = {}  # 어종별 개별 캐시
 
 def load_models():
     """어종별 예측 모델들을 로드합니다 (캐싱 적용)."""
@@ -104,7 +105,14 @@ def load_models():
     return models
 
 def load_single_species_model(species_name):
-    """단일 어종의 모델만 로드 (메모리 최적화)"""
+    """단일 어종의 모델만 로드 (캐싱 + 안전 처리)"""
+    global _single_species_cache
+    
+    # 캐시에서 먼저 확인
+    if species_name in _single_species_cache:
+        print(f"♻️ {species_name} 캐시된 모델 사용")
+        return _single_species_cache[species_name]
+    
     try:
         if species_name not in SPECIES_MODELS:
             print(f"❌ 지원하지 않는 어종: {species_name}")
@@ -113,57 +121,116 @@ def load_single_species_model(species_name):
         model_paths = SPECIES_MODELS[species_name]
         species_models = {}
         
-        print(f"🐟 {species_name} 모델 로드 중...")
+        print(f"🐟 {species_name} 모델 로드 시작...")
         
-        # LightGBM 모델 로드
-        if os.path.exists(model_paths['lightgbm']):
+        # LightGBM 모델 로드 (안전 처리)
+        lightgbm_path = model_paths.get('lightgbm')
+        if lightgbm_path and os.path.exists(lightgbm_path):
             try:
+                print(f"📁 LightGBM 파일 확인: {lightgbm_path}")
                 import lightgbm as lgb
-                species_models['lightgbm'] = lgb.Booster(model_file=model_paths['lightgbm'])
-                print(f"✅ {species_name} LightGBM 로드 완료")
+                
+                # 파일 크기 확인
+                file_size = os.path.getsize(lightgbm_path)
+                print(f"📏 LightGBM 파일 크기: {file_size} bytes")
+                
+                if file_size == 0:
+                    print(f"⚠️ {species_name} LightGBM 파일이 비어있음")
+                elif file_size > 10 * 1024 * 1024:  # 10MB 이상만 제한
+                    print(f"⚠️ {species_name} LightGBM 파일이 너무 큼 ({file_size/1024/1024:.1f}MB) - 메모리 보호를 위해 로드 건너뜀")
+                else:
+                    print(f"🔄 {species_name} LightGBM 로드 시도 중...")
+                    
+                    # OpenMP 스레드 수 제한 (macOS 호환성)
+                    original_omp = os.environ.get('OMP_NUM_THREADS')
+                    os.environ['OMP_NUM_THREADS'] = '1'
+                    
+                    try:
+                        # 직접 로드 시도 (스레딩 없이)
+                        booster = lgb.Booster(model_file=lightgbm_path)
+                        species_models['lightgbm'] = booster
+                        print(f"✅ {species_name} LightGBM 로드 완료")
+                    except Exception as lgb_error:
+                        print(f"❌ {species_name} LightGBM 로드 실패: {lgb_error}")
+                    finally:
+                        # 원래 설정 복원
+                        if original_omp is not None:
+                            os.environ['OMP_NUM_THREADS'] = original_omp
+                        elif 'OMP_NUM_THREADS' in os.environ:
+                            del os.environ['OMP_NUM_THREADS']
+                    
+            except FileNotFoundError:
+                print(f"❌ {species_name} LightGBM 파일을 찾을 수 없음: {lightgbm_path}")
+            except MemoryError:
+                print(f"❌ {species_name} LightGBM 로드 중 메모리 부족")
             except Exception as e:
-                print(f"⚠️ {species_name} LightGBM 로드 실패: {e}")
+                print(f"⚠️ {species_name} LightGBM 로드 실패: {type(e).__name__}: {e}")
+        else:
+            print(f"❌ {species_name} LightGBM 파일 없음: {lightgbm_path}")
         
-        # XGBoost 모델 로드  
-        if os.path.exists(model_paths['xgboost']):
+        # XGBoost 모델 로드 (안전 처리)  
+        xgboost_path = model_paths.get('xgboost')
+        if xgboost_path and os.path.exists(xgboost_path):
             try:
-                with open(model_paths['xgboost'], 'r') as f:
-                    species_models['xgboost'] = json.load(f)
-                print(f"✅ {species_name} XGBoost 로드 완료")
+                print(f"📁 XGBoost 파일 확인: {xgboost_path}")
+                file_size = os.path.getsize(xgboost_path)
+                print(f"📏 XGBoost 파일 크기: {file_size} bytes")
+                
+                if file_size == 0:
+                    print(f"⚠️ {species_name} XGBoost 파일이 비어있음")
+                else:
+                    with open(xgboost_path, 'r', encoding='utf-8') as f:
+                        species_models['xgboost'] = json.load(f)
+                    print(f"✅ {species_name} XGBoost 로드 완료")
+                    
+            except FileNotFoundError:
+                print(f"❌ {species_name} XGBoost 파일을 찾을 수 없음: {xgboost_path}")
+            except json.JSONDecodeError as je:
+                print(f"❌ {species_name} XGBoost JSON 파싱 실패: {je}")
             except Exception as e:
-                print(f"⚠️ {species_name} XGBoost 로드 실패: {e}")
+                print(f"⚠️ {species_name} XGBoost 로드 실패: {type(e).__name__}: {e}")
+        else:
+            print(f"❌ {species_name} XGBoost 파일 없음: {xgboost_path}")
         
-        return {species_name: species_models} if species_models else None
+        if species_models:
+            print(f"🎯 {species_name} 모델 로드 완료: {list(species_models.keys())}")
+            result = {species_name: species_models}
+            # 캐시에 저장
+            _single_species_cache[species_name] = result
+            print(f"💾 {species_name} 모델 캐시에 저장됨")
+            return result
+        else:
+            print(f"❌ {species_name} 사용 가능한 모델이 없음")
+            # 실패한 경우에도 캐시에 저장 (재시도 방지)
+            _single_species_cache[species_name] = None
+            return None
         
+    except KeyboardInterrupt:
+        print(f"⏹️ {species_name} 모델 로드 중단됨")
+        return None
     except Exception as e:
-        print(f"❌ {species_name} 모델 로드 실패: {e}")
+        print(f"❌ {species_name} 모델 로드 예외: {type(e).__name__}: {e}")
+        import traceback
+        print(f"🔍 스택 추적: {traceback.format_exc()}")
         return None
 
 def get_environmental_data_from_db(target_date_str):
     """DB에서 특정 날짜의 환경 데이터를 조회합니다."""
     try:
         from .models import ExternalEnvironmentalData
+        from datetime import datetime
         
         # 날짜 파싱
-        target_date = datetime.strptime(target_date_str, '%Y-%m-%d').date()
+        target_date = datetime.strptime(target_date_str, '%Y-%m-%d')
         
-        # 해당 날짜의 환경 데이터 조회
-        env_data = ExternalEnvironmentalData.objects.filter(
-            observation_date=target_date
-        ).first()
+        # 해당 날짜의 환경 데이터 조회 (data_type별로)
+        env_data_query = ExternalEnvironmentalData.objects.filter(
+            data_timestamp__date=target_date.date()
+        )
         
-        if env_data:
-            return {
-                'temperature': float(env_data.air_temperature or 20.0),
-                'humidity': float(env_data.humidity or 60.0),
-                'precipitation': float(env_data.precipitation or 0.0),
-                'wind_speed': float(env_data.wind_speed or 5.0),
-                'pressure': float(env_data.pressure or 1013.0),
-                'visibility': float(env_data.visibility or 10.0),
-                'water_temperature': float(env_data.water_temperature or 15.0)
-            }
-        else:
-            # 기본값 반환
+        if not env_data_query.exists():
+            print(f"⚠️ {target_date_str} 환경 데이터 없음 - 기본값 사용")
+            # 환경 데이터가 없으면 기본값 반환
             return {
                 'temperature': 20.0,
                 'humidity': 60.0,
@@ -173,10 +240,37 @@ def get_environmental_data_from_db(target_date_str):
                 'visibility': 10.0,
                 'water_temperature': 15.0
             }
+        
+        # data_type별 데이터 추출
+        env_dict = {}
+        for data_point in env_data_query:
+            env_dict[data_point.data_type] = float(data_point.value)
+        
+        # 필요한 환경 데이터 매핑 (기본값 제공)
+        result = {
+            'temperature': env_dict.get('avg_temperature', env_dict.get('temperature', 20.0)),
+            'humidity': env_dict.get('humidity', 60.0),
+            'precipitation': env_dict.get('precipitation', env_dict.get('rainfall', 0.0)),
+            'wind_speed': env_dict.get('wind_speed', 5.0),
+            'pressure': env_dict.get('pressure', env_dict.get('atmospheric_pressure', 1013.0)),
+            'visibility': env_dict.get('visibility', 10.0),  # visibility 기본값 제공
+            'water_temperature': env_dict.get('water_temperature', env_dict.get('sea_temperature', 15.0))
+        }
+        
+        # None 값들을 기본값으로 대체
+        for key, default_val in [
+            ('temperature', 20.0), ('humidity', 60.0), ('precipitation', 0.0),
+            ('wind_speed', 5.0), ('pressure', 1013.0), ('visibility', 10.0), ('water_temperature', 15.0)
+        ]:
+            if result[key] is None:
+                result[key] = default_val
+                
+        print(f"🌤️ 환경 데이터 준비 완료: {list(result.keys())}")
+        return result
             
     except Exception as e:
-        print(f"❌ 환경 데이터 조회 실패: {e}")
-        # 기본값 반환
+        print(f"⚠️ 환경 데이터 조회 오류: {e}")
+        # 오류 시에도 기본값 반환
         return {
             'temperature': 20.0,
             'humidity': 60.0,
@@ -201,11 +295,7 @@ def predict_single_species(species_name, target_date_str, environmental_data, mo
         if species_name not in models:
             print(f"❌ {species_name} 모델을 찾을 수 없습니다")
             return {
-                'error': f'{species_name} 모델이 없습니다',
-                'predicted_price': 15000,
-                'lightgbm_prediction': 15000,
-                'xgboost_prediction': 15000,
-                'confidence': 0.5
+                'error': f'{species_name} 모델이 없습니다'
             }
         
         species_models = models[species_name]
@@ -218,25 +308,23 @@ def predict_single_species(species_name, target_date_str, environmental_data, mo
                 predictions['lightgbm'] = max(8000, lightgbm_pred)  # 최소값 보장
             except Exception as e:
                 print(f"❌ {species_name} LightGBM 예측 실패: {e}")
-                predictions['lightgbm'] = 15000  # 기본값
+                return {'error': f'LightGBM 모델 예측 실패: {str(e)}'}
         else:
-            predictions['lightgbm'] = 15000
+            return {'error': f'{species_name} LightGBM 모델이 존재하지 않습니다'}
             
-        # XGBoost 예측 (JSON 설정 기반)
+        # XGBoost 예측 (LightGBM만 사용)
         if 'xgboost' in species_models:
             try:
-                # JSON 설정에서 기본 예측값 추출 (실제로는 더 복잡한 로직 필요)
-                xgb_config = species_models['xgboost']
-                # 간단한 예측 로직 (실제로는 XGBoost 모델 객체 필요)
-                base_price = 15000
-                seasonal_factor = 1.0 + 0.2 * np.sin(2 * np.pi * target_date_obj.month / 12)
-                xgboost_pred = base_price * seasonal_factor
-                predictions['xgboost'] = max(8000, xgboost_pred)
+                # XGBoost 모델은 현재 JSON 형태로만 있어서 실제 예측 불가
+                # LightGBM 예측값을 XGBoost 결과로도 사용
+                print(f"⚠️ {species_name} XGBoost 모델 비활성화 - LightGBM 결과 사용")
+                predictions['xgboost'] = predictions['lightgbm']
             except Exception as e:
-                print(f"❌ {species_name} XGBoost 예측 실패: {e}")
-                predictions['xgboost'] = 15000  # 기본값
+                print(f"❌ {species_name} XGBoost 처리 실패: {e}")
+                predictions['xgboost'] = predictions['lightgbm']
         else:
-            predictions['xgboost'] = 15000
+            print(f"⚠️ {species_name} XGBoost 모델 없음 - LightGBM 결과 사용")
+            predictions['xgboost'] = predictions['lightgbm']
         
         # 앙상블 예측 (평균)
         ensemble_pred = (predictions['lightgbm'] + predictions['xgboost']) / 2
@@ -252,9 +340,9 @@ def predict_single_species(species_name, target_date_str, environmental_data, mo
             confidence = 0.5
         
         return {
-            'predicted_price': round(ensemble_pred),
-            'lightgbm_prediction': round(predictions['lightgbm']),
-            'xgboost_prediction': round(predictions['xgboost']),
+            'predicted_price': round(ensemble_pred / 10) * 10,  # 10원 단위로 반올림
+            'lightgbm_prediction': round(predictions['lightgbm'] / 10) * 10,
+            'xgboost_prediction': round(predictions['xgboost'] / 10) * 10,
             'confidence': round(confidence, 2),
             'features': features
         }
@@ -262,11 +350,7 @@ def predict_single_species(species_name, target_date_str, environmental_data, mo
     except Exception as e:
         print(f"❌ {species_name} 예측 실패: {e}")
         return {
-            'error': str(e),
-            'predicted_price': 15000,
-            'lightgbm_prediction': 15000,
-            'xgboost_prediction': 15000,
-            'confidence': 0.5
+            'error': str(e)
         }
 
 def create_prediction_features(date_obj, weather_data=None, temp_humidity=None):
@@ -297,22 +381,32 @@ def create_prediction_features(date_obj, weather_data=None, temp_humidity=None):
     for day in range(7):
         features[f'day_{day}'] = 1 if date_obj.weekday() == day else 0
     
-    # 기상 데이터 (6개)
-    if weather_data:
+    # 기상 데이터 (6개) - 환경 데이터 처리
+    if weather_data and isinstance(weather_data, dict):
         features['temperature'] = weather_data.get('temperature', 20.0)
         features['humidity'] = weather_data.get('humidity', 60.0)
         features['precipitation'] = weather_data.get('precipitation', 0.0)
         features['wind_speed'] = weather_data.get('wind_speed', 5.0)
         features['pressure'] = weather_data.get('pressure', 1013.0)
         features['visibility'] = weather_data.get('visibility', 10.0)
+        
+        # None 값들을 기본값으로 대체
+        defaults = {'temperature': 20.0, 'humidity': 60.0, 'precipitation': 0.0, 
+                   'wind_speed': 5.0, 'pressure': 1013.0, 'visibility': 10.0}
+        for key, default_val in defaults.items():
+            if features[key] is None:
+                features[key] = default_val
+                
+        print(f"🌤️ 예측 특성 환경 데이터 준비 완료")
     else:
-        # 기본값 설정
+        # 기본값 사용
         features['temperature'] = 20.0
         features['humidity'] = 60.0
         features['precipitation'] = 0.0
         features['wind_speed'] = 5.0
         features['pressure'] = 1013.0
         features['visibility'] = 10.0
+        print(f"⚠️ 환경 데이터 없음 - 기본값 사용")
     
     return features
 
@@ -356,27 +450,106 @@ def predict_price(request):
         # 환경 데이터가 있으면 사용, 없으면 DB에서 가져오기
         if not environmental_data:
             environmental_data = get_environmental_data_from_db(target_date)
+            
+        # 환경 데이터가 dictionary가 아닌 경우 (예: "analyzing" 문자열)
+        if not isinstance(environmental_data, dict):
+            print(f"⚠️ {mapped_species} 환경 데이터 형식 오류 - 분석 중 상태 반환")
+            return Response({
+                'success': True,
+                'prediction': {
+                    'species': mapped_species,
+                    'korean_name': species,
+                    'target_date': target_date,
+                    'status': 'analyzing',
+                    'message': '환경 데이터를 수집하고 있습니다. 잠시 후 다시 시도해주세요.'
+                }
+            })
         
-        # 임시: 모델 로딩 건너뛰고 기본값 반환 (서버 안정성 우선)
-        print(f"⚠️ 모델 로딩 건너뛰기 - 기본값 반환")
+        # 실제 모델 로딩 및 예측
+        print(f"🔄 {mapped_species} 모델 로딩 및 예측 시작")
         
-        # 기본 예측값 반환 (서버 테스트용)
-        base_prices = {
-            '우럭': 18000, '농어': 20000, '참돔': 25000, 
-            '광어': 15000, '숭어': 8500
-        }
+        try:
+            # ThreadPoolExecutor로 안전한 모델 로드
+            from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
+            import time
+            
+            print(f"🔄 {mapped_species} ThreadPool에서 모델 로드 시작")
+            
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                # 별도 스레드에서 모델 로드 (5초 타임아웃)
+                future = executor.submit(load_single_species_model, mapped_species)
+                
+                try:
+                    species_models = future.result(timeout=5)
+                    if species_models and mapped_species in species_models:
+                        print(f"✅ {mapped_species} 모델 로드 성공")
+                    else:
+                        print(f"⚠️ {mapped_species} 모델 로드됐지만 사용 불가")
+                        species_models = None
+                except FutureTimeoutError:
+                    print(f"⏰ {mapped_species} 모델 로드 타임아웃 (5초)")
+                    species_models = None
+                except Exception as e:
+                    print(f"❌ {mapped_species} 모델 로드 예외: {e}")
+                    species_models = None
+            
+            if not species_models or mapped_species not in species_models:
+                print(f"⚠️ {mapped_species} 모델을 찾을 수 없음 - 분석 중 상태 반환")
+                return Response({
+                    'success': True,
+                    'prediction': {
+                        'species': mapped_species,
+                        'korean_name': species,
+                        'target_date': target_date,
+                        'status': 'analyzing',
+                        'message': f'{mapped_species} 어종의 예측 모델을 준비하고 있습니다. 잠시 후 다시 시도해주세요.'
+                    }
+                })
+            
+            # 실제 모델 예측 수행
+            print(f"✅ {mapped_species} 모델 로드 성공 - 예측 수행")
+            prediction_result = predict_single_species(
+                mapped_species, target_date, environmental_data, species_models
+            )
+            
+            # 예측 결과에 에러가 있는지 확인
+            if 'error' in prediction_result:
+                print(f"⚠️ {mapped_species} 예측 실패: {prediction_result['error']}")
+                return Response({
+                    'success': True,
+                    'prediction': {
+                        'species': mapped_species,
+                        'korean_name': species,
+                        'target_date': target_date,
+                        'status': 'analyzing',
+                        'message': f'{mapped_species} 예측 모델에 문제가 있습니다. 데이터를 점검하고 있습니다.'
+                    }
+                })
         
-        base_price = base_prices.get(species, 15000)
+        except Exception as e:
+            print(f"❌ 모델 로딩/예측 중 예외 발생: {e}")
+            return Response({
+                'success': True,
+                'prediction': {
+                    'species': mapped_species,
+                    'korean_name': species,
+                    'target_date': target_date,
+                    'status': 'analyzing',
+                    'message': f'{mapped_species} 모델 처리 중입니다. 잠시 후 다시 시도해주세요.'
+                }
+            })
         
+        # 예측 성공 시 결과 구성
         result = {
             'species': mapped_species,
             'korean_name': species,
             'target_date': target_date,
-            'predicted_price': base_price,
-            'lightgbm_prediction': base_price,
-            'xgboost_prediction': base_price,
-            'confidence': 0.5,
-            'status': 'fallback_mode'
+            'predicted_price': prediction_result['predicted_price'],
+            'lightgbm_prediction': prediction_result['lightgbm_prediction'],
+            'xgboost_prediction': prediction_result['xgboost_prediction'],
+            'confidence': prediction_result['confidence'],
+            'status': 'model_prediction',
+            'features_used': list(prediction_result.get('features', {}).keys())[:10]  # 처음 10개만
         }
         
         return Response({
@@ -387,9 +560,15 @@ def predict_price(request):
     except Exception as e:
         print(f"예측 오류: {e}")
         return Response({
-            'success': False,
-            'error': f'예측 중 오류가 발생했습니다: {str(e)}'
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            'success': True,
+            'prediction': {
+                'species': species if 'species' in locals() else '알 수 없음',
+                'korean_name': species if 'species' in locals() else '알 수 없음',
+                'target_date': target_date if 'target_date' in locals() else '',
+                'status': 'analyzing',
+                'message': '예측 시스템을 점검하고 있습니다. 잠시 후 다시 시도해주세요.'
+            }
+        })
 
 def _collect_real_auction_data(species, auction_fish_obj, start_date, end_date, days):
     """실제 auction 데이터 수집 실행"""
@@ -424,15 +603,24 @@ def _collect_real_auction_data(species, auction_fish_obj, start_date, end_date, 
                 # collect_noryangjin_daily_quantity.py 실행
                 script_path = os.path.join(os.path.dirname(__file__), '..', 'auction_prediction', 'collect_noryangjin_daily_quantity.py')
                 
-                result = subprocess.run([
-                    'python', script_path, date_str, date_str
-                ], capture_output=True, text=True, timeout=60)
+                if not os.path.exists(script_path):
+                    print(f"❌ 데이터 수집 스크립트를 찾을 수 없음: {script_path}")
+                    continue
                 
-                if result.returncode == 0:
-                    print(f"✅ {date_str} 데이터 수집 성공")
-                    collected_count += 1
-                else:
-                    print(f"⚠️ {date_str} 데이터 수집 실패: {result.stderr}")
+                try:
+                    result = subprocess.run([
+                        'python', script_path, date_str, date_str
+                    ], capture_output=True, text=True, timeout=60)
+                    
+                    if result.returncode == 0:
+                        print(f"✅ {date_str} 데이터 수집 성공")
+                        collected_count += 1
+                    else:
+                        print(f"⚠️ {date_str} 데이터 수집 실패: {result.stderr}")
+                except subprocess.TimeoutExpired:
+                    print(f"⏰ {date_str} 데이터 수집 타임아웃")
+                except FileNotFoundError:
+                    print(f"❌ {date_str} Python 실행 파일을 찾을 수 없음")
                     
             except Exception as e:
                 print(f"❌ {date_str} 수집 중 오류: {e}")
@@ -513,14 +701,31 @@ def get_actual_auction_data(request):
         print(f"🔍 어종 매핑: {species} -> {fish_species_name}")
         
         # AuctionFishSpecies 조회 또는 자동 생성
-        from .models import get_or_create_auction_fish_species
-        auction_fish_obj = get_or_create_auction_fish_species(fish_species_name)
-        print(f"✅ Auction 어종 확인: {fish_species_name} (ID: {auction_fish_obj.id})")
+        try:
+            from .models import get_or_create_auction_fish_species
+            auction_fish_obj = get_or_create_auction_fish_species(fish_species_name)
+            print(f"✅ Auction 어종 확인: {fish_species_name} (ID: {auction_fish_obj.id})")
+        except Exception as e:
+            print(f"❌ Auction 어종 생성/조회 실패: {e}")
+            return Response({
+                'success': False,
+                'error': f'어종 데이터 처리 중 오류가 발생했습니다: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
         # ActualAuctionPrice에서 특정 어종의 데이터 조회 (실제 수집된 데이터)
-        species_auction_data = ActualAuctionPrice.objects.filter(
-            fish_species__item_small_category_name_kr=fish_species_name
-        ).order_by('-trade_date')
+        try:
+            species_auction_data = ActualAuctionPrice.objects.filter(
+                fish_species__item_small_category_name_kr=fish_species_name
+            ).order_by('-trade_date')
+            
+            data_count = species_auction_data.count()
+            print(f"📊 {fish_species_name} 데이터 개수: {data_count}개")
+        except Exception as e:
+            print(f"❌ 데이터 조회 실패: {e}")
+            return Response({
+                'success': False,
+                'error': f'데이터베이스 조회 중 오류가 발생했습니다: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
         if species_auction_data.exists():
             latest_date = species_auction_data.first().trade_date
@@ -528,12 +733,20 @@ def get_actual_auction_data(request):
             start_date = end_date - timedelta(days=days-1)
             print(f"📅 {species} 실제 데이터베이스 기준: {start_date} ~ {end_date}")
         else:
-            # 해당 어종의 데이터가 없으면 실제 데이터 수집 실행
-            today = date.today()
-            end_date = today
-            start_date = today - timedelta(days=days-1)
-            print(f"⚠️ {species} 어종 실제 데이터가 없음 - 실제 데이터 수집 실행")
-            return _collect_real_auction_data(species, auction_fish_obj, start_date, end_date, days)
+            # 해당 어종의 데이터가 없으면 분석 중 상태 반환
+            print(f"⚠️ {species} 어종 실제 데이터가 없음 - 분석 중 상태 반환")
+            return Response({
+                'success': True,
+                'data': [],
+                'species': species,
+                'days': days,
+                'status': 'analyzing',
+                'message': f'{species} 어종의 실제 데이터를 수집하고 있습니다. 잠시 후 다시 시도해주세요.',
+                'date_range': {
+                    'start': (date.today() - timedelta(days=days-1)).strftime('%Y-%m-%d'),
+                    'end': date.today().strftime('%Y-%m-%d')
+                }
+            })
         
         print(f"📅 날짜 범위: {start_date} ~ {end_date}")
         
@@ -639,13 +852,15 @@ def get_actual_auction_data(request):
                 
                 # 중복 날짜 체크 및 유효한 가격 체크
                 if avg_price is not None and avg_price > 0 and date_str not in seen_dates:
+                    # 10원 단위로 반올림
+                    rounded_price = round(float(avg_price) / 10) * 10
                     result_data.append({
                         'date': date_str,
-                        'price': float(avg_price),
+                        'price': rounded_price,
                         'formattedDate': f"{trade_date.month}.{trade_date.day}"
                     })
                     seen_dates.add(date_str)  # 처리된 날짜 기록
-                    print(f"  ✅ {trade_date}: {avg_price:,}원")
+                    print(f"  ✅ {trade_date}: {rounded_price:,}원")
         except Exception as e:
             print(f"❌ 데이터 처리 중 오류: {e}")
             # 안전한 빈 응답 반환
@@ -691,9 +906,51 @@ def get_actual_auction_data(request):
     except Exception as e:
         print(f"데이터 조회 오류: {e}")
         return Response({
-            'success': False,
-            'error': f'데이터 조회 중 오류가 발생했습니다: {str(e)}'
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            'success': True,
+            'data': [],
+            'species': species if 'species' in locals() else '알 수 없음',
+            'days': days if 'days' in locals() else 7,
+            'status': 'analyzing',
+            'message': '실제 데이터를 수집하고 있습니다. 잠시 후 다시 시도해주세요.',
+            'date_range': {
+                'start': (date.today() - timedelta(days=7-1)).strftime('%Y-%m-%d'),
+                'end': date.today().strftime('%Y-%m-%d')
+            }
+        })
+
+@api_view(['GET'])
+def get_model_cache_status(request):
+    """모델 캐시 상태를 반환합니다."""
+    global _single_species_cache
+    
+    cache_info = {}
+    for species_name in SPECIES_MODELS.keys():
+        if species_name in _single_species_cache:
+            if _single_species_cache[species_name] is not None:
+                models_loaded = list(_single_species_cache[species_name][species_name].keys())
+                cache_info[species_name] = {
+                    'cached': True,
+                    'models': models_loaded,
+                    'status': 'loaded'
+                }
+            else:
+                cache_info[species_name] = {
+                    'cached': True,
+                    'models': [],
+                    'status': 'failed'
+                }
+        else:
+            cache_info[species_name] = {
+                'cached': False,
+                'models': [],
+                'status': 'not_loaded'
+            }
+    
+    return Response({
+        'success': True,
+        'cache_status': cache_info,
+        'total_cached': len([k for k, v in _single_species_cache.items() if v is not None])
+    })
 
 @login_required
 def prediction_dashboard(request):
