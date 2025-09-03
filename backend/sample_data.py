@@ -729,13 +729,13 @@ def create_sample_data():
             if inventory and inventory.stock_quantity > 100:
                 # 정상적인 거래 기록 후 갑작스러운 대량 감소
                 StockTransaction.objects.create(
+                    user=user,
+                    fish_type=target_fish,
                     inventory=inventory,
-                    transaction_type='출고',
-                    quantity=inventory.stock_quantity * 0.8,  # 재고의 80% 갑자기 출고
-                    transaction_datetime=timezone.now() - timedelta(hours=2),
-                    reference_type='manual',
-                    reference_id=None,
-                    remarks='[이상패턴] 급격한 대량 출고'
+                    transaction_type='adjustment',
+                    quantity_change=-inventory.stock_quantity * 0.8,  # 재고의 80% 갑자기 출고 (음수)
+                    unit=target_fish.unit,
+                    notes='[이상패턴] 급격한 대량 출고'
                 )
                 
                 inventory.stock_quantity = int(inventory.stock_quantity * 0.2)
