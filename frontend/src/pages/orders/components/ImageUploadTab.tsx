@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Input } from "../../../components/ui/input"
 import { Label } from "../../../components/ui/label"
 import { Camera, Upload, Trash2, Eye, AlertCircle, X } from "lucide-react"
-import { businessApi, exebaseApi } from "../../../lib/api"
+import { businessApi, exebaseApi, fishTypeApi } from "../../../lib/api"
 import type { Business } from "../../../types"
 
 import toast from "react-hot-toast"
@@ -223,6 +223,42 @@ const ImageUploadTab: React.FC<ImageUploadTabProps> = ({
     const updatedItems = parsedOrder.items.filter((_, i) => i !== index)
     setParsedOrder({ ...parsedOrder, items: updatedItems })
   }
+
+
+  const handleRegisterBusiness = async () => {
+    if (!parsedOrder?.business_name?.trim()) {
+      toast.error("거래처명을 입력하세요.");
+      return;
+    }
+    try {
+      const res = await businessApi.create({
+        business_name: parsedOrder.business_name.trim(),
+        phone_number: parsedOrder.phone_number?.trim() || "",
+      });
+      toast.success("거래처가 등록되었습니다.");
+      onBusinessChange?.(res.data.id);
+    } catch {
+      toast.error("거래처 등록에 실패했습니다.");
+    }
+  };
+
+  const handleRegisterFishType = async (
+    name: string,
+    unit: string,
+    index: number
+  ) => {
+    try {
+      const res = await fishTypeApi.create({
+        name,
+        unit,
+      });
+      toast.success("어종이 등록되었습니다.");
+      handleItemChange(index, "fish_type_id", res.data.id);
+    } catch {
+      toast.error("어종 등록에 실패했습니다.");
+    }
+  };
+
   // 컴포넌트 반환
   return (
     <div className="space-y-4">
@@ -420,6 +456,22 @@ const ImageUploadTab: React.FC<ImageUploadTabProps> = ({
                         placeholder="어종명을 입력하세요"
                       />
                     )}
+                  </div>
+                  <div>
+                  <Button
+                            size="sm"
+                            onClick={() => {
+                              const name = item.item_name_snapshot?.trim();
+                              const unit = item.unit || "박스";
+                              if (!name) {
+                                toast.error("어종명을 입력하세요.");
+                                return;
+                              }
+                              handleRegisterFishType(name, unit, index);
+                            }}
+                          >
+                            등록
+                          </Button>
                   </div>
 
                   <div className="space-y-1">
