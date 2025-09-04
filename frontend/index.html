@@ -19,7 +19,86 @@
     
     <script type="module" src="/src/main.tsx"></script>
 
-    <script type="application/javascript" src="https://66a92e7ce493.ngrok-free.app/ai/chatbot.js" defer></script>
+    <body>
+
+<!-- 인증/챗봇 토글 버튼 -->
+<button id="auth-chatbot-btn" 
+  style="
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    border: none;
+    background-color: #000;
+    color: #fff;
+    font-weight: bold;
+    cursor: pointer;
+    z-index: 9999;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+  "
+>
+  인증하기
+</button>
+
+<!-- 챗봇 iframe (처음엔 숨김) -->
+<iframe
+  id="chatbot-iframe"
+  src="https://66a92e7ce493.ngrok-free.app/"
+  style="
+    display: none;
+    position: fixed;
+    bottom: 100px;
+    right: 24px;
+    width: 400px;
+    height: 600px;
+    border: none;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    z-index: 9998;
+  "
+></iframe>
+
+<script>
+  const btn = document.getElementById('auth-chatbot-btn');
+  const iframe = document.getElementById('chatbot-iframe');
+  let authWindow = null;
+  let authenticated = false;
+
+  btn.addEventListener('click', () => {
+    if (!authenticated) {
+      // 인증 안 된 상태 → 인증 페이지 팝업 열기
+      authWindow = window.open('https://66a92e7ce493.ngrok-free.app/', 'ngrokAuth', 'width=600,height=700');
+
+      // 10초 후 인증 완료 처리 (실제로는 인증 확인 로직 필요)
+      setTimeout(() => {
+        authenticated = true;
+        btn.textContent = '챗봇 열기';
+
+        // 팝업 닫기
+        if (authWindow && !authWindow.closed) {
+          authWindow.close();
+        }
+      }, 10000); // 10초 동안 인증 유도
+    } else {
+      // 인증 완료 상태 → 챗봇 iframe 토글
+      if (iframe.style.display === 'none') {
+        iframe.style.display = 'block';
+        btn.textContent = '챗봇 닫기';
+      } else {
+        iframe.style.display = 'none';
+        btn.textContent = '챗봇 열기';
+      }
+    }
+  });
+</script>
+
+</body>
 
   </body>
 </html>
